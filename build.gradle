@@ -1,0 +1,11 @@
+plugins { id 'java'; id 'net.neoforged.moddev' version '2.0.107' }
+group = 'cn.bfops'
+version = '0.5.1'
+base.archivesName = 'battlefield-ops'
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+neoForge {
+    version = '21.1.233'
+    runs { client { client() }; server { server(); programArgument '--nogui' } }
+    mods { battlefield_ops { sourceSet sourceSets.main } }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }

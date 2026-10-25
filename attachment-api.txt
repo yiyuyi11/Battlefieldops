@@ -1,0 +1,16 @@
+Compiled from "AttachmentItemBuilder.java"
+public class com.tacz.guns.api.item.builder.AttachmentItemBuilder {
+  public static com.tacz.guns.api.item.builder.AttachmentItemBuilder create();
+  public com.tacz.guns.api.item.builder.AttachmentItemBuilder setCount(int);
+  public com.tacz.guns.api.item.builder.AttachmentItemBuilder setId(net.minecraft.resources.ResourceLocation);
+  public com.tacz.guns.api.item.builder.AttachmentItemBuilder setSkinId(net.minecraft.resources.ResourceLocation);
+  public net.minecraft.world.item.ItemStack build();
+}
+Compiled from "CommonAttachmentIndex.java"
+public class com.tacz.guns.resource.index.CommonAttachmentIndex {
+  public static com.tacz.guns.resource.index.CommonAttachmentIndex getInstance(com.tacz.guns.resource.pojo.AttachmentIndexPOJO) throws java.lang.IllegalArgumentException;
+  public com.tacz.guns.resource.pojo.data.attachment.AttachmentData getData();
+  public com.tacz.guns.api.item.attachment.AttachmentType getType();
+  public com.tacz.guns.resource.pojo.AttachmentIndexPOJO getPojo();
+  public int getSort();
+}

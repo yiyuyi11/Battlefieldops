@@ -1,0 +1,8 @@
+from pathlib import Path
+p=Path('src/main/java/cn/bfops')
+f=p/'BattleScreen.java';s=f.read_text('utf-8').replace('            if (!vehicle.isEmpty()) vehicleFacts(f);','            if (!vehicle.isEmpty()){row(f,"载具弹种",fitting("vehicle",vehicle).size()+" 项",()->customize("vehicle",vehicle));vehicleFacts(f);}');s=s.replace('Engine.num(state, "limit", arena.vehicleLimit)','Engine.num(state, "limit", arena.vehicleLimitFor(team()))');f.write_text(s,'utf-8')
+f=p/'ChoiceScreen.java';s=f.read_text('utf-8').replace('LibrarySource.name(choice.id)+" · "+choice.id','LibrarySource.name(choice.icon)+" · "+choice.icon');f.write_text(s,'utf-8')
+f=p/'VehicleHud.java';s=f.read_text('utf-8').replace('case READY -> "可部署 · 上限 " + vehicleLimit + "/" + matchLimit;','case READY -> "可部署 · 本方已用 " + matchLimit + "/" + vehicleLimit;').replace('case MATCH_LIMIT -> "已达上限 " + matchLimit;','case MATCH_LIMIT -> vehicleLimit==0?"本方载具已禁用":"本方名额已满 " + vehicleLimit;');f.write_text(s,'utf-8')
+f=p/'Engine.java';s=f.read_text('utf-8').replace('player.sendSystemMessage(Component.literal("§e" + result + " —— 已返回部署界面，未扣任何费用"));\n                return;','player.sendSystemMessage(Component.literal("§e" + result + " —— 已返回部署界面，未扣任何费用"));\n                throw new IllegalArgumentException(result);');f.write_text(s,'utf-8')
+f=p/'Fittings.java';s=f.read_text('utf-8');s=s.replace('            data.getClass().getMethod("save").invoke(data);','''            java.util.function.Consumer<Object> persist=value->{};
+            vehicle.getClass().getMethod("modifyGunData",String.class,java.util.function.Consumer.class).invoke(vehicle,choice.getKey(),persist);''');f.write_text(s,'utf-8')

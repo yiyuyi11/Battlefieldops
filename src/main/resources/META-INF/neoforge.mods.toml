@@ -1,0 +1,39 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="All Rights Reserved"
+[[mods]]
+modId="battlefield_ops"
+version="0.6.3"
+displayName="战地风云 · Battlefield Ops"
+authors="Local development"
+description='''征服 / 突破计分、地图划线编辑器、据点与出生点、双方活动区域、TaCZ 配装按部署发放、卓越前线载具白名单部署。武器与载具列表全部在运行时从注册数据读取。部署的载具按车型自动配发弹药与电量，地图可放置补给点持续补给弹药、电量与血量。对局内可隐藏 Xaero 小地图，并按同一按键同时查看大地图与计分板。载具刷新只受冷却与本局上限限制，不再消耗个人积分。'''
+
+[[dependencies.battlefield_ops]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.233,21.2)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.battlefield_ops]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
+
+# Both are optional and probed at runtime. If either is missing the catalogue reports it in-game
+# instead of failing to load, and only the matching kit / vehicle entries disappear.
+[[dependencies.battlefield_ops]]
+modId="tacz"
+type="optional"
+versionRange="[1.1.0,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.battlefield_ops]]
+modId="superbwarfare"
+type="optional"
+versionRange="[0.8.0,)"
+ordering="NONE"
+side="BOTH"

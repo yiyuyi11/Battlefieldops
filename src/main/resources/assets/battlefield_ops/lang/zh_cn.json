@@ -1,0 +1,8 @@
+{
+  "key.battlefield_ops.open": "打开战地部署 / 编辑器",
+  "key.battlefield_ops.scores": "按住查看地图与计分板",
+  "key.categories.battlefield_ops": "战地风云",
+  "key.battlefield_ops.minimap_corner": "切换小地图位置（四角循环）",
+  "key.battlefield_ops.minimap_toggle": "隐藏 / 显示小地图",
+  "key.battlefield_ops.mark": "标记准星前方的敌军"
+}

@@ -1,0 +1,19 @@
+from pathlib import Path
+p=Path('src/main/java/cn/bfops')
+f=p/'OpsScreen.java';s=f.read_text('utf-8');s=s.replace('private boolean dirty(){return !invalid.isEmpty()||!jsonDraft().equals(savedDraft);}','private boolean dirty(){try{return !invalid.isEmpty()||!jsonDraft().equals(savedDraft);}catch(IllegalArgumentException ex){return true;}}');s=s.replace('        history.record(jsonDraft());\n        scrollMemory.put','        try{history.record(jsonDraft());}catch(IllegalArgumentException ex){warn("草稿坐标无效，请修正坐标或重新载入地图");}\n        scrollMemory.put');s=s.replace('左键点地图 = 移动当前选中的点','左键选择标记；移动需先选择放置模式');a=s.index('        row(form, "摆放模式"');b=s.index('\n\n        form.section("据点',a);s=s[:a]+'''        row(form,"放置当前据点",placing!=null&&placing.equals("point")?"进行中":"点击启用",()->{placing="point";rebuild();});
+        row(form,"放置当前出生点",placing!=null&&placing.equals("spawn")?"进行中":"点击启用",()->{placing="spawn";rebuild();});
+        if(placing!=null)row(form,"取消放置","Esc",()->{placing=null;rebuild();});'''+s[b:];s=s.replace('    @Override public boolean keyPressed(int key,int scan,int modifiers){','    @Override public boolean keyPressed(int key,int scan,int modifiers){\n        if(key==256&&placing!=null){placing=null;rebuild();say("已取消放置，坐标未改变");return true;}');s=s.replace('                point.x = x;\n                point.y = y;\n                point.z = z;','                PointPlacement.move(point,x,y,z);').replace('                spawn.x = x;\n                spawn.y = y;\n                spawn.z = z;','                PointPlacement.move(spawn,x,y,z);');a=s.index('            if (!draft.points.isEmpty()) {',s.index('// Nothing pending:'));b=s.index('\n            return false;',a);s=s[:a]+'''            say("未移动任何标记；请先点击左侧「放置当前据点」或「放置当前出生点」");
+            return true;'''+s[b+len('\n            return false;'):];s=s.replace('// Nothing pending: a click on a marker selects it, a click on empty ground moves the\n            // currently selected point there. That is the gesture an operator reaches for after\n            // arrow-keying through the list and wanting to nudge the result.','// Selection mode never mutates coordinates.');f.write_text(s,'utf-8')
+f=p/'FrontButton.java';s=f.read_text('utf-8').replace('        this.active = enabled;','        this.active = enabled;\n        setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(compose(label,value))));');s=s.replace('        g.fill(getX(), getY(), getX() + width, getY() + height, body);','''        g.fill(getX()+2,getY(),getX()+width-2,getY()+height,body);
+        g.fill(getX(),getY()+2,getX()+width,getY()+height-2,body);
+        if(on){g.fill(getX()+2,getY(),getX()+width-2,getY()+1,Ui.FRAME_LIGHT);}
+        if(primary)g.fill(getX(),getY()+3,getX()+2,getY()+height-3,Ui.ACCENT);''');s=s.replace('        int textRight = getX() + width - inset;','''        int actionIcon=UiIcons.action(label);
+        if(iconId.isEmpty()&&actionIcon>=0&&width>=76&&height>=16){
+            UiIcons.draw(g,actionIcon,textLeft,getY()+(height-14)/2,14);textLeft+=18;
+        }
+        int textRight = getX() + width - inset;''');f.write_text(s,'utf-8')
+f=p/'TacticalColors.java';s=f.read_text('utf-8');a=s.index('        if(hostile){');b=s.index('\n    }',a);s=s[:a]+'        UiIcons.draw(g,hostile?6:5,x-5,y-5,11);'+s[b:];f.write_text(s,'utf-8')
+for f in [Path('build.py'),Path('gradle.properties'),Path('src/main/resources/META-INF/neoforge.mods.toml')]:
+ if f.exists():f.write_text(f.read_text('utf-8').replace('0.5.5','0.5.6'),'utf-8')
+s=Path('install-0.5.5.ps1').read_text('utf-8-sig').replace('0.5.5','0.5.6').replace("'battlefield-ops-0.5.4-neoforge-1.21.1.jar'","'battlefield-ops-0.5.4-neoforge-1.21.1.jar','battlefield-ops-0.5.5-neoforge-1.21.1.jar'")
+Path('install-0.5.6.ps1').write_text(s,'utf-8-sig')
