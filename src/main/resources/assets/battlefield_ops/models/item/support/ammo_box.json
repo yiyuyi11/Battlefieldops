@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "battlefield_ops:gui/hud_ammo_box"
+  }
+}

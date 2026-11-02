@@ -1,0 +1,50 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "minecraft:item/paper"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 656100
+      },
+      "model": "battlefield_ops:item/support/ammo_bag"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656101
+      },
+      "model": "battlefield_ops:item/support/medic_bag"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656102
+      },
+      "model": "battlefield_ops:item/support/ammo_box"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656103
+      },
+      "model": "battlefield_ops:item/support/med_box"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656104
+      },
+      "model": "battlefield_ops:item/support/radio_beacon"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656105
+      },
+      "model": "battlefield_ops:item/support/ground_sensor"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 656106
+      },
+      "model": "battlefield_ops:item/support/paper_fallback"
+    }
+  ]
+}

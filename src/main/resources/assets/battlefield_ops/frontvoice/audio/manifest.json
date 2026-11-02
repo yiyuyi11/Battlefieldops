@@ -1,0 +1,1199 @@
+{
+  "eventCount": 149,
+  "importedOggCount": 1414,
+  "skippedFileCount": 6,
+  "events": [
+    {
+      "eventId": "downed.loop.bleedout_loop_01_join",
+      "category": "downed",
+      "resourceDirectory": "downed/loop/bleedout_loop_01_join",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/循环",
+      "displayName": "倒地呼救相关语音和音效/循环",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.loop.heartbeats_02",
+      "category": "downed",
+      "resourceDirectory": "downed/loop/heartbeats_02",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/循环",
+      "displayName": "倒地呼救相关语音和音效/循环",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.final_death",
+      "category": "downed",
+      "resourceDirectory": "downed/final_death",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/放弃or最终死亡",
+      "displayName": "倒地呼救相关语音和音效/放弃or最终死亡",
+      "soundCount": 5
+    },
+    {
+      "eventId": "downed.revived_fp",
+      "category": "downed",
+      "resourceDirectory": "downed/revived_fp",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/被救起来的第一人称音效",
+      "displayName": "倒地呼救相关语音和音效/被救起来的第一人称音效",
+      "soundCount": 2
+    },
+    {
+      "eventId": "downed.syringe.gadget_syringe_deploy",
+      "category": "downed",
+      "resourceDirectory": "downed/syringe/gadget_syringe_deploy",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/醫療用針筒",
+      "displayName": "倒地呼救相关语音和音效/醫療用針筒",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.syringe.gadget_syringe_fill",
+      "category": "downed",
+      "resourceDirectory": "downed/syringe/gadget_syringe_fill",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/醫療用針筒",
+      "displayName": "倒地呼救相关语音和音效/醫療用針筒",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.syringe.gadget_syringe_inject",
+      "category": "downed",
+      "resourceDirectory": "downed/syringe/gadget_syringe_inject",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/醫療用針筒",
+      "displayName": "倒地呼救相关语音和音效/醫療用針筒",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.syringe.soldier_revived1p_wave",
+      "category": "downed",
+      "resourceDirectory": "downed/syringe/soldier_revived1p_wave",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/醫療用針筒",
+      "displayName": "倒地呼救相关语音和音效/醫療用針筒",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.defibrillator.defibrillator_charged_wave",
+      "category": "downed",
+      "resourceDirectory": "downed/defibrillator/defibrillator_charged_wave",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/電擊器",
+      "displayName": "倒地呼救相关语音和音效/電擊器",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.defibrillator.defibrillator_deploy_wave",
+      "category": "downed",
+      "resourceDirectory": "downed/defibrillator/defibrillator_deploy_wave",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/電擊器",
+      "displayName": "倒地呼救相关语音和音效/電擊器",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.defibrillator.defibrillator_fire_wave",
+      "category": "downed",
+      "resourceDirectory": "downed/defibrillator/defibrillator_fire_wave",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/電擊器",
+      "displayName": "倒地呼救相关语音和音效/電擊器",
+      "soundCount": 1
+    },
+    {
+      "eventId": "downed.defibrillator.defibrillator_rub_wave",
+      "category": "downed",
+      "resourceDirectory": "downed/defibrillator/defibrillator_rub_wave",
+      "primaryOriginalDirectory": "倒地呼救相关语音和音效/電擊器",
+      "displayName": "倒地呼救相关语音和音效/電擊器",
+      "soundCount": 1
+    },
+    {
+      "eventId": "fp.cn.throw_medkit",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/throw_medkit",
+      "primaryOriginalDirectory": "第一人称/CN/丢医疗",
+      "displayName": "第一人称/CN/丢医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.throw_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/throw_ammo",
+      "primaryOriginalDirectory": "第一人称/CN/丢弹药",
+      "displayName": "第一人称/CN/丢弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.throw_grenade",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/throw_grenade",
+      "primaryOriginalDirectory": "第一人称/CN/丢手雷",
+      "displayName": "第一人称/CN/丢手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.throw_smoke",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/throw_smoke",
+      "primaryOriginalDirectory": "第一人称/CN/丢烟",
+      "displayName": "第一人称/CN/丢烟",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.downed_help",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/downed_help",
+      "primaryOriginalDirectory": "第一人称/CN/倒地需要医疗",
+      "displayName": "第一人称/CN/倒地需要医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.gogogo",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/gogogo",
+      "primaryOriginalDirectory": "第一人称/CN/冲冲冲",
+      "displayName": "第一人称/CN/冲冲冲",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.cn.spotted_enemy",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/spotted_enemy",
+      "primaryOriginalDirectory": "第一人称/CN/发现敌兵",
+      "displayName": "第一人称/CN/发现敌兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.request_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/request_ammo",
+      "primaryOriginalDirectory": "第一人称/CN/我需要弹药",
+      "displayName": "第一人称/CN/我需要弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.place_c4_4",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/place_c4_4",
+      "primaryOriginalDirectory": "第一人称/CN/放置c4",
+      "displayName": "第一人称/CN/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.spotted_support",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/spotted_support",
+      "primaryOriginalDirectory": "第一人称/CN/索敌敌军机枪手（支援兵",
+      "displayName": "第一人称/CN/索敌敌军机枪手（支援兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.spotted_engineer",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/spotted_engineer",
+      "primaryOriginalDirectory": "第一人称/CN/索敌敌方反坦克（工程兵",
+      "displayName": "第一人称/CN/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.spotted_recon",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/spotted_recon",
+      "primaryOriginalDirectory": "第一人称/CN/索敌敌方狙击手（侦察",
+      "displayName": "第一人称/CN/索敌敌方狙击手（侦察",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.cn.thanks",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/thanks",
+      "primaryOriginalDirectory": "第一人称/CN/谢谢",
+      "displayName": "第一人称/CN/谢谢",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.cn.request_repair",
+      "category": "fp",
+      "resourceDirectory": "fp/cn/request_repair",
+      "primaryOriginalDirectory": "第一人称/CN/需要维修",
+      "displayName": "第一人称/CN/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.ru.throw_medkit",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/throw_medkit",
+      "primaryOriginalDirectory": "第一人称/RU/丢医疗",
+      "displayName": "第一人称/RU/丢医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.throw_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/throw_ammo",
+      "primaryOriginalDirectory": "第一人称/RU/丢弹药",
+      "displayName": "第一人称/RU/丢弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.throw_grenade",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/throw_grenade",
+      "primaryOriginalDirectory": "第一人称/RU/丢手雷",
+      "displayName": "第一人称/RU/丢手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.throw_smoke",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/throw_smoke",
+      "primaryOriginalDirectory": "第一人称/RU/丢烟",
+      "displayName": "第一人称/RU/丢烟",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.downed_help",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/downed_help",
+      "primaryOriginalDirectory": "第一人称/RU/倒地需要医疗",
+      "displayName": "第一人称/RU/倒地需要医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.gogogo",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/gogogo",
+      "primaryOriginalDirectory": "第一人称/RU/冲冲冲",
+      "displayName": "第一人称/RU/冲冲冲",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.ru.spotted_enemy",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/spotted_enemy",
+      "primaryOriginalDirectory": "第一人称/RU/发现敌兵",
+      "displayName": "第一人称/RU/发现敌兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.request_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/request_ammo",
+      "primaryOriginalDirectory": "第一人称/RU/我需要弹药",
+      "displayName": "第一人称/RU/我需要弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.place_c4_4",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/place_c4_4",
+      "primaryOriginalDirectory": "第一人称/RU/放置c4",
+      "displayName": "第一人称/RU/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.spotted_support",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/spotted_support",
+      "primaryOriginalDirectory": "第一人称/RU/索敌敌军机枪手（支援兵",
+      "displayName": "第一人称/RU/索敌敌军机枪手（支援兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.spotted_engineer",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/spotted_engineer",
+      "primaryOriginalDirectory": "第一人称/RU/索敌敌方反坦克（工程兵",
+      "displayName": "第一人称/RU/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.spotted_recon",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/spotted_recon",
+      "primaryOriginalDirectory": "第一人称/RU/索敌敌方狙击手（侦察",
+      "displayName": "第一人称/RU/索敌敌方狙击手（侦察",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.ru.thanks",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/thanks",
+      "primaryOriginalDirectory": "第一人称/RU/谢谢",
+      "displayName": "第一人称/RU/谢谢",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.ru.request_repair",
+      "category": "fp",
+      "resourceDirectory": "fp/ru/request_repair",
+      "primaryOriginalDirectory": "第一人称/RU/需要维修",
+      "displayName": "第一人称/RU/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.us.throw_medkit",
+      "category": "fp",
+      "resourceDirectory": "fp/us/throw_medkit",
+      "primaryOriginalDirectory": "第一人称/US/丢医疗",
+      "displayName": "第一人称/US/丢医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.throw_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/us/throw_ammo",
+      "primaryOriginalDirectory": "第一人称/US/丢弹药",
+      "displayName": "第一人称/US/丢弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.throw_grenade",
+      "category": "fp",
+      "resourceDirectory": "fp/us/throw_grenade",
+      "primaryOriginalDirectory": "第一人称/US/丢手雷",
+      "displayName": "第一人称/US/丢手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.throw_smoke",
+      "category": "fp",
+      "resourceDirectory": "fp/us/throw_smoke",
+      "primaryOriginalDirectory": "第一人称/US/丢烟",
+      "displayName": "第一人称/US/丢烟",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.downed_help",
+      "category": "fp",
+      "resourceDirectory": "fp/us/downed_help",
+      "primaryOriginalDirectory": "第一人称/US/倒地需要医疗",
+      "displayName": "第一人称/US/倒地需要医疗",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.gogogo",
+      "category": "fp",
+      "resourceDirectory": "fp/us/gogogo",
+      "primaryOriginalDirectory": "第一人称/US/冲冲冲",
+      "displayName": "第一人称/US/冲冲冲",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.us.spotted_enemy",
+      "category": "fp",
+      "resourceDirectory": "fp/us/spotted_enemy",
+      "primaryOriginalDirectory": "第一人称/US/发现敌兵",
+      "displayName": "第一人称/US/发现敌兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.request_ammo",
+      "category": "fp",
+      "resourceDirectory": "fp/us/request_ammo",
+      "primaryOriginalDirectory": "第一人称/US/我需要弹药",
+      "displayName": "第一人称/US/我需要弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.place_c4_4",
+      "category": "fp",
+      "resourceDirectory": "fp/us/place_c4_4",
+      "primaryOriginalDirectory": "第一人称/US/放置c4",
+      "displayName": "第一人称/US/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.spotted_support",
+      "category": "fp",
+      "resourceDirectory": "fp/us/spotted_support",
+      "primaryOriginalDirectory": "第一人称/US/索敌敌军机枪手（支援兵",
+      "displayName": "第一人称/US/索敌敌军机枪手（支援兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.spotted_engineer",
+      "category": "fp",
+      "resourceDirectory": "fp/us/spotted_engineer",
+      "primaryOriginalDirectory": "第一人称/US/索敌敌方反坦克（工程兵",
+      "displayName": "第一人称/US/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.spotted_recon",
+      "category": "fp",
+      "resourceDirectory": "fp/us/spotted_recon",
+      "primaryOriginalDirectory": "第一人称/US/索敌敌方狙击手（侦察",
+      "displayName": "第一人称/US/索敌敌方狙击手（侦察",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.us.thanks",
+      "category": "fp",
+      "resourceDirectory": "fp/us/thanks",
+      "primaryOriginalDirectory": "第一人称/US/谢谢",
+      "displayName": "第一人称/US/谢谢",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.us.request_repair",
+      "category": "fp",
+      "resourceDirectory": "fp/us/request_repair",
+      "primaryOriginalDirectory": "第一人称/US/需要维修",
+      "displayName": "第一人称/US/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.grenade_alert",
+      "category": "fp",
+      "resourceDirectory": "fp/grenade_alert",
+      "primaryOriginalDirectory": "第一人称/手雷在我旁边啊啊啊啊啊",
+      "displayName": "第一人称/手雷在我旁边啊啊啊啊啊",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.burning.scream",
+      "category": "fp",
+      "resourceDirectory": "fp/burning/scream",
+      "primaryOriginalDirectory": "第一人称/着火/喊叫",
+      "displayName": "第一人称/着火/喊叫",
+      "soundCount": 10
+    },
+    {
+      "eventId": "fp.burning.spark",
+      "category": "fp",
+      "resourceDirectory": "fp/burning/spark",
+      "primaryOriginalDirectory": "第一人称/着火/火花",
+      "displayName": "第一人称/着火/火花",
+      "soundCount": 5
+    },
+    {
+      "eventId": "fp.burning.flame",
+      "category": "fp",
+      "resourceDirectory": "fp/burning/flame",
+      "primaryOriginalDirectory": "第一人称/着火/燃烧",
+      "displayName": "第一人称/着火/燃烧",
+      "soundCount": 3
+    },
+    {
+      "eventId": "fp.death.death",
+      "category": "fp",
+      "resourceDirectory": "fp/death/death",
+      "primaryOriginalDirectory": "第一人称/第一人称死亡音效/倒下",
+      "displayName": "第一人称/第一人称死亡音效/倒下",
+      "soundCount": 7
+    },
+    {
+      "eventId": "fp.death.sfx",
+      "category": "fp",
+      "resourceDirectory": "fp/death/sfx",
+      "primaryOriginalDirectory": "第一人称/第一人称死亡音效/效果音（同时播放",
+      "displayName": "第一人称/第一人称死亡音效/效果音（同时播放",
+      "soundCount": 7
+    },
+    {
+      "eventId": "tp.cn.throw_smoke",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/throw_smoke",
+      "primaryOriginalDirectory": "第三人称/CN/丢出烟雾弹！",
+      "displayName": "第三人称/CN/丢出烟雾弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.gogogo",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/gogogo",
+      "primaryOriginalDirectory": "第三人称/CN/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "displayName": "第三人称/CN/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.kill_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/kill_enemy",
+      "primaryOriginalDirectory": "第三人称/CN/击杀敌人",
+      "displayName": "第三人称/CN/击杀敌人",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.spotted_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/spotted_enemy",
+      "primaryOriginalDirectory": "第三人称/CN/发现敌兵（标记",
+      "displayName": "第三人称/CN/发现敌兵（标记",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.friendly_fire",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/friendly_fire",
+      "primaryOriginalDirectory": "第三人称/CN/妈的是友军",
+      "displayName": "第三人称/CN/妈的是友军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.explosion_close",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/explosion_close",
+      "primaryOriginalDirectory": "第三人称/CN/差点炸到我了",
+      "displayName": "第三人称/CN/差点炸到我了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.low_health_panic",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/low_health_panic",
+      "primaryOriginalDirectory": "第三人称/CN/我受不了了！可怕的战争！",
+      "displayName": "第三人称/CN/我受不了了！可怕的战争！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.heavy_hurt",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/heavy_hurt",
+      "primaryOriginalDirectory": "第三人称/CN/我受伤了",
+      "displayName": "第三人称/CN/我受伤了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.suppressed",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/suppressed",
+      "primaryOriginalDirectory": "第三人称/CN/我被压制住了",
+      "displayName": "第三人称/CN/我被压制住了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.throw_grenade",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/throw_grenade",
+      "primaryOriginalDirectory": "第三人称/CN/我要丢手雷了",
+      "displayName": "第三人称/CN/我要丢手雷了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.reloading",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/reloading",
+      "primaryOriginalDirectory": "第三人称/CN/我要换子弹！",
+      "displayName": "第三人称/CN/我要换子弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.request_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/request_ammo",
+      "primaryOriginalDirectory": "第三人称/CN/我需要弹药（没子弹了",
+      "displayName": "第三人称/CN/我需要弹药（没子弹了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.downed_help",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/downed_help",
+      "primaryOriginalDirectory": "第三人称/CN/我需要急救",
+      "displayName": "第三人称/CN/我需要急救",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.battle_intense",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/battle_intense",
+      "primaryOriginalDirectory": "第三人称/CN/战况激烈",
+      "displayName": "第三人称/CN/战况激烈",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.grenade_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/grenade_alert",
+      "primaryOriginalDirectory": "第三人称/CN/手雷",
+      "displayName": "第三人称/CN/手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.nice_shot",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/nice_shot",
+      "primaryOriginalDirectory": "第三人称/CN/打得好！",
+      "displayName": "第三人称/CN/打得好！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.suppressing_hostile",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/suppressing_hostile",
+      "primaryOriginalDirectory": "第三人称/CN/持续压制敌军",
+      "displayName": "第三人称/CN/持续压制敌军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.place_c4_4",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/place_c4_4",
+      "primaryOriginalDirectory": "第三人称/CN/放置c4",
+      "displayName": "第三人称/CN/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.spotted_support",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/spotted_support",
+      "primaryOriginalDirectory": "第三人称/CN/敌军机枪手",
+      "displayName": "第三人称/CN/敌军机枪手 | 第三人称/CN/索敌敌军机枪手（支援兵",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.cn.rpg_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/rpg_alert",
+      "primaryOriginalDirectory": "第三人称/CN/敌军火箭弹",
+      "displayName": "第三人称/CN/敌军火箭弹",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.spotted_recon",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/spotted_recon",
+      "primaryOriginalDirectory": "第三人称/CN/敌军狙击",
+      "displayName": "第三人称/CN/敌军狙击 | 第三人称/CN/索敌敌方狙击手（侦察",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.cn.death",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/death",
+      "primaryOriginalDirectory": "第三人称/CN/有队友倒下",
+      "displayName": "第三人称/CN/有队友倒下",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.reviving",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/reviving",
+      "primaryOriginalDirectory": "第三人称/CN/正在急救队友",
+      "displayName": "第三人称/CN/正在急救队友",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.spotted_engineer",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/spotted_engineer",
+      "primaryOriginalDirectory": "第三人称/CN/索敌敌方反坦克（工程兵",
+      "displayName": "第三人称/CN/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.throw_medkit",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/throw_medkit",
+      "primaryOriginalDirectory": "第三人称/CN/给你医疗包",
+      "displayName": "第三人称/CN/给你医疗包",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.throw_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/throw_ammo",
+      "primaryOriginalDirectory": "第三人称/CN/给你弹药",
+      "displayName": "第三人称/CN/给你弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.revived",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/revived",
+      "primaryOriginalDirectory": "第三人称/CN/被救起来",
+      "displayName": "第三人称/CN/被救起来",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.thanks",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/thanks",
+      "primaryOriginalDirectory": "第三人称/CN/谢谢",
+      "displayName": "第三人称/CN/谢谢",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.cn.request_repair",
+      "category": "tp",
+      "resourceDirectory": "tp/cn/request_repair",
+      "primaryOriginalDirectory": "第三人称/CN/需要维修",
+      "displayName": "第三人称/CN/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "tp.ru.throw_smoke",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/throw_smoke",
+      "primaryOriginalDirectory": "第三人称/RU/丢出烟雾弹！",
+      "displayName": "第三人称/RU/丢出烟雾弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.gogogo",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/gogogo",
+      "primaryOriginalDirectory": "第三人称/RU/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "displayName": "第三人称/RU/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.kill_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/kill_enemy",
+      "primaryOriginalDirectory": "第三人称/RU/击杀敌人",
+      "displayName": "第三人称/RU/击杀敌人",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.spotted_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/spotted_enemy",
+      "primaryOriginalDirectory": "第三人称/RU/发现敌兵（标记",
+      "displayName": "第三人称/RU/发现敌兵（标记",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.friendly_fire",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/friendly_fire",
+      "primaryOriginalDirectory": "第三人称/RU/妈的是友军",
+      "displayName": "第三人称/RU/妈的是友军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.explosion_close",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/explosion_close",
+      "primaryOriginalDirectory": "第三人称/RU/差点炸到我了",
+      "displayName": "第三人称/RU/差点炸到我了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.low_health_panic",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/low_health_panic",
+      "primaryOriginalDirectory": "第三人称/RU/我受不了了！可怕的战争！",
+      "displayName": "第三人称/RU/我受不了了！可怕的战争！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.heavy_hurt",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/heavy_hurt",
+      "primaryOriginalDirectory": "第三人称/RU/我受伤了",
+      "displayName": "第三人称/RU/我受伤了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.suppressed",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/suppressed",
+      "primaryOriginalDirectory": "第三人称/RU/我被压制住了",
+      "displayName": "第三人称/RU/我被压制住了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.throw_grenade",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/throw_grenade",
+      "primaryOriginalDirectory": "第三人称/RU/我要丢手雷了",
+      "displayName": "第三人称/RU/我要丢手雷了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.reloading",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/reloading",
+      "primaryOriginalDirectory": "第三人称/RU/我要换子弹！",
+      "displayName": "第三人称/RU/我要换子弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.request_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/request_ammo",
+      "primaryOriginalDirectory": "第三人称/RU/我需要弹药（没子弹了",
+      "displayName": "第三人称/RU/我需要弹药（没子弹了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.downed_help",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/downed_help",
+      "primaryOriginalDirectory": "第三人称/RU/我需要急救",
+      "displayName": "第三人称/RU/我需要急救",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.battle_intense",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/battle_intense",
+      "primaryOriginalDirectory": "第三人称/RU/战况激烈",
+      "displayName": "第三人称/RU/战况激烈",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.grenade_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/grenade_alert",
+      "primaryOriginalDirectory": "第三人称/RU/手雷",
+      "displayName": "第三人称/RU/手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.nice_shot",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/nice_shot",
+      "primaryOriginalDirectory": "第三人称/RU/打得好！",
+      "displayName": "第三人称/RU/打得好！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.suppressing_hostile",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/suppressing_hostile",
+      "primaryOriginalDirectory": "第三人称/RU/持续压制敌军",
+      "displayName": "第三人称/RU/持续压制敌军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.place_c4_4",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/place_c4_4",
+      "primaryOriginalDirectory": "第三人称/RU/放置c4",
+      "displayName": "第三人称/RU/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.spotted_support",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/spotted_support",
+      "primaryOriginalDirectory": "第三人称/RU/敌军机枪手",
+      "displayName": "第三人称/RU/敌军机枪手 | 第三人称/RU/索敌敌军机枪手（支援兵",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.ru.rpg_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/rpg_alert",
+      "primaryOriginalDirectory": "第三人称/RU/敌军火箭弹",
+      "displayName": "第三人称/RU/敌军火箭弹",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.spotted_recon",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/spotted_recon",
+      "primaryOriginalDirectory": "第三人称/RU/敌军狙击",
+      "displayName": "第三人称/RU/敌军狙击 | 第三人称/RU/索敌敌方狙击手（侦察",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.ru.death",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/death",
+      "primaryOriginalDirectory": "第三人称/RU/有队友倒下",
+      "displayName": "第三人称/RU/有队友倒下",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.reviving",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/reviving",
+      "primaryOriginalDirectory": "第三人称/RU/正在急救队友",
+      "displayName": "第三人称/RU/正在急救队友",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.spotted_engineer",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/spotted_engineer",
+      "primaryOriginalDirectory": "第三人称/RU/索敌敌方反坦克（工程兵",
+      "displayName": "第三人称/RU/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.throw_medkit",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/throw_medkit",
+      "primaryOriginalDirectory": "第三人称/RU/给你医疗包",
+      "displayName": "第三人称/RU/给你医疗包",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.throw_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/throw_ammo",
+      "primaryOriginalDirectory": "第三人称/RU/给你弹药",
+      "displayName": "第三人称/RU/给你弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.revived",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/revived",
+      "primaryOriginalDirectory": "第三人称/RU/被救起来",
+      "displayName": "第三人称/RU/被救起来",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.thanks",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/thanks",
+      "primaryOriginalDirectory": "第三人称/RU/谢谢",
+      "displayName": "第三人称/RU/谢谢",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.ru.request_repair",
+      "category": "tp",
+      "resourceDirectory": "tp/ru/request_repair",
+      "primaryOriginalDirectory": "第三人称/RU/需要维修",
+      "displayName": "第三人称/RU/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "tp.us.throw_smoke",
+      "category": "tp",
+      "resourceDirectory": "tp/us/throw_smoke",
+      "primaryOriginalDirectory": "第三人称/US/丢出烟雾弹！",
+      "displayName": "第三人称/US/丢出烟雾弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.gogogo",
+      "category": "tp",
+      "resourceDirectory": "tp/us/gogogo",
+      "primaryOriginalDirectory": "第三人称/US/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "displayName": "第三人称/US/冲冲冲！（虽然bf里需要玩家主动触发，但是mc里可以做成开局队友语音",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.kill_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/us/kill_enemy",
+      "primaryOriginalDirectory": "第三人称/US/击杀敌人",
+      "displayName": "第三人称/US/击杀敌人",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.spotted_enemy",
+      "category": "tp",
+      "resourceDirectory": "tp/us/spotted_enemy",
+      "primaryOriginalDirectory": "第三人称/US/发现敌兵（标记",
+      "displayName": "第三人称/US/发现敌兵（标记",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.friendly_fire",
+      "category": "tp",
+      "resourceDirectory": "tp/us/friendly_fire",
+      "primaryOriginalDirectory": "第三人称/US/妈的是友军",
+      "displayName": "第三人称/US/妈的是友军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.explosion_close",
+      "category": "tp",
+      "resourceDirectory": "tp/us/explosion_close",
+      "primaryOriginalDirectory": "第三人称/US/差点炸到我了",
+      "displayName": "第三人称/US/差点炸到我了",
+      "soundCount": 5
+    },
+    {
+      "eventId": "tp.us.low_health_panic",
+      "category": "tp",
+      "resourceDirectory": "tp/us/low_health_panic",
+      "primaryOriginalDirectory": "第三人称/US/我受不了了！可怕的战争！",
+      "displayName": "第三人称/US/我受不了了！可怕的战争！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.heavy_hurt",
+      "category": "tp",
+      "resourceDirectory": "tp/us/heavy_hurt",
+      "primaryOriginalDirectory": "第三人称/US/我受伤了",
+      "displayName": "第三人称/US/我受伤了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.suppressed",
+      "category": "tp",
+      "resourceDirectory": "tp/us/suppressed",
+      "primaryOriginalDirectory": "第三人称/US/我被压制住了",
+      "displayName": "第三人称/US/我被压制住了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.throw_grenade",
+      "category": "tp",
+      "resourceDirectory": "tp/us/throw_grenade",
+      "primaryOriginalDirectory": "第三人称/US/我要丢手雷了",
+      "displayName": "第三人称/US/我要丢手雷了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.reloading",
+      "category": "tp",
+      "resourceDirectory": "tp/us/reloading",
+      "primaryOriginalDirectory": "第三人称/US/我要换子弹！",
+      "displayName": "第三人称/US/我要换子弹！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.request_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/us/request_ammo",
+      "primaryOriginalDirectory": "第三人称/US/我需要弹药（没子弹了",
+      "displayName": "第三人称/US/我需要弹药（没子弹了",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.downed_help",
+      "category": "tp",
+      "resourceDirectory": "tp/us/downed_help",
+      "primaryOriginalDirectory": "第三人称/US/我需要急救",
+      "displayName": "第三人称/US/我需要急救",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.battle_intense",
+      "category": "tp",
+      "resourceDirectory": "tp/us/battle_intense",
+      "primaryOriginalDirectory": "第三人称/US/战况激烈",
+      "displayName": "第三人称/US/战况激烈",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.grenade_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/us/grenade_alert",
+      "primaryOriginalDirectory": "第三人称/US/手雷",
+      "displayName": "第三人称/US/手雷",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.nice_shot",
+      "category": "tp",
+      "resourceDirectory": "tp/us/nice_shot",
+      "primaryOriginalDirectory": "第三人称/US/打得好！",
+      "displayName": "第三人称/US/打得好！",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.suppressing_hostile",
+      "category": "tp",
+      "resourceDirectory": "tp/us/suppressing_hostile",
+      "primaryOriginalDirectory": "第三人称/US/持续压制敌军",
+      "displayName": "第三人称/US/持续压制敌军",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.place_c4_4",
+      "category": "tp",
+      "resourceDirectory": "tp/us/place_c4_4",
+      "primaryOriginalDirectory": "第三人称/US/放置c4",
+      "displayName": "第三人称/US/放置c4",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.spotted_support",
+      "category": "tp",
+      "resourceDirectory": "tp/us/spotted_support",
+      "primaryOriginalDirectory": "第三人称/US/敌军机枪手",
+      "displayName": "第三人称/US/敌军机枪手 | 第三人称/US/索敌敌军机枪手（支援兵",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.us.rpg_alert",
+      "category": "tp",
+      "resourceDirectory": "tp/us/rpg_alert",
+      "primaryOriginalDirectory": "第三人称/US/敌军火箭弹",
+      "displayName": "第三人称/US/敌军火箭弹",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.spotted_recon",
+      "category": "tp",
+      "resourceDirectory": "tp/us/spotted_recon",
+      "primaryOriginalDirectory": "第三人称/US/敌军狙击",
+      "displayName": "第三人称/US/敌军狙击 | 第三人称/US/索敌敌方狙击手（侦察",
+      "soundCount": 20
+    },
+    {
+      "eventId": "tp.us.death",
+      "category": "tp",
+      "resourceDirectory": "tp/us/death",
+      "primaryOriginalDirectory": "第三人称/US/有队友倒下",
+      "displayName": "第三人称/US/有队友倒下",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.reviving",
+      "category": "tp",
+      "resourceDirectory": "tp/us/reviving",
+      "primaryOriginalDirectory": "第三人称/US/正在急救队友",
+      "displayName": "第三人称/US/正在急救队友",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.spotted_engineer",
+      "category": "tp",
+      "resourceDirectory": "tp/us/spotted_engineer",
+      "primaryOriginalDirectory": "第三人称/US/索敌敌方反坦克（工程兵",
+      "displayName": "第三人称/US/索敌敌方反坦克（工程兵",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.throw_medkit",
+      "category": "tp",
+      "resourceDirectory": "tp/us/throw_medkit",
+      "primaryOriginalDirectory": "第三人称/US/给你医疗包",
+      "displayName": "第三人称/US/给你医疗包",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.throw_ammo",
+      "category": "tp",
+      "resourceDirectory": "tp/us/throw_ammo",
+      "primaryOriginalDirectory": "第三人称/US/给你弹药",
+      "displayName": "第三人称/US/给你弹药",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.revived",
+      "category": "tp",
+      "resourceDirectory": "tp/us/revived",
+      "primaryOriginalDirectory": "第三人称/US/被救起来",
+      "displayName": "第三人称/US/被救起来",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.thanks",
+      "category": "tp",
+      "resourceDirectory": "tp/us/thanks",
+      "primaryOriginalDirectory": "第三人称/US/谢谢",
+      "displayName": "第三人称/US/谢谢",
+      "soundCount": 10
+    },
+    {
+      "eventId": "tp.us.request_repair",
+      "category": "tp",
+      "resourceDirectory": "tp/us/request_repair",
+      "primaryOriginalDirectory": "第三人称/US/需要维修",
+      "displayName": "第三人称/US/需要维修",
+      "soundCount": 5
+    },
+    {
+      "eventId": "tp.death",
+      "category": "tp",
+      "resourceDirectory": "tp/death",
+      "primaryOriginalDirectory": "第三人称/死亡惨叫",
+      "displayName": "第三人称/死亡惨叫 | 第三人称/死亡惨叫（新添加",
+      "soundCount": 25
+    },
+    {
+      "eventId": "tp.burning",
+      "category": "tp",
+      "resourceDirectory": "tp/burning",
+      "primaryOriginalDirectory": "第三人称/被火焰点燃后的第三人称语音",
+      "displayName": "第三人称/被火焰点燃后的第三人称语音",
+      "soundCount": 15
+    }
+  ]
+}
