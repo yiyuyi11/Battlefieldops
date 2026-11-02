@@ -189,6 +189,8 @@ sim/                        离线回归测试
 
 界面与玩法设计亦参考了 GD656 的若干模块（frontvoice / killicon / motionhud / peek / tacz 相关 tweak 等），在此一并致谢。
 
+如原模组作者/权利方提出要求，本仓库会立即下架相关代码或素材，详见 [CREDITS.md](./CREDITS.md)。
+
 ## 许可
 
 [MIT](./LICENSE)
