@@ -183,6 +183,12 @@ sim/                        离线回归测试
 
 ---
 
+## 第三方资源与致谢
+
+本项目中的 **656 系列六件战场支援装备** —— 弹药包（ammo_bag）、医疗包（medic_bag）、弹药箱（ammo_box）、医疗箱（med_box）、复活信标（radio_beacon）、地面传感器（ground_sensor）—— 及其贴图、模型、音效等资源 **来源于 GD656（gd656conquest）**，版权归原作者所有；本项目只做了 1.21.1 / NeoForge 的移植与适配。
+
+界面与玩法设计亦参考了 GD656 的若干模块（frontvoice / killicon / motionhud / peek / tacz 相关 tweak 等），在此一并致谢。
+
 ## 许可
 
 [MIT](./LICENSE)
