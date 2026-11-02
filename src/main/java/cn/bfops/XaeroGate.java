@@ -105,8 +105,72 @@ public final class XaeroGate {
         // menu is open, and {@code RenderGuiEvent} stops firing then — a player sitting in the
         // deployment screen would get Xaero's map back. Tick is also the safer place to write a config
         // value than the middle of a frame, since Xaero reads that config while it renders.
-        apply(inMatch() && wanted());
+        // The player's own "hide minimap" toggle must hide Xaero too: Xaero's terrain is the minimap's base,
+        // so hiding only our overlay would leave a bare Xaero map behind.
+        apply(inMatch() && (ClientPrefs.minimapHidden() || ((wanted()||NativeXaero.present()) && !NativeXaero.available())));
         applyRadar(inMatch());
+        // With the battlefield overlay drawing on Xaero's terrain, Xaero's own frame and player arrow are
+        // redundant; zero them for the match and restore them afterwards.
+        applyChrome(inMatch() && NativeXaero.available() && !ClientPrefs.minimapHidden());
+        // Riding: Xaero's map would sit on top of Superb Warfare's vehicle readouts, so it is moved to the
+        // top-left for the duration and restored on dismount.
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        // Works outside matches too: mounting should move the map whenever it is visible.
+        applyVehicleCorner(NativeXaero.available() && !ClientPrefs.minimapHidden()
+                && mc.player != null && mc.player.getRootVehicle() != mc.player);
+    }
+
+    // ---- Vehicle corner gate ---------------------------------------------------------
+    // The minimap's corner lives in the HUD module's confirmed transform. When the player mounts, a
+    // bottom-corner map is relocated to the top-left; on dismount the original corner is restored.
+    private static Boolean vehicleBottom, vehicleRight;
+
+    static void applyVehicleCorner(boolean riding) {
+        if (!NativeXaero.available() || !resolve()) return;
+        try {
+            Object current = module.getClass().getMethod("getConfirmedTransform").invoke(module);
+            if (current == null) return;
+            if (riding) {
+                if (savedTransform == null) savedTransform = snapshot(current);
+                write(current, "fromBottom", Boolean.FALSE);
+                write(current, "fromRight", Boolean.FALSE);
+            } else if (savedTransform != null) {
+                restore(savedTransform, current);
+                savedTransform = null;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** The transform as it was before the first mount, so an exact restore is possible. */
+    private static Object savedTransform;
+
+    /** Copies every public instance field, which covers the corner flags and both pixel offsets. */
+    private static Object snapshot(Object source) {
+        try {
+            Object copy = source.getClass().getDeclaredConstructor().newInstance();
+            restore(source, copy);
+            return copy;
+        } catch (Throwable ex) {
+            return source;
+        }
+    }
+
+    private static void restore(Object from, Object to) {
+        for (java.lang.reflect.Field field : from.getClass().getFields()) {
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers())) continue;
+            try {
+                field.set(to, field.get(from));
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static void write(Object target, String name, Object value) {
+        try {
+            target.getClass().getField(name).set(target, value);
+        } catch (Throwable ignored) {
+        }
     }
 
     @SubscribeEvent
@@ -115,6 +179,7 @@ public final class XaeroGate {
         // no minimap in every other world until they restarted the game.
         apply(false);
         applyRadar(false);
+        applyChrome(false);
     }
 
     /**
@@ -135,6 +200,70 @@ public final class XaeroGate {
     public static void shuttingDown(net.neoforged.neoforge.event.GameShuttingDownEvent event) {
         apply(false);
         applyRadar(false);
+        applyChrome(false);
+    }
+
+    // ---- Chrome gate (frame + player arrow) -------------------------------------------
+    // The battlefield overlay wants Xaero's terrain but not its frame or its player arrow. Both are
+    // per-profile config values, so they are captured, zeroed for the match, and restored afterwards.
+    private static boolean chromeResolved;
+    private static Object frameOption, arrowOpacityOption;
+    private static Object savedFrame, savedArrow;
+
+    static void applyChrome(boolean hide) {
+        if (!resolve() || !resolveChrome()) return;
+        try {
+            var manager = manager();
+            if (manager == null) return;
+            Object profile = getCurrentProfile.invoke(manager);
+            if (profile == null) return;
+            if (hide) {
+                if (savedFrame != null || savedArrow != null) return;
+                if (configGet == null || configSet == null) return;
+                savedFrame = configGet.invoke(profile, frameOption);
+                savedArrow = configGet.invoke(profile, arrowOpacityOption);
+                configSet.invoke(profile, frameOption, zeroLike(savedFrame));
+                configSet.invoke(profile, arrowOpacityOption, zeroLike(savedArrow));
+            } else {
+                if (savedFrame == null && savedArrow == null) return;
+                if (configGet == null || configSet == null) return;
+                if (savedFrame != null) configSet.invoke(profile, frameOption, savedFrame);
+                if (savedArrow != null) configSet.invoke(profile, arrowOpacityOption, savedArrow);
+                savedFrame = null;
+                savedArrow = null;
+            }
+        } catch (Throwable ex) {
+            BattlefieldOps.LOG.debug("Could not adjust the Xaero frame/arrow", ex);
+        }
+    }
+
+    /** Zero value matching the saved value's numeric type, so the option's setter accepts it. */
+    private static Object zeroLike(Object saved) {
+        if (saved instanceof Float) return 0.0f;
+        if (saved instanceof Double) return 0.0d;
+        if (saved instanceof Long) return 0L;
+        return 0;
+    }
+
+    private static boolean resolveChrome() {
+        if (chromeResolved) return frameOption != null && arrowOpacityOption != null;
+        chromeResolved = true;
+        try {
+            Class<?> options = Class.forName("xaero.hud.minimap.common.config.option.MinimapProfiledConfigOptions");
+            frameOption = options.getField("FRAME").get(null);
+            arrowOpacityOption = options.getField("ARROW_OPACITY").get(null);
+            try {
+                Class<?> managerClass = Class.forName("xaero.lib.client.config.ClientConfigManager");
+                Class<?> optionClass = Class.forName("xaero.lib.common.config.option.ConfigOption");
+                Class<?> configClass = Class.forName("xaero.lib.common.config.Config");
+                if (getCurrentProfile == null) getCurrentProfile = managerClass.getMethod("getCurrentProfile");
+                if (configGet == null) configGet = configClass.getMethod("get", optionClass);
+                if (configSet == null) configSet = configClass.getMethod("set", optionClass, Object.class);
+            } catch (Throwable ignored) { }
+            return frameOption != null && arrowOpacityOption != null;
+        } catch (Throwable ex) {
+            return false;
+        }
     }
 
     /**
@@ -420,6 +549,7 @@ public final class XaeroGate {
     private static boolean hideBroken;
 
     /** {@code HudMod.INSTANCE.getHudConfigs().getClientConfigManager()}, or null before login. */
+    static Object configManager() throws ReflectiveOperationException{return resolve()?manager():null;}
     private static Object manager() throws ReflectiveOperationException {
         Object instance = hudModClass.getField("INSTANCE").get(null);
         if (instance == null) return null;

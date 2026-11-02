@@ -40,7 +40,7 @@ import java.util.UUID;
 final class Board {
     /** Blue is team 0, red is team 1; anything else is a spectator with no team. */
     static final ChatFormatting[] COLORS = {ChatFormatting.BLUE, ChatFormatting.RED};
-    static final String[] LABELS = {"蓝方", "红方"};
+    static final String[] LABELS = {"机械轴心", "格雷同盟"};
 
     private static final String OBJECTIVE = "bfops";
 
@@ -54,6 +54,7 @@ final class Board {
     private Objective objective;
     /** Player name -> team name currently applied by this class. */
     private final Map<String, String> joined = new HashMap<>();
+    private final Map<String,String> previousTeams=new HashMap<>();
     /** Player name -> score currently written, so unchanged rows are not rewritten every second. */
     private final Map<String, String> rendered = new HashMap<>();
 
@@ -98,12 +99,13 @@ final class Board {
         // this player, taking them over would break TAB's nametag and tab-list formatting and TAB
         // would simply put them back 鈥?a fight that shows up as a flickering name, not as an error.
         // In that case we keep our own bookkeeping but leave the scoreboard alone.
-        if (compat != null && !compat.useTeams(scoreboard.getPlayerTeam(name), BattlefieldOps.LOG)) {
+        if (compat != null && !compat.useTeams(scoreboard.getPlayersTeam(name), BattlefieldOps.LOG)) {
             joined.put(name, wanted);
             return;
         }
 
-        PlayerTeam existing = scoreboard.getPlayerTeam(name);
+        PlayerTeam existing = scoreboard.getPlayersTeam(name);
+        if(!previousTeams.containsKey(name))previousTeams.put(name,existing==null||owned(existing.getName())?"":existing.getName());
         if (existing != null && !existing.getName().equals(wanted)) {
             scoreboard.removePlayerFromTeam(name);
         }
@@ -113,11 +115,10 @@ final class Board {
         target.setDisplayName(Component.literal(label(team) + " 路 " + map));
         target.setPlayerPrefix(Component.literal("[" + label(team) + "] ").withStyle(color(team)));
         target.setAllowFriendlyFire(friendlyFire);
-        target.setNameTagVisibility(hideEnemyNametags
-                ? Team.Visibility.HIDE_FOR_OTHER_TEAMS : Team.Visibility.ALWAYS);
+        target.setNameTagVisibility(Team.Visibility.HIDE_FOR_OTHER_TEAMS);
         target.setCollisionRule(Team.CollisionRule.ALWAYS);
         if (!target.getPlayers().contains(name)) scoreboard.addPlayerToTeam(name, target);
-        joined.put(name, wanted);
+        joined.put(name, wanted);refreshName(player);
     }
 
     /**
@@ -131,16 +132,29 @@ final class Board {
     }
 
     /** Removes one player from whatever this class put them in, leaving foreign teams alone. */
+    static boolean owned(String name){return name!=null&&name.matches("bfops_[a-z0-9_-]+_(blue|red)");}
+    static void clearOwned(Scoreboard scoreboard,String name){
+        PlayerTeam current=scoreboard.getPlayersTeam(name);
+        if(current==null||!owned(current.getName()))return;
+        scoreboard.removePlayerFromTeam(name);
+        if(current.getPlayers().isEmpty())scoreboard.removePlayerTeam(current);
+    }
     void clearPlayer(ServerPlayer player) {
-        String name = player.getScoreboardName();
-        String owned = joined.remove(name);
-        if (owned == null) return;
-        PlayerTeam current = board().getPlayerTeam(name);
-        if (current != null && current.getName().equals(owned)) board().removePlayerFromTeam(name);
-        // Side bar rows use synthetic holder names, never the player name, so there is no score to
-        // clear here. Calling resetAllPlayerScores would wipe this player's scores in *other*
-        // plugins' objectives, which is not ours to touch.
-        if (current != null && current.getPlayers().isEmpty()) board().removePlayerTeam(current);
+        String name=player.getScoreboardName();joined.remove(name);
+        clearOwned(board(),name);
+        String previous=previousTeams.remove(name);
+        if(previous!=null&&!previous.isEmpty())restoreTeam(player,previous);
+        refreshName(player);
+    }
+    void restoreTeam(ServerPlayer player,String previous){
+        if(previous==null||previous.isEmpty()||owned(previous)||board().getPlayersTeam(player.getScoreboardName())!=null)return;
+        PlayerTeam original=board().getPlayerTeam(previous);
+        if(original!=null)board().addPlayerToTeam(player.getScoreboardName(),original);
+        refreshName(player);
+    }
+    private static void refreshName(ServerPlayer player){
+        for(String method:List.of("refreshDisplayName","refreshTabListName"))try{player.getClass().getMethod(method).invoke(player);}
+        catch(ReflectiveOperationException ignored){}
     }
 
     /** Removes every team this map created, whether or not the players are still online. */
@@ -159,14 +173,14 @@ final class Board {
 
     void clearAll() {
         for (String name : new ArrayList<>(joined.keySet())) {
-            PlayerTeam current = board().getPlayerTeam(name);
-            if (current != null) board().removePlayerFromTeam(name);
+            PlayerTeam current = board().getPlayersTeam(name);
+            if (current != null && owned(current.getName())) board().removePlayerFromTeam(name);
         }
         for (String team : generatedTeams()) {
             PlayerTeam existing = board().getPlayerTeam(team);
             if (existing != null) board().removePlayerTeam(existing);
         }
-        joined.clear();
+        joined.clear();previousTeams.clear();
         rendered.clear();
         if (objective != null) {
             // Same rule as hideSidebar: never clear a slot someone else is displaying.
@@ -250,7 +264,7 @@ final class Board {
     List<String> generatedTeams() {
         return board().getPlayerTeams().stream()
                 .map(PlayerTeam::getName)
-                .filter(name -> name.startsWith("bfops_"))
+                .filter(Board::owned)
                 .toList();
     }
 }

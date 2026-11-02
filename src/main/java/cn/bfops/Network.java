@@ -9,7 +9,17 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.util.function.Consumer;
 
 public final class Network {
+    private static final com.google.gson.Gson WIRE_JSON=new com.google.gson.Gson();
     public static Consumer<String> receiver=s->{};
+    public static Consumer<Boolean> modeReceiver=value->{};
+    public record Mode(boolean enabled) implements CustomPacketPayload {
+        public static final Type<Mode> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","mode"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,Mode> CODEC=StreamCodec.of((b,p)->b.writeBoolean(p.enabled),b->new Mode(b.readBoolean()));
+        public Type<Mode> type(){return TYPE;}
+    }
+    public static void mode(ServerPlayer player,boolean enabled){
+        if(net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)player.connection,Mode.TYPE.id()))PacketDistributor.sendToPlayer(player,new Mode(enabled));
+    }
     public record Request(String json) implements CustomPacketPayload {
         public static final Type<Request> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","request"));
         public static final StreamCodec<RegistryFriendlyByteBuf,Request> CODEC=StreamCodec.of((b,p)->b.writeUtf(p.json,20000),b->new Request(b.readUtf(20000)));
@@ -17,15 +27,20 @@ public final class Network {
     }
     public record State(String json) implements CustomPacketPayload {
         public static final Type<State> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","state"));
-        public static final StreamCodec<RegistryFriendlyByteBuf,State> CODEC=StreamCodec.of((b,p)->b.writeUtf(p.json,200000),b->new State(b.readUtf(200000)));
+        public static final StreamCodec<RegistryFriendlyByteBuf,State> CODEC=StreamCodec.of((b,p)->b.writeUtf(p.json,800000),b->new State(b.readUtf(800000)));
         public Type<State> type(){return TYPE;}
     }
-    public static void register(RegisterPayloadHandlersEvent e){var r=e.registrar("2").optional();r.playToServer(Request.TYPE,Request.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);}));r.playToClient(State.TYPE,State.CODEC,(p,c)->c.enqueueWork(()->receiver.accept(p.json)));}
+    public record MapSave(byte[] data) implements CustomPacketPayload {
+        public static final Type<MapSave> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","map_save"));
+        public static final StreamCodec<RegistryFriendlyByteBuf,MapSave> CODEC=StreamCodec.of((b,p)->b.writeByteArray(p.data),b->new MapSave(b.readByteArray(30000)));
+        public Type<MapSave> type(){return TYPE;}
+    }
+    public static void register(RegisterPayloadHandlersEvent e){var r=e.registrar("3").optional();r.playToClient(Mode.TYPE,Mode.CODEC,(p,c)->c.enqueueWork(()->modeReceiver.accept(p.enabled)));r.playToServer(Request.TYPE,Request.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);}));r.playToClient(State.TYPE,State.CODEC,(p,c)->c.enqueueWork(()->receiver.accept(p.json)));r.playToServer(MapSave.TYPE,MapSave.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp)MapTransfer.receive(sp,p.data);}));}
     public static boolean supported(ServerPlayer p){
         // Bots (fake players) have no client: treat them as unsupported so state/award packets never
         // reach their dropped connection.
         if(BattlefieldOps.engine!=null && BattlefieldOps.engine.isBot(p))return false;
         return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,State.TYPE.id()) && net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,Request.TYPE.id());
     }
-    public static void send(ServerPlayer p,Object state){if(!supported(p))return;String s=BattlefieldOps.GSON.toJson(state);if(s.length()>190000)throw new IllegalStateException("响应过大");PacketDistributor.sendToPlayer(p,new State(s));}
+    public static void send(ServerPlayer p,Object state){if(!supported(p))return;String s=WIRE_JSON.toJson(state);if(s.length()>780000||s.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>900000)throw new IllegalStateException("响应过大");PacketDistributor.sendToPlayer(p,new State(s));}
 }

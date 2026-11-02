@@ -54,12 +54,35 @@ public final class Catalog {
     public final Set<String> vehicles = new HashSet<>();
     /** Vehicles that belong on a runway point instead of a ground spawn. */
     public final Set<String> aircraft = new LinkedHashSet<>();
+    /** Gun id → attachment groups, pre-scanned at startup so the "fittings" request is a cache read. */
+    public final Map<String, List<Fittings.Group>> gunFittings = new LinkedHashMap<>();
+    /** Gun id → "伤害 X · 射速 Y · 弹容 Z", pre-scanned so clients never reflect into TaCZ themselves. */
+    public final Map<String, String> gunStats = new LinkedHashMap<>();
+    public final Map<String,String> gunTypes=new LinkedHashMap<>();
+    /** Vehicle id → weapon-station ammo groups, pre-scanned so the vehicle "fittings" request is a cache read. */
+    public final Map<String, List<Fittings.Group>> vehicleFittings = new LinkedHashMap<>();
+    /** Vehicle id → seat count, from Superb Warfare's own seat table. */
+    public final Map<String, Integer> vehicleSeats = new LinkedHashMap<>();
+    /** Vehicle id → max health, from Superb Warfare's own metadata. */
+    public final Map<String, Float> vehicleHealth = new LinkedHashMap<>();
     public String diagnostics = "";
 
     private Class<?> vehicleBase;
 
+    String category(Entry entry){return entry.kind()+":"+(entry.kind().equals("gun")?gunTypes.getOrDefault(entry.id(),""):vehicleTypes.getOrDefault(entry.id(),""));}
     public boolean isGun(String id) { return guns.contains(id); }
     public boolean isVehicle(String id) { return vehicles.contains(id); }
+
+    /** True for a TaCZ gun tagged as a melee weapon (knife), which the melee slot may carry. */
+    public boolean isKnife(String id) {
+        String type = gunTypes.getOrDefault(id, "");
+        return type.equalsIgnoreCase("knife") || type.equalsIgnoreCase("melee");
+    }
+
+    /** Every scanned gun tagged as a knife, for the melee slot picker. */
+    public java.util.List<String> knives() {
+        return guns.stream().filter(this::isKnife).sorted().toList();
+    }
 
     /**
      * True when this vehicle needs an air point rather than a ground spawn.
@@ -119,6 +142,18 @@ public final class Catalog {
         return entity != null && vehicleBase != null && vehicleBase.isInstance(entity);
     }
 
+    /** Health fraction (0..1) of a fielded vehicle, or -1 when it is not a readable vehicle. */
+    public float vehicleHealthFraction(Entity entity) {
+        if (!isVehicleEntity(entity)) return -1;
+        try {
+            float health = (float) vehicleBase.getMethod("getHealth").invoke(entity);
+            float max = (float) vehicleBase.getMethod("getMaxHealth").invoke(entity);
+            return max <= 0 ? -1 : Math.max(0f, Math.min(1f, health / max));
+        } catch (ReflectiveOperationException ex) {
+            return -1;
+        }
+    }
+
     public static boolean hasTacz() { return ModList.get().isLoaded("tacz"); }
     public static boolean hasSuperbWarfare() { return ModList.get().isLoaded("superbwarfare"); }
 
@@ -127,12 +162,13 @@ public final class Catalog {
         names.clear();
         kinds.clear();
         vehicleTypes.clear();
-        guns.clear();
+        guns.clear();gunTypes.clear();
         vehicles.clear();
         aircraft.clear();
         diagnostics = "";
         Map<String, String> lang = lang(server);
         scanGuns(lang);
+        scanGunFittings(server);
         scanVehicles(server, lang);
         entries.sort(Comparator.comparing(Entry::kind).thenComparing(Entry::id));
         if (!aircraft.isEmpty()) {
@@ -151,6 +187,7 @@ public final class Catalog {
                 Map.Entry<?, ?> indexed = (Map.Entry<?, ?>) item;
                 String id = indexed.getKey().toString();
                 guns.add(id);
+                gunTypes.put(id,String.valueOf(indexed.getValue().getClass().getMethod("getType").invoke(indexed.getValue())));
                 String name = gunName(indexed.getValue(), id, lang);
                 names.put(id, name);
                 kinds.put(id, "gun");
@@ -176,6 +213,65 @@ public final class Catalog {
             // fall through to the prettified id
         }
         return prettify(id);
+    }
+
+    /**
+     * Pre-scans every gun's attachment options and headline stats at startup.
+     *
+     * <p>The "fittings" request and the client's weapon-property line used to reflect into TaCZ on demand
+     * — the server built a fresh gun and re-read the whole attachment table per request, and the client
+     * built its own gun index per weapon. Doing it once here and caching it means both are a cache read
+     * afterwards. A gun that fails to build or read is skipped with a diagnostic rather than aborting the
+     * scan, so one broken addon gun cannot take the rest of the catalogue down.
+     */
+    private void scanGunFittings(MinecraftServer server) {
+        if (!hasTacz()) return;
+        net.minecraft.core.HolderLookup.Provider reg = server.overworld().registryAccess();
+        int failed = 0;
+        for (String id : guns) {
+            try {
+                gunFittings.put(id, Fittings.gunOptions(buildGun(id, reg)));
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                failed++;
+                BattlefieldOps.LOG.warn("Cannot scan fittings for {}", id, ex);
+            }
+            try {
+                Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
+                Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
+                        .invoke(null, ResourceLocation.parse(id))).orElse(null);
+                if (index != null) {
+                    String stats = statsSummary(index);
+                    if (!stats.isEmpty()) gunStats.put(id, stats);
+                }
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                // Stats are a nicety; a gun without readable stats just has no property line.
+            }
+        }
+        if (failed > 0) diagnostics += failed + " 把枪读不到配件表；";
+    }
+
+    /** "伤害 35 · 射速 600 · 弹容 30 · 重量 4 · 弹药 9mm" from a common gun index, or empty when unreadable. */
+    private static String statsSummary(Object index) throws ReflectiveOperationException {
+        Object gun = index.getClass().getMethod("getGunData").invoke(index);
+        if (gun == null) return "";
+        int rpm = (int) gun.getClass().getMethod("getRoundsPerMinute").invoke(gun);
+        int mag = (int) gun.getClass().getMethod("getAmmoAmount").invoke(gun);
+        float weight = (float) gun.getClass().getMethod("getWeight").invoke(gun);
+        float damage = 0;
+        Object bullet = gun.getClass().getMethod("getBulletData").invoke(gun);
+        if (bullet != null) {
+            float perPellet = (float) bullet.getClass().getMethod("getDamageAmount").invoke(bullet);
+            int pellets = Math.max(1, (int) bullet.getClass().getMethod("getBulletAmount").invoke(bullet));
+            damage = perPellet * pellets;
+        }
+        Object ammo = gun.getClass().getMethod("getAmmoId").invoke(gun);
+        StringBuilder text = new StringBuilder();
+        if (damage > 0) text.append("伤害 ").append(Math.round(damage)).append(" · ");
+        if (rpm > 0) text.append("射速 ").append(rpm).append(" · ");
+        if (mag > 0) text.append("弹容 ").append(mag).append(" · ");
+        if (weight > 0) text.append("重量 ").append(Math.round(weight)).append(" · ");
+        if (ammo != null) text.append("弹药 ").append(prettify(ammo.toString()));
+        return text.toString().trim();
     }
 
     private void scanVehicles(MinecraftServer server, Map<String, String> lang) {
@@ -209,6 +305,13 @@ public final class Catalog {
             try {
                 probe = type.create(probeLevel);
                 if (probe == null || vehicleBase == null || !vehicleBase.isInstance(probe)) continue;
+                // Pre-scan the weapon-station ammo options while the probe is live, so the vehicle
+                // "fittings" request becomes a cache read instead of a fresh instantiation + reflection.
+                try {
+                    vehicleFittings.put(key, Fittings.vehicleOptions(probe));
+                } catch (ReflectiveOperationException | RuntimeException ex) {
+                    // A vehicle with unreadable weapons just has no editable ammo; it is still deployable.
+                }
             } catch (Throwable ex) {
                 // A type whose factory throws is not a vehicle we can use; record and move on rather
                 // than letting one broken addon abort the scan.
@@ -233,6 +336,18 @@ public final class Catalog {
             if (typeName != null) {
                 vehicleTypes.put(key, typeName);
                 if (AIR_TYPES.contains(typeName)) aircraft.add(key);
+            }
+            // Seat count and max health from the same default data, so the deploy card can show them
+            // without the client reflecting into Superb Warfare.
+            try {
+                Object defaults = Class.forName(VEHICLE_DATA).getMethod("getDefault", EntityType.class).invoke(null, type);
+                if (defaults != null) {
+                    java.util.List<?> seats = (java.util.List<?>) defaults.getClass().getMethod("seats").invoke(defaults);
+                    vehicleSeats.put(key, seats == null ? 0 : seats.size());
+                    vehicleHealth.put(key, (float) defaults.getClass().getMethod("getMaxHealth").invoke(defaults));
+                }
+            } catch (ReflectiveOperationException | RuntimeException ex) {
+                // seat/health are niceties; a vehicle with unreadable metadata just shows no stat line.
             }
         }
         if (vehicles.isEmpty()) {
@@ -309,11 +424,17 @@ public final class Catalog {
 
     /** Rejects a map whose kits or vehicle whitelist reference something that is not registered. */
     public void check(Model.Arena map) {
-        for (Model.Kit kit : map.kits) {
+        List<Model.Kit> checkedKits=new ArrayList<>(map.kits);
+        for(var template:map.eliteKits)checkedKits.add(template.kit);
+        for (Model.Kit kit : checkedKits) {
             for (boolean main : new boolean[]{true,false}) {
                 Model.require(kit.options(main).size() <= 64, "每个兵种每个武器栏最多 64 把枪");
                 for(String id : kit.options(main)) if(!id.isEmpty()) Model.require(guns.contains(id), "未扫描到可选武器：" + id);
             }
+            kit.attachments.forEach((gun,policy)->{
+                Set<String> valid=new HashSet<>();for(var group:gunFittings.getOrDefault(gun,List.of()))for(var option:group.options())valid.add(option.id());
+                for(String id:policy.entries.keySet())Model.require(valid.contains(id),"配件不兼容或未扫描到："+gun+" / "+id);
+            });
             if (!kit.primary.isEmpty()) Model.require(guns.contains(kit.primary), "未扫描到主武器：" + kit.primary);
             if (!kit.secondary.isEmpty()) Model.require(guns.contains(kit.secondary), "未扫描到副武器：" + kit.secondary);
         }
@@ -347,33 +468,40 @@ public final class Catalog {
         return out;
     }
 
+
+    /**
+     * Gun plus exactly {@code rounds} ammunition, not "N full stacks".
+     *
+     * <p>The kit's number means rounds: asking for 4 gives 4 rockets, so the deploy screen text ("x4 发")
+     * matches what is actually handed over.
+     */
+    public List<ItemStack> gunRounds(ServerPlayer player, String id, int rounds) throws ReflectiveOperationException {
+        List<ItemStack> template = gun(player, id, 1);
+        List<ItemStack> result = new ArrayList<>();
+        if (template.isEmpty()) return result;
+        result.add(template.getFirst());
+        if (template.size() < 2 || rounds <= 0) return result;
+        ItemStack ammo = template.get(1);
+        int perStack = Math.max(1, ammo.getMaxStackSize());
+        int remaining = rounds;
+        while (remaining > 0) {
+            int amount = Math.min(remaining, perStack);
+            ItemStack part = ammo.copyWithCount(amount);
+            result.add(part);
+            remaining -= amount;
+        }
+        return result;
+    }
+
     public List<ItemStack> gun(ServerPlayer player, String id, int stacks) throws ReflectiveOperationException {
         if (id.isEmpty()) return List.of();
         Model.require(guns.contains(id), "该武器不可用");
-        ResourceLocation key = ResourceLocation.parse(id);
-        Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
-        Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class).invoke(null, key))
-                .orElseThrow(() -> new IllegalArgumentException("TaCZ 未加载该武器：" + id));
-        Object data = index.getClass().getMethod("getGunData").invoke(index);
-        Class<?> builderClass = Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
-        Object builder = builderClass.getMethod("create").invoke(null);
-        builderClass.getMethod("setId", ResourceLocation.class).invoke(builder, key);
-        int amount = (int) data.getClass().getMethod("getAmmoAmount").invoke(data);
-        builderClass.getMethod("setAmmoCount", int.class).invoke(builder, amount);
-        builderClass.getMethod("setAmmoInBarrel", boolean.class).invoke(builder, true);
-        List<?> modes = (List<?>) data.getClass().getMethod("getFireModeSet").invoke(data);
-        if (!modes.isEmpty()) {
-            builderClass.getMethod("setFireMode", Class.forName("com.tacz.guns.api.item.gun.FireMode"))
-                    .invoke(builder, modes.getFirst());
-        }
-        ItemStack gun = (ItemStack) builderClass
-                .getMethod("build", net.minecraft.core.HolderLookup.Provider.class)
-                .invoke(builder, player.registryAccess());
-        Model.require(!gun.isEmpty(), "TaCZ 构建武器失败");
+        ItemStack gun = buildGun(id, player.registryAccess());
 
         List<ItemStack> result = new ArrayList<>();
         result.add(gun);
         if (stacks > 0) {
+            Object data = gunData(id);
             ResourceLocation ammo = (ResourceLocation) data.getClass().getMethod("getAmmoId").invoke(data);
             Class<?> ammoBuilder = Class.forName("com.tacz.guns.api.item.builder.AmmoItemBuilder");
             for (int i = 0; i < stacks; i++) {
@@ -386,5 +514,36 @@ public final class Catalog {
             }
         }
         return result;
+    }
+
+    /** Builds a TaCZ gun stack from its common index, against the given registry access. */
+    private static ItemStack buildGun(String id, net.minecraft.core.HolderLookup.Provider reg)
+            throws ReflectiveOperationException {
+        ResourceLocation key = ResourceLocation.parse(id);
+        Object data = gunData(id);
+        Class<?> builderClass = Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
+        Object builder = builderClass.getMethod("create").invoke(null);
+        builderClass.getMethod("setId", ResourceLocation.class).invoke(builder, key);
+        int amount = (int) data.getClass().getMethod("getAmmoAmount").invoke(data);
+        builderClass.getMethod("setAmmoCount", int.class).invoke(builder, amount);
+        builderClass.getMethod("setAmmoInBarrel", boolean.class).invoke(builder, true);
+        List<?> modes = (List<?>) data.getClass().getMethod("getFireModeSet").invoke(data);
+        if (!modes.isEmpty()) {
+            builderClass.getMethod("setFireMode", Class.forName("com.tacz.guns.api.item.gun.FireMode"))
+                    .invoke(builder, modes.getFirst());
+        }
+        ItemStack gun = (ItemStack) builderClass
+                .getMethod("build", net.minecraft.core.HolderLookup.Provider.class).invoke(builder, reg);
+        Model.require(!gun.isEmpty(), "TaCZ 构建武器失败");
+        return gun;
+    }
+
+    /** The gun's {@code GunData}, looked up from its common index. */
+    private static Object gunData(String id) throws ReflectiveOperationException {
+        Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
+        Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
+                .invoke(null, ResourceLocation.parse(id)))
+                .orElseThrow(() -> new IllegalArgumentException("TaCZ 未加载该武器：" + id));
+        return index.getClass().getMethod("getGunData").invoke(index);
     }
 }

@@ -25,17 +25,41 @@ final class GunFeedbackCompat {
     }
     @SuppressWarnings({"unchecked","rawtypes"})
     static void register() {
+        registerReload();
         try {
             Class<? extends Event> type=(Class<? extends Event>)Class.forName("com.tacz.guns.api.event.common.EntityHurtByGunEvent$Pre");
-            Method victim=type.getMethod("getHurtEntity"),attacker=type.getMethod("getAttacker"),head=type.getMethod("isHeadShot");
+            Method victim=type.getMethod("getHurtEntity"),attacker=type.getMethod("getAttacker"),head=type.getMethod("isHeadShot"),gunId=type.getMethod("getGunId"),bullet=type.getMethod("getBullet");
             NeoForge.EVENT_BUS.addListener((Class)type,(java.util.function.Consumer<Event>)event->{
                 try {
                     if(BattlefieldOps.engine!=null && attacker.invoke(event) instanceof ServerPlayer player
-                            && victim.invoke(event) instanceof Entity target && !target.level().isClientSide())
+                            && victim.invoke(event) instanceof Entity raw && !raw.level().isClientSide()) {
+                        Entity target=raw instanceof net.neoforged.neoforge.entity.PartEntity<?> part?part.getParent():raw;
+                        BattlefieldOps.engine.atmosphereHit((Entity)bullet.invoke(event));
+                        BattlefieldOps.engine.gunEvidence(player,target,gunId.invoke(event).toString());
                         BattlefieldOps.engine.cosmeticKills.gunHit(target,player,(Boolean)head.invoke(event));
+                    }
                 } catch(ReflectiveOperationException ex) { BattlefieldOps.LOG.debug("Cannot read TaCZ hit",ex); }
             });
         } catch(ClassNotFoundException ignored) { }
         catch(ReflectiveOperationException | LinkageError ex) { BattlefieldOps.LOG.warn("TaCZ precise headshot bridge unavailable",ex); }
     }
+    @SuppressWarnings({"unchecked","rawtypes"})
+    private static void registerReload(){
+        try{
+            Class<? extends Event> type=(Class<? extends Event>)Class.forName("com.tacz.guns.api.event.common.GunReloadEvent");
+            Method entity=type.getMethod("getEntity");
+            NeoForge.EVENT_BUS.addListener((Class)type,(java.util.function.Consumer<Event>)event->{try{if(BattlefieldOps.engine!=null&&entity.invoke(event) instanceof ServerPlayer p)BattlefieldOps.engine.gunReload(p);}catch(ReflectiveOperationException ex){BattlefieldOps.LOG.debug("Cannot read reload event",ex);}});
+        }catch(ReflectiveOperationException|LinkageError ex){BattlefieldOps.LOG.debug("TaCZ reload bridge unavailable",ex);}
+    }
+    static boolean sniperAiming(ServerPlayer player){
+        try{
+            var stack=player.getMainHandItem();if(!heldGun(stack))return false;
+            var id=stack.getItem().getClass().getMethod("getGunId",ItemStack.class).invoke(stack.getItem(),stack);
+            Object value=Class.forName("com.tacz.guns.api.TimelessAPI").getMethod("getCommonGunIndex",net.minecraft.resources.ResourceLocation.class).invoke(null,id);
+            if(!(value instanceof java.util.Optional<?> index)||index.isEmpty()||!"sniper".equals(index.get().getClass().getMethod("getType").invoke(index.get())))return false;
+            Class<?> operator=Class.forName("com.tacz.guns.api.entity.IGunOperator");Object op=operator.getMethod("fromLivingEntity",net.minecraft.world.entity.LivingEntity.class).invoke(null,player);
+            return Boolean.TRUE.equals(operator.getMethod("getSynIsAiming").invoke(op));
+        }catch(ReflectiveOperationException|LinkageError ex){return false;}
+    }
+
 }

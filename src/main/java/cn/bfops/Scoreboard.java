@@ -24,7 +24,8 @@ final class Scoreboard {
      * @param self whether this is the viewing player, marked so they can find themselves instantly
      */
     record Row(String name, int team, int kills, int deaths, int score, int captures,
-               boolean alive, boolean self) {
+               boolean alive, boolean self,int assists,int revives,String kit,int squad) {
+        Row(String name,int team,int kills,int deaths,int score,int captures,boolean alive,boolean self){this(name,team,kills,deaths,score,captures,alive,self,0,0,"",0);}
     }
 
     static final int BLUE = 0xff5599ff;
@@ -78,7 +79,7 @@ final class Scoreboard {
 
     /** Compact right-aligned statistics column: kills, deaths, score. */
     static String stats(Row row) {
-        return row.kills() + "/" + row.deaths() + "  " + row.score();
+        return row.kills()+"/"+row.deaths()+"/"+row.assists()+"/"+row.revives()+"  "+row.score();
     }
 
     /** Total personal score of one team, shown in the team header. */

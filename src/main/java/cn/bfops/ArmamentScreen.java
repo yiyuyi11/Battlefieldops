@@ -165,7 +165,7 @@ final class ArmamentScreen extends FrontScreen {
     }
 
     @Override
-    protected void rebuild() {
+    protected void rebuildContent() {
         clearWidgets();
         seedStations();
         form = newForm(Ui.headerBody(layout.left));
@@ -249,6 +249,7 @@ final class ArmamentScreen extends FrontScreen {
             rebuild();
         });
 
+        row(form,"原生武器站属性图表","包含当前草稿配件",()->minecraft.setScreen(new EquipmentStatsScreen(this,"vehicle",vehicleId,java.util.Map.of(),working)));
         form.section("配件");
         for (String slot : ATTACHMENT_SLOTS) {
             Integer value = station.attachments.get(slot);

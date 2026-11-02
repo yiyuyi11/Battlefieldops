@@ -9,24 +9,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
 
-/**
- * Shared shell for every screen in this mod: one opaque window, one layout, one footer.
- *
- * <p><b>Why this class exists.</b> The reported bugs — "the right-hand map looks like it is on a
- * different layer than the left column" and "everything is very blurry" — were not cosmetic. Every
- * screen used to paint its own content and then call {@code super.render(...)}, and vanilla's
- * {@code Screen.render} starts with {@code renderBackground}, which blurs a copy of the world
- * ({@code processBlurEffect}) and then lays a semi-transparent dirt texture over the whole window.
- * That blur landed on top of the hand-drawn map, while the text painted afterwards stayed sharp: the
- * two halves of the same window were literally composited in different passes over a blurred world.
- * The old panels also mixed alpha values ({@code 0xe9…}, {@code 0x80…}, {@code 0x50…}), so the world
- * bled through by a different amount in each region.
- *
- * <p>So the shell owns rendering: it paints an opaque backdrop (nothing of the world shows through),
- * draws the chrome, lets the subclass paint its body, and never calls {@code super.render}. Widgets
- * are rendered exactly once, by the {@link Form} that owns them, in a single pass above the panels —
- * which is what makes both panes read as one window.
- */
+/** Shared 656-style world-backed screen shell; render widgets once without vanilla blur. */
 abstract class FrontScreen extends Screen {
     /** Message shown in the footer. Blank hides it. */
     protected String message = "";
@@ -34,6 +17,37 @@ abstract class FrontScreen extends Screen {
     protected int messageColor = Ui.TEXT_DIM;
 
     private final String windowTitle;
+    private DropdownMenu dropdown;
+    protected final boolean dropdownOpen(){return dropdown!=null;}
+    protected FrontButton dropdown(Form form,String label,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){return dropdown(form,form.take(Layout.ROW),label,current,options,chosen);}
+    protected FrontButton dropdown(Form form,Layout.Rect rect,String label,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){
+        String value=options.stream().filter(c->c.id().equals(current)).map(ChoiceScreen.Choice::name).findFirst().orElse(current);
+        FrontButton[] holder=new FrontButton[1];
+        holder[0]=place(form,rect,label,value+"  ▾","","",!options.isEmpty(),()->{dropdown=new DropdownMenu(holder[0],options,current,chosen);setFocused(holder[0]);});
+        return holder[0];
+    }
+    protected void openChoice(String title,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){
+        if(getFocused() instanceof FrontButton button)dropdown=new DropdownMenu(button,options,current,chosen);
+        else minecraft.setScreen(new ChoiceScreen(this,title,options,chosen));
+    }
+    private void chooseDropdown(String value){DropdownMenu menu=dropdown;dropdown=null;if(value!=null)guard(()->menu.chosen.accept(value));}
+    @Override public boolean keyPressed(int key,int scan,int modifiers){
+        if(dropdown!=null){
+            if(key==256){dropdown=null;return true;}
+            if(key==265||key==264){dropdown.move(key==265?-1:1);return true;}
+            if(key==268){dropdown.selected=0;return true;}
+            if(key==269){dropdown.selected=Math.max(0,dropdown.filtered().size()-1);return true;}
+            if(key==257||key==335){chooseDropdown(dropdown.value());return true;}
+            if(key==259&&!dropdown.query.isEmpty()){dropdown.query=dropdown.query.substring(0,dropdown.query.offsetByCodePoints(dropdown.query.length(),-1));dropdown.selected=0;dropdown.first=0;}
+            return true;
+        }
+        return super.keyPressed(key,scan,modifiers);
+    }
+    @Override public boolean charTyped(char chr,int modifiers){if(dropdown!=null){if(!Character.isISOControl(chr)&&dropdown.query.length()<64){dropdown.query+=chr;dropdown.selected=0;dropdown.first=0;}return true;}return super.charTyped(chr,modifiers);}
+    @Override public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(dropdown!=null){dropdown.move(vertical>0?-1:vertical<0?1:0);return true;}return super.mouseScrolled(x,y,horizontal,vertical);}
+    @Override public boolean mouseDragged(double x,double y,int button,double dx,double dy){if(dropdown!=null)return true;return super.mouseDragged(x,y,button,dx,dy);}
+    @Override public boolean mouseReleased(double x,double y,int button){if(dropdown!=null)return true;return super.mouseReleased(x,y,button);}
+
 
     FrontScreen(String windowTitle) {
         super(Component.literal(windowTitle));
@@ -44,7 +58,14 @@ abstract class FrontScreen extends Screen {
     protected Layout layout;
 
     /** Build widgets for the current tab from current state. */
-    protected abstract void rebuild();
+    protected abstract void rebuildContent();
+    private boolean rebuildPending;
+    /** Network updates continue; only widget replacement waits for the modal interaction to finish. */
+    protected final void rebuild(){
+        if(dropdownOpen()){rebuildPending=true;return;}
+        rebuildPending=false;
+        rebuildContent();
+    }
 
     /** Paint the working area. Widgets are drawn by their owning {@link Form}. */
     protected abstract void paint(GuiGraphics graphics, int mouseX, int mouseY, float partialTick);
@@ -52,6 +73,11 @@ abstract class FrontScreen extends Screen {
     /** Tab labels, or an empty array for a screen without tabs. */
     protected String[] tabs() {
         return new String[0];
+    }
+
+    /** False for a page that paints its own full-screen chrome (the deploy map), so no band is left behind. */
+    protected boolean showChrome() {
+        return true;
     }
 
     /** Index of the highlighted tab. */
@@ -65,6 +91,13 @@ abstract class FrontScreen extends Screen {
     }
 
     /** One line of context drawn next to the window title, e.g. the selected map. */
+    protected boolean worldBackdrop() { return minecraft != null && minecraft.level != null; }
+
+    protected boolean actionIcons(){return true;}
+    protected Layout layoutFor(int width,int height){return Layout.of(width,height);}
+    protected boolean showBottomBar(){return true;}
+    protected boolean showFooter(){return true;}
+
     protected String subtitle() {
         return "";
     }
@@ -104,7 +137,7 @@ abstract class FrontScreen extends Screen {
 
     @Override
     protected void init() {
-        layout = Layout.of(width, height);
+        layout = layoutFor(width, height);
         // A failed screen build must not take the game down with it. Whatever the cause, the operator needs to
         // see it in the footer and in the log, and still be able to close the window.
         try {
@@ -125,6 +158,7 @@ abstract class FrontScreen extends Screen {
 
     @Override
     public void resize(Minecraft minecraft, int width, int height) {
+        dropdown=null;
         super.resize(minecraft, width, height);
     }
 
@@ -132,6 +166,7 @@ abstract class FrontScreen extends Screen {
     public void tick() {
         super.tick();
         poll();
+        if(rebuildPending&&!dropdownOpen()&&minecraft.screen==this)guard(this::rebuild);
     }
 
     /** Hook for screens that refresh server state on a timer. */
@@ -148,10 +183,10 @@ abstract class FrontScreen extends Screen {
 
     @Override
     public final void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        Ui.backdrop(graphics, width, height);
+        if (!worldBackdrop()) Ui.backdrop(graphics, width, height);
         chrome(graphics, mouseX, mouseY);
         Layout.Rect bar = layout.bar;
-        if (bar.h() > 0) {
+        if (showBottomBar() && bar.h() > 0) {
             graphics.fill(bar.x(),bar.y(),bar.right(),bar.bottom(),Ui.PANEL_SUNKEN);
             Ui.frame(graphics,bar,Ui.FRAME);
         }
@@ -162,7 +197,10 @@ abstract class FrontScreen extends Screen {
         } catch (RuntimeException | LinkageError ex) {
             reportPaintFailure(ex);
         }
-        foot(graphics);
+        if(showFooter())foot(graphics);
+        // The menu drop-down is drawn AFTER the page content: it is a pop-up, so the panes must not cover it.
+        if(tabsOpen)menuOverlay(graphics,mouseX,mouseY);
+        if(dropdown!=null){if(!children().contains(dropdown.anchor)||!dropdown.anchor.visible)dropdown=null;else dropdown.draw(graphics,font,mouseX,mouseY,width,height);}
     }
 
     /** Last paint failure we logged, so a repeating error does not fill the log every frame. */
@@ -180,20 +218,31 @@ abstract class FrontScreen extends Screen {
     // ------------------------------------------------------------------ chrome
 
     private void chrome(GuiGraphics graphics, int mouseX, int mouseY) {
-        Layout.Rect[] cells = tabRects();
-        for (int i = 0; i < cells.length; i++) {
-            Ui.tab(graphics, font, cells[i], tabs()[i], i == activeTab(), cells[i].inside(mouseX, mouseY));
-        }
-        // A single accent rule under the whole tab strip, so the strip reads as a band belonging to the
-        // window rather than as a row of unrelated buttons. Individual tabs still underline themselves;
-        // this is the baseline they sit on.
-        if (cells.length > 0) {
+        // A full-screen page (the deploy map) carries its own chrome; the window title/tab band must not
+        // be drawn underneath it, or the leftover band shows through at the top.
+        if (!showChrome()) return;
+        if (tabs().length > 0) {
+            // The tab strip is collapsed into one small menu button; the tabs open as a dropdown under it.
+            Layout.Rect toggle = menuButton();
+            boolean hovered = toggle.inside(mouseX, mouseY);
+            graphics.fill(toggle.x(), toggle.y(), toggle.right(), toggle.bottom(),
+                    hovered ? Ui.PANEL_ALT : Ui.mix(Ui.PANEL_ALT, Ui.BACKDROP, 0.55));
+            graphics.fill(toggle.x(), toggle.y(), toggle.right(), toggle.y() + 1, Ui.FRAME);
+            graphics.drawString(font, "☰ 菜单", toggle.x() + 5, toggle.y() + (toggle.h() - 8) / 2,
+                    hovered ? Ui.TEXT : Ui.TEXT_DIM, false);
             graphics.fill(layout.tabs.x(), layout.tabs.bottom(), layout.tabs.right(),
                     layout.tabs.bottom() + 1, Ui.FRAME);
         }
         // Title strip: window name on the left, context after it, so the operator always knows which
         // map and which tab they are looking at.
+        if(layout.title.h()<=0)return;
         int titleX = layout.title.x() + 7;
+        // A very shallow vertical gradient inside the title band. Two near-identical values, not a
+        // decorative fade: the band was a flat rectangle of backdrop and the eye slid off it, so the
+        // window had no visual top edge. Banding is avoided by keeping the two colours close.
+        Ui.gradient(graphics, layout.title,
+                Ui.mix(Ui.PANEL_ALT, Ui.BACKDROP, 0.55),
+                Ui.mix(Ui.PANEL_ALT, Ui.BACKDROP, 0.82));
         // Accent bar flush against the window edge: a fixed landmark that makes the title band
         // recognisable at a glance without spending colour on the text itself.
         graphics.fill(layout.title.x() + 2, layout.title.y() + 1, layout.title.x() + 4,
@@ -235,17 +284,54 @@ abstract class FrontScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            Layout.Rect[] cells = tabRects();
-            for (int i = 0; i < cells.length; i++) {
-                if (cells[i].inside(mouseX, mouseY)) {
-                    if (onTab(i)) return true;
+        if(dropdown!=null){if(button==0){dropdown.layout(width,height);chooseDropdown(dropdown.click(mouseX,mouseY));}else dropdown=null;return true;}
+        if (button == 0 && tabs().length > 0) {
+            Layout.Rect toggle = menuButton();
+            if (toggle.inside(mouseX, mouseY)) { tabsOpen = !tabsOpen; return true; }
+            if (tabsOpen) {
+                for (int i = 0; i < tabs().length; i++) {
+                    if (menuItem(i).inside(mouseX, mouseY)) {
+                        tabsOpen = false;
+                        if (i != activeTab()) onTab(i);
+                        return true;
+                    }
                 }
+                tabsOpen = false;
+                return true;
             }
         }
         // Clipping is a rendering hint only, so the panes snap to whole rows: what is drawn and what
         // is clickable stay the same set, and a click can never reach a row scrolled out of sight.
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** Collapsed tab strip: one small "menu" button in the tab band; the tabs open under it. */
+    private boolean tabsOpen;
+    private Layout.Rect menuButton() {
+        int width = 58, height = Math.max(10, Math.min(14, layout.tabs.h() - 4));
+        return new Layout.Rect(layout.tabs.x() + 2, layout.tabs.y() + 2, width, height);
+    }
+
+    private Layout.Rect menuItem(int index) {
+        int width = Math.max(120, Math.min(200, layout.tabs.w() - 4));
+        return new Layout.Rect(layout.tabs.x() + 2, layout.tabs.bottom() + 2 + index * 16, width, 16);
+    }
+
+    /** The open menu, painted last so no pane or widget can occlude it. */
+    private void menuOverlay(GuiGraphics graphics, int mouseX, int mouseY) {
+        String[] names = tabs();
+        for (int i = 0; i < names.length; i++) {
+            Layout.Rect item = menuItem(i);
+            boolean on = i == activeTab();
+            boolean hovered = item.inside(mouseX, mouseY);
+            graphics.fill(item.x(), item.y(), item.right(), item.bottom(),
+                    on ? 0xf03a4a58 : hovered ? 0xf0283642 : 0xf0101820);
+            graphics.drawString(font, names[i], item.x() + 6, item.y() + (item.h() - 8) / 2,
+                    on ? Ui.ACCENT : Ui.TEXT, false);
+        }
+        graphics.fill(layout.tabs.x() + 2, layout.tabs.bottom() + 2 + names.length * 16,
+                layout.tabs.x() + 2 + Math.max(120, Math.min(200, layout.tabs.w() - 4)),
+                layout.tabs.bottom() + 3 + names.length * 16, Ui.FRAME);
     }
 
     // ------------------------------------------------------------------ widget helpers
@@ -291,7 +377,7 @@ abstract class FrontScreen extends Screen {
                                 String iconKind, String iconId, boolean enabled, Runnable action) {
         FrontButton control = new FrontButton(label, value, rect.x(), rect.y(), rect.w(), rect.h(),
                 iconKind, iconId, enabled, () -> guard(action));
-        live(control);
+        control.showActionIcon=actionIcons();live(control);
         form.add(control);
         return control;
     }

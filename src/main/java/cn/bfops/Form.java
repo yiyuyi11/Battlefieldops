@@ -130,20 +130,15 @@ final class Form {
     /** Wraps by words; used for help text so long hints can never run under the next pane. */
     void paragraph(String text, int color) {
         if (text == null || text.isEmpty()) return;
-        StringBuilder line = new StringBuilder();
-        for (String word : text.split(" ")) {
-            String candidate = line.isEmpty() ? word : line + " " + word;
-            if (font.width(candidate) > width && !line.isEmpty()) {
-                lines.add(new Line(line.toString(), x, cursor, color));
-                cursor += 10;
-                line = new StringBuilder(word);
-            } else {
-                line = new StringBuilder(candidate);
+        for(String paragraph:text.split("\\n",-1)){
+            String remaining=paragraph;
+            if(remaining.isEmpty()){cursor+=10;continue;}
+            while(!remaining.isEmpty()){
+                String line=font.plainSubstrByWidth(remaining,Math.max(1,width));
+                if(line.isEmpty())line=remaining.substring(0,Character.charCount(remaining.codePointAt(0)));
+                lines.add(new Line(line,x,cursor,color));cursor+=10;
+                remaining=remaining.substring(line.length()).stripLeading();
             }
-        }
-        if (!line.isEmpty()) {
-            lines.add(new Line(line.toString(), x, cursor, color));
-            cursor += 10;
         }
     }
 
@@ -170,9 +165,10 @@ final class Form {
      * from below. The painter receives the row's rect already adjusted for the current scroll.
      */
     void paint(int height, java.util.function.BiConsumer<GuiGraphics, Layout.Rect> painter) {
-        Layout.Rect row = take(height, 0);
-        painters.add(new Paint(row, painter));
-        return;
+        paintRow(height,painter);
+    }
+    Layout.Rect paintRow(int height,java.util.function.BiConsumer<GuiGraphics,Layout.Rect> painter){
+        Layout.Rect row=take(height,0);painters.add(new Paint(row,painter));return row;
     }
 
     private record Paint(Layout.Rect row, java.util.function.BiConsumer<GuiGraphics, Layout.Rect> painter) {}

@@ -64,6 +64,24 @@ final class Compat {
          * information a scored match does not hand out, so this defaults on.</p>
          */
         public boolean hideXaeroInMatch = true;
+        /**
+         * Whether the client should suppress every third-party client aid for the duration of a match.
+         *
+         * <p><b>Why this is a server setting and not a client one.</b> Whether a minimap, a world map or a
+         * player-model mod counts as an unfair advantage is a property of the match rules, and it has to be
+         * the same for everyone in the room. A client-side switch would be a promise, not a rule: the player
+         * who turns it off gains nothing but the honesty of the others, so the honest players would be the
+         * only ones bound by it.
+         *
+         * <p><b>What it can and cannot do.</b> These are client mods; a server cannot detect them and cannot
+         * force them off. This flag lets the operator declare the rule and lets a cooperating client honour
+         * it. It raises the floor, not the ceiling — a deliberate cheat still needs a server-side answer
+         * (pack enforcement, or a client with no such mods installed at all).
+         *
+         * <p>Wider than {@link #hideXaeroInMatch}: that one covers Xaero because it is the minimap this mod
+         * collides with, while this covers anything in the same business of revealing position.
+         */
+        public boolean strictAidsInMatch = true;
         /** Minimap edge length in GUI pixels. */
         public int minimapSize = 120;
         /**
@@ -74,7 +92,7 @@ final class Compat {
          * objective hint — the two corners that stay legible are the left ones. Anything unrecognised
          * falls back to this, so a hand-edited config file cannot leave the minimap undrawable.
          */
-        public String minimapCorner = "TOP_LEFT";
+        public String minimapCorner = "BOTTOM_LEFT";
         /** Negative means "choose a corner". */
         public int minimapX = -1;
         public int minimapY = -1;
@@ -171,7 +189,7 @@ final class Compat {
     /** Xaero is client-side, so its presence is a pack fact rather than something we probe. */
     boolean useMinimap(org.slf4j.Logger log) {
         boolean allowed = policy.mayUseMinimap(settings.minimap, settings.xaeroMinimap);
-        if (!allowed) note("已让出小地图，避免与 Xaero 小地图重叠（规则页可强制开启）", log);
+        if (!allowed) note(settings.minimap==CompatPolicy.Mode.NEVER?"已关闭战局小地图":"地形优先使用 Xaero，战术图标由战地风云叠加", log);
         return allowed;
     }
 

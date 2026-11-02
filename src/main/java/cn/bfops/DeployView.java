@@ -30,7 +30,7 @@ import java.util.List;
  *
  * <h2>Why straight down</h2>
  *
- * <p>The pitch is -90: looking vertically down. Any tilt foreshortens the area into a trapezoid, so part
+ * <p>The pitch is +90: looking vertically down. Any tilt foreshortens the area into a trapezoid, so part
  * of it occupies fewer pixels than the rest, and the operator's mental map of "where is that flag"
  * stops matching the screen. A top-down view is the only orientation in which the area's ground plan
  * maps onto the screen undistorted, which is what a deployment map is for.
@@ -58,6 +58,30 @@ final class DeployView {
 
     private DeployView() { }
 
+    /** Frames the complete polygon in an unobscured GUI viewport, using vertical FOV. */
+    static Placement frame(List<Model.Vec> polygon,double ground,double fov,int width,int height,
+                           Layout.Rect viewport,int view) {
+        double minX=Double.POSITIVE_INFINITY,maxX=Double.NEGATIVE_INFINITY,minZ=minX,maxZ=maxX;
+        for(Model.Vec v:polygon){minX=Math.min(minX,v.x());maxX=Math.max(maxX,v.x());minZ=Math.min(minZ,v.z());maxZ=Math.max(maxZ,v.z());}
+        if(polygon.isEmpty()){minX=minZ=-16;maxX=maxZ=16;}
+        double tangent=Math.tan(Math.toRadians(Math.max(30,Math.min(110,fov)))/2);
+        double usableW=Math.max(16,viewport.w()-32),usableH=Math.max(16,viewport.h()-48);
+        double required=Math.max((maxX-minX)*Math.max(1,height)/(2*tangent*usableW),
+                (maxZ-minZ)*Math.max(1,height)/(2*tangent*usableH));
+        double lift=Math.max(MIN_Y,Math.min(1024,required));
+        double scale=Math.max(1,height)/(2*tangent*lift);
+        // At yaw 0 / pitch +90 screen-right is world -X; screen-up is world +Z.
+        double x=(minX+maxX)/2+(viewport.cx()-width/2.0)/scale;
+        double z=(minZ+maxZ)/2+(viewport.cy()-height/2.0)/scale;
+        double radius=Math.hypot(Math.max(Math.abs(minX-x),Math.abs(maxX-x)),Math.max(Math.abs(minZ-z),Math.abs(maxZ-z)));
+        // Report the fit from the height actually chosen, not from the pessimistic MIN_Y estimate: this
+        // camera may be lifted higher than MIN_Y for a big area, and it may sit at MIN_Y for a small one.
+        // `fitsFromHeight` is the same test `place` uses, so the two framings cannot disagree.
+        boolean fits=fitsFromHeight(radius,lift,view);
+        double overflow=fits?0:Math.hypot(radius,lift)-Math.max(16,view);
+        return new Placement(x,ground+lift,z,0,90,fits,overflow,lift);
+    }
+
     /**
      * Places the camera above the centre of an area.
      *
@@ -77,10 +101,9 @@ final class DeployView {
         double height = Math.max(MIN_Y, Math.min(MAX_Y, ideal));
         double eyeY = groundY + height;
 
-        double farthest = Math.hypot(radius, height);
-        boolean fits = farthest <= distance;
-        double overflow = fits ? 0 : farthest - distance;
-        return new Placement(centreX, eyeY, centreZ, 0f, (float) -PITCH, fits, overflow, height);
+        boolean fits = fitsFromHeight(radius, height, distance);
+        double overflow = fits ? 0 : Math.hypot(radius, height) - distance;
+        return new Placement(centreX, eyeY, centreZ, 0f, (float) PITCH, fits, overflow, height);
     }
 
     /**
@@ -88,10 +111,32 @@ final class DeployView {
      *
      * <p>Accounts for {@link #MIN_Y}: a camera cannot be flush with the ground, so an area slightly
      * narrower than the view distance still fails once the minimum height is added in.
+     *
+     * <p>This is the <em>pessimistic</em> question, and it is the one the editor wants: the editor is
+     * deciding whether the area the operator is drawing will ever be framable, before any framing has been
+     * computed. A camera that happens to sit closer than {@link #MIN_Y} does not rescue an oversized area.
      */
     static boolean fitsHorizontally(double span, int view) {
         int distance = view <= 0 ? DEFAULT_VIEW : view;
         return Math.hypot(Math.max(0, span) / 2.0, MIN_Y) <= distance;
+    }
+
+    /**
+     * Whether a placement actually puts the whole area inside the view distance.
+     *
+     * <p>Separate from {@link #fitsHorizontally} because {@link #frame} works forwards — it derives the
+     * height <em>from</em> the area — and the two can disagree. When the area is small, `frame` still lifts
+     * the camera to {@link #MIN_Y}, and that lift is enough to push the far corner past the view distance
+     * for a view distance near {@code MIN_Y} itself. Reporting `fits` from the drawn height rather than
+     * from the pessimistic constant is what keeps the warning honest about the camera the player is
+     * actually going to look through.
+     *
+     * @param radius    distance from the camera's ground point to the farthest corner, in blocks
+     * @param headroom  the camera's height above the ground
+     */
+    static boolean fitsFromHeight(double radius, double headroom, int view) {
+        int distance = view <= 0 ? DEFAULT_VIEW : view;
+        return Math.hypot(Math.max(0, radius), Math.max(0, headroom)) <= distance;
     }
 
     /** Human-readable warning for an area that is too wide, or {@code null} when it fits. */

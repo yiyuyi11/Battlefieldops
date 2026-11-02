@@ -17,20 +17,45 @@ import net.minecraft.client.gui.GuiGraphics;
  * reads as a heading.
  */
 final class TacticalColors {
-    /** Cyan-green, distinct from the teammate blue at a glance and from terrain colours. */
-    static final int SELF = 0xff36e0b4, FRIEND = 0xff619fea, ENEMY = 0xffe96772, NEUTRAL = 0xffa3b3bd;
+    /** The player's own marker is a yellow dot, matching Battlefield's "you are here" reading. */
+    static final int SELF = 0xffffd23f, FRIEND = 0xff619fea, ENEMY = 0xffe96772, NEUTRAL = 0xffa3b3bd;
+    /**
+     * Your own class, on a teammate marker.
+     *
+     * <p>The reference pack colours the squad variant green (110,251,145) and the team variant blue. Green is
+     * out of this mod's agreed palette, so the distinction is kept — it is genuinely useful, "is that person
+     * running my kit" — and carried in cyan instead: near enough to the squad reading, and still separated
+     * from `FRIEND` blue and from the cyan-green that marks the player themselves.
+     */
+    static final int MATE = 0xff6efb91;
+    /**
+     * A downed teammate's label.
+     *
+     * <p>Deliberately <em>not</em> used for the marker glyph: the reference pack draws the death glyph in the
+     * same team/squad colour as the living one, so shape carries "downed" and colour stays reserved for the
+     * relationship. That is the rule this file already follows elsewhere, and it keeps the palette at cyan,
+     * blue and red as agreed. The amber is only for the text under the glyph, where the extra urgency is
+     * worth one hue.
+     */
+    static final int DOWNED = 0xffffb347;
     /** The view cone is translucent on purpose: it has to overlay terrain without hiding it. */
-    static final int VIEW_CONE = 0x4036e0b4;
-    static final int VIEW_EDGE = 0x8036e0b4;
+    static final int VIEW_CONE = 0x40ffffff;
+    static final int VIEW_EDGE = 0x80ffffff;
     /** Marks are a ring, so they cannot be confused with the red dot of a live contact. */
     static final int MARK = 0xffffb347;
 
     private TacticalColors() { }
 
     static void label(GuiGraphics g, Font font, String text, int centerX, int y, int color) {
+        int alpha = color >>> 24;
+        if(alpha < 4 || text == null || text.isEmpty())return;
+        g.flush();
+        com.mojang.blaze3d.systems.RenderSystem.setShaderColor(1,1,1,1);
         int half = font.width(text) / 2;
-        g.fill(centerX - half - 2, y - 1, centerX + half + 3, y + 9, 0xe0000000);
+        // A translucent charcoal backing fades with the label instead of becoming an opaque black block.
+        g.fill(centerX - half - 2, y - 1, centerX + half + 3, y + 9, HudLabelStyle.backing(color));
         g.drawCenteredString(font, text, centerX, y, color);
+        g.flush();
     }
 
     static int objective(int owner, int self) {
@@ -155,17 +180,103 @@ final class TacticalColors {
                 y + (int) Math.round(Math.cos(rightAngle) * radiusPixels), edge, 1);
     }
 
-    /** A manual mark: a ring with a cross, drawn where the team last called out a contact. */
+    /**
+     * A manual mark: an inverted triangle for an enemy, the friendly blue for a teammate.
+     *
+     * <p><b>Why an inverted triangle and not the ring this used to draw.</b> The ring was indistinguishable
+     * from a capture point at map scale, and at eleven pixels a hollow shape is one pixel of stroke that
+     * disappears over light terrain. A filled inverted triangle is the reference pack's own enemy-mark
+     * shape, and it cannot be confused with anything else on this map: contacts are dots, teammates are
+     * arrows and class glyphs, objectives are diamonds, vehicles are hollow squares.
+     *
+     * <p>The point aims down, which both reads as "here, precisely" and differs from the player's own
+     * forward arrow even when the two overlap.
+     *
+     * @param kind  the mark's side, from the snapshot's {@code kind} field
+     * @param alpha 0..1, for the fade as it expires
+     */
+    static void mark(GuiGraphics g, int x, int y, int radius, String kind, float alpha) {
+        boolean mate = "MATE".equalsIgnoreCase(kind == null ? "" : kind);
+        if (mate) {
+            // A teammate mark is a soft blue halo rather than a hard triangle. The two marks mean different
+            // things -- "enemy here" is a warning, "friendly here" is an invitation -- and the friendly one
+            // should not compete for the same visual alarm. A halo also layers correctly under the teammate's
+            // own contact marker, which the warning triangle would cover.
+            halo(g, x, y, radius, withAlpha(FRIEND, alpha));
+            return;
+        }
+        // Enemy: a filled inverted triangle, the reference pack's own enemy-mark shape.
+        int color = withAlpha(ENEMY, alpha);
+        triangle(g, x - radius, y - radius, x + radius + 1, y - radius, x, y + radius + 1, color);
+        // A dark line along the wide edge: over bright terrain a flat fill loses its top border and the
+        // triangle then reads as a shapeless wedge.
+        g.fill(x - radius, y - radius - 1, x + radius + 1, y - radius, withAlpha(0xff0a1218, alpha * 0.8f));
+    }
+
+    /**
+     * A soft ring of decreasing opacity, used for a teammate mark.
+     *
+     * <p>Three concentric one-pixel rings at falling alpha, rather than a blur: at map scale a real blur is
+     * both expensive and invisible, while three rings read as a glow and cost three circle passes. The
+     * outermost is faint enough not to hide the terrain it sits on.
+     */
+    static void halo(GuiGraphics g, int x, int y, int radius, int color) {
+        int r = Math.max(2, radius);
+        for (int ring = 0; ring < 3; ring++) {
+            double scale = 1.0 + ring * 0.55;
+            int rr = (int) Math.round(r * scale);
+            int tint = withAlpha(color, (0.55f - ring * 0.15f) * ((color >>> 24) / 255f));
+            for (int i = 0; i < 16; i++) {
+                double a0 = i * Math.PI * 2 / 16, a1 = (i + 1) * Math.PI * 2 / 16;
+                Ui.line(g, x + (int) Math.round(Math.cos(a0) * rr), y + (int) Math.round(Math.sin(a0) * rr),
+                        x + (int) Math.round(Math.cos(a1) * rr), y + (int) Math.round(Math.sin(a1) * rr),
+                        tint, 1);
+            }
+        }
+    }
+
+    /**
+     * A manual mark: a ring with a cross, drawn where the team last called out a contact.
+     *
+     * @deprecated kept for the deploy view's spawn selection, which wants a locator ring rather than a
+     *         side-coded marker. Use {@link #mark(GuiGraphics, int, int, int, String, float)} for contacts.
+     */
+    @Deprecated
     static void mark(GuiGraphics g, int x, int y, int radius, int color) {
+        mark(g, x, y, radius, color, 1f);
+    }
+
+    /**
+     * A locator ring with a cross, for "the thing you selected is here".
+     *
+     * <p>Deliberately not side-coded: this marks a place the player chose, not a person somebody reported.
+     *
+     * @param alpha 0..1, where 1 is fully opaque
+     */
+    static void mark(GuiGraphics g, int x, int y, int radius, int color, float alpha) {
+        int faded = withAlpha(color, alpha);
         int r = Math.max(2, radius);
         for (int i = 0; i < 12; i++) {
             double a0 = i * Math.PI * 2 / 12, a1 = (i + 1) * Math.PI * 2 / 12;
             Ui.line(g, x + (int) Math.round(Math.cos(a0) * r), y + (int) Math.round(Math.sin(a0) * r),
-                    x + (int) Math.round(Math.cos(a1) * r), y + (int) Math.round(Math.sin(a1) * r), color, 1);
+                    x + (int) Math.round(Math.cos(a1) * r), y + (int) Math.round(Math.sin(a1) * r), faded, 1);
         }
-        g.fill(x - r - 2, y, x - r + 1, y + 1, color);
-        g.fill(x + r, y, x + r + 3, y + 1, color);
-        g.fill(x, y - r - 2, x + 1, y - r + 1, color);
-        g.fill(x, y + r, x + 1, y + r + 3, color);
+        g.fill(x - r - 2, y, x - r + 1, y + 1, faded);
+        g.fill(x + r, y, x + r + 3, y + 1, faded);
+        g.fill(x, y - r - 2, x + 1, y - r + 1, faded);
+        g.fill(x, y + r, x + 1, y + r + 3, faded);
+    }
+
+    /**
+     * Replaces a colour's alpha channel.
+     *
+     * <p>Kept in one place because every marker colour here is stored with an opaque alpha, and a fade
+     * that accidentally cleared the RGB bits instead would draw black glyphs. An
+     * {@code & 0x00FFFFFF} written by hand at three call sites is three chances to write
+     * {@code & 0xFFFFFF00} at one of them.
+     */
+    static int withAlpha(int argb, float alpha) {
+        int a = (int) Math.round(Math.max(0f, Math.min(1f, alpha)) * 255f);
+        return (argb & 0x00FFFFFF) | (a << 24);
     }
 }

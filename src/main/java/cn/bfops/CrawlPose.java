@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /** NeoForge adds forced-pose methods at runtime; the offline compile jar is unpatched. */
-final class CrawlPose {
+public final class CrawlPose {
     private static final Map<Player, Pose> previous = new WeakHashMap<>();
     private static final Method SET = method("setForcedPose", Pose.class);
     private static final Method GET = method("getForcedPose");
@@ -15,6 +15,12 @@ final class CrawlPose {
         try { return Player.class.getMethod(name, args); }
         catch (ReflectiveOperationException e) { throw new IllegalStateException("NeoForge forced-pose API missing", e); }
     }
+    public static synchronized void force(Player player,Pose pose) {
+        if(player==null)return;
+        try{SET.invoke(player,previous.containsKey(player)?Pose.SWIMMING:pose);}
+        catch(ReflectiveOperationException ex){throw new IllegalStateException("Cannot set crawl pose",ex);}
+    }
+    public static synchronized boolean downed(Player player){return previous.containsKey(player);}
     static synchronized void apply(Player player, boolean downed) {
         if (player == null) return;
         try {

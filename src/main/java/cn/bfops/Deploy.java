@@ -32,7 +32,7 @@ final class Deploy {
     record Site(String id, String label, double x, double y, double z, float yaw,
                 String allows, boolean spawn, String kind) {
         boolean allows(char vehicleClass) {
-            return allows != null && allows.indexOf(Character.toUpperCase(vehicleClass)) >= 0;
+            return DeploymentRules.canSpawnNew(this)&&allows != null && allows.indexOf(Character.toUpperCase(vehicleClass)) >= 0;
         }
 
         boolean air() {
@@ -72,21 +72,28 @@ final class Deploy {
         List<Site> airSites = new ArrayList<>();
         for (Model.Spawn spawn : map.spawns) {
             if (spawn.team != team) continue;
-            if (breakthrough && spawn.sector != stage) continue;
+            if (breakthrough && spawn.sector != stage
+                    &&!(spawn.allows('G')&&map.independentVehicleArea(team,"G"))
+                    &&!(spawn.allows('A')&&map.independentVehicleArea(team,"A"))) continue;
             // A spawn outside the team's activity zone would drop the player outside their area, so it
             // is not offered. The same filter exists server-side in Engine.legalSpawns.
-            if (!map.inZone(team, spawn.x, spawn.z)) continue;
+            String scopeMask=spawn.allows==null||spawn.allows.isEmpty()?"G":spawn.allows;
+            if(!map.deploymentArea(team,"G",spawn.x,spawn.z,stage,breakthrough))scopeMask=scopeMask.replace("G","");
+            if(!map.deploymentArea(team,"A",spawn.x,spawn.z,stage,breakthrough))scopeMask=scopeMask.replace("A","");
+            if(!map.deploymentArea(team,"I",spawn.x,spawn.z,stage,breakthrough)&&!scopeMask.contains("G")&&!scopeMask.contains("A"))continue;
             Site site = new Site(spawn.id, spawn.id, spawn.x, spawn.y, spawn.z, spawn.yaw,
-                    spawn.allows == null || spawn.allows.isEmpty() ? "G" : spawn.allows, true,
+                    scopeMask.isEmpty()?"N":scopeMask, true,
                     spawn.kind());
             if (spawn.air()) airSites.add(site); else spawnSites.add(site);
         }
         out.addAll(spawnSites);
         out.addAll(airSites);
+        if(map.isDeathmatch())return out;
         for (int i = 0; i < map.points.size(); i++) {
             Model.Point point = map.points.get(i);
             if (breakthrough && point.sector != stage) continue;
             if (owners == null || i >= owners.length || owners[i] != team) continue;
+            if (!map.inZone(team,point.x,point.z)) continue;
             String id = pointId(point);
             // Ground only: an owned flag is a staging ground, not an airstrip.
             out.add(new Site(id, id, point.x, point.y, point.z, 0f, "G", false, Model.Spawn.POINT));
@@ -125,6 +132,8 @@ final class Deploy {
         if (vehicle == null || vehicle.isEmpty()) {
             return sites.stream().anyMatch(s -> s.id().equals(current)) ? current : sites.getFirst().id();
         }
+        Site selected=sites.stream().filter(s->s.id().equals(current)).findFirst().orElse(null);
+        if(selected!=null&&SquadRules.dynamic(selected.kind())||!DeploymentRules.prefixKind(current).isEmpty())return current;
         List<Site> capable = sitesFor(sites, vehicleClass);
         if (capable.isEmpty()) return current;
         if (capable.stream().anyMatch(s -> s.id().equals(current))) return current;
@@ -171,14 +180,14 @@ final class Deploy {
         if (arena == null || team < 0) return List.of();
         JsonArray array = state != null && state.has("deploySites")
                 && state.get("deploySites").isJsonArray() ? state.getAsJsonArray("deploySites") : null;
-        if (array != null && !array.isEmpty()) {
+        if (array != null) {
             List<Site> out = new ArrayList<>();
             for (JsonElement element : array) {
                 if (!element.isJsonObject()) continue;
                 JsonObject site = element.getAsJsonObject();
                 String id = Engine.str(site, "id", "");
                 if (id.isEmpty()) continue;
-                out.add(new Site(id, id,
+                out.add(new Site(id, Engine.str(site,"label",id),
                         site.has("x") ? site.get("x").getAsDouble() : 0,
                         site.has("y") ? site.get("y").getAsDouble() : 64,
                         site.has("z") ? site.get("z").getAsDouble() : 0,
@@ -187,7 +196,7 @@ final class Deploy {
                         site.has("spawn") && site.get("spawn").getAsBoolean(),
                         Engine.str(site, "kind", Model.Spawn.BASE)));
             }
-            if (!out.isEmpty()) return out;
+            return out;
         }
         return local(state, arena, team);
     }
@@ -205,6 +214,6 @@ final class Deploy {
                 owners[i] = Engine.num(flags.get(i).getAsJsonObject(), "owner", -1);
             }
         }
-        return sites(arena, team, stage, "BREAKTHROUGH".equals(arena.mode), owners);
+        return sites(arena, team, stage, arena.isStaged(), owners);
     }
 }

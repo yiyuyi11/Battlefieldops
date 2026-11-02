@@ -11,6 +11,16 @@ import java.util.List;
 final class VehicleDeploy {
     private VehicleDeploy() { }
 
+    /** Reference passenger rule: empty hull, squad driver, or explicitly shared friendly driver. */
+    static String boardingBlocker(String room,int team,int squad,boolean teamWide,boolean hasDriver,
+                                  String driverRoom,int driverTeam,int driverSquad,boolean driverActive){
+        if(!hasDriver)return "";
+        if(!driverActive||driverRoom==null||!room.equals(driverRoom))return "驾驶员不在本局或当前不可部署";
+        if(driverTeam!=team)return "该载具正由敌军驾驶";
+        if(!teamWide&&!SquadRules.same(room,team,squad,driverRoom,driverTeam,driverSquad))return "仅驾驶员同小队可登车部署";
+        return "";
+    }
+
     /**
      * The outcome of the checks that decide whether a deployment happens at all.
      *

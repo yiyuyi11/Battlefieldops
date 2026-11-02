@@ -29,8 +29,10 @@ final class OpsScreen extends FrontScreen {
      */
     Model.Arena draft;
     private int tab;
+    private int eliteSpawnIndex;
     private int pointIndex, spawnIndex, supplyIndex, kitIndex, rulePage, zone = -1;
     private int catalogPage, catalogLocal;
+    private String libraryCategory="";
     private String query = "", entryId = "", entryKind = "";
 
     private String deployKit = "", deploySpawn = "", deployVehicle = "";
@@ -65,8 +67,9 @@ final class OpsScreen extends FrontScreen {
     private long saveStarted;
     private int movingVertex=-1;
     private String jsonDraft(){return BattlefieldOps.GSON.toJson(draft);}
+    void saveError(String message){savingId="";fail(message);rebuild();}
     private boolean dirty(){try{return !invalid.isEmpty()||!jsonDraft().equals(savedDraft);}catch(IllegalArgumentException ex){return true;}}
-    private String fieldKey(String label){return tab+":"+pointIndex+":"+spawnIndex+":"+kitIndex+":"+label;}
+    private String fieldKey(String label){return tab+":"+pointIndex+":"+spawnIndex+":"+supplyIndex+":"+eliteSpawnIndex+":"+kitIndex+":"+label;}
     void saved(JsonObject arena){
         if(!Engine.str(arena,"id","").equals(savingId))return;
         savedDraft=BattlefieldOps.GSON.toJson(BattlefieldOps.GSON.fromJson(arena,Model.Arena.class));
@@ -88,7 +91,7 @@ final class OpsScreen extends FrontScreen {
         history.record(jsonDraft());String value=redo?history.redo():history.undo();
         if(value!=null){draft=BattlefieldOps.GSON.fromJson(value,Model.Arena.class);rawFields.clear();invalid.clear();rebuild();}
     }
-    @Override public boolean keyPressed(int key,int scan,int modifiers){
+    @Override public boolean keyPressed(int key,int scan,int modifiers){if(dropdownOpen())return super.keyPressed(key,scan,modifiers);
         if(key==256&&placing!=null){placing=null;rebuild();say("已取消放置，坐标未改变");return true;}
         if(hasControlDown()&&key==org.lwjgl.glfw.GLFW.GLFW_KEY_S){guard(this::save);return true;}
         if(!(getFocused() instanceof EditBox)&&hasControlDown()&&key==org.lwjgl.glfw.GLFW.GLFW_KEY_Z){undo(hasShiftDown());return true;}
@@ -193,18 +196,17 @@ final class OpsScreen extends FrontScreen {
         draft.points.add(point);
         for (int i = 0; i < 2; i++) {
             Model.Spawn spawn = new Model.Spawn();
-            spawn.id = i == 0 ? "蓝方基地" : "红方基地";
+            spawn.id = i == 0 ? "机械轴心基地" : "格雷同盟基地";
             spawn.team = i;
             spawn.x = x + (i == 0 ? -48 : 48);
             spawn.y = y;
             spawn.z = z;
             draft.spawns.add(spawn);
         }
-        for (String role : List.of("突击兵", "支援兵", "工程兵", "侦察兵")) {
-            Model.Kit kit = new Model.Kit();
-            kit.id = role;
-            draft.kits.add(kit);
+        for (var role : FixedClasses.Role.values()) {
+            Model.Kit kit = new Model.Kit();kit.id=role.name;draft.kits.add(kit);
         }
+        EliteRules.complete(draft);
         selected = draft.id;
         pointIndex = spawnIndex = kitIndex = 0;
         history.reset(jsonDraft());
@@ -312,7 +314,7 @@ final class OpsScreen extends FrontScreen {
     // ------------------------------------------------------------------ rebuild
 
     @Override
-    protected void rebuild() {
+    protected void rebuildContent() {
         if(form!=null&&formTab>=0)scrollMemory.put(formTab,form.scroll());
         clearWidgets();
         if (draft == null) return;
@@ -322,6 +324,8 @@ final class OpsScreen extends FrontScreen {
         sideForm = newForm(Ui.headerBody(layout.right));
         if (scrollMemory.containsKey(tab)) form.scrollTo(scrollMemory.get(tab));
 
+        row(form,"选择编辑地图",draft==null?"未选择":draft.name,this::chooseEditingMap);
+        if(admin())row(form,"旁观者快速放点","直接在世界中编辑",()->QuickMapEdit.start(this));
         switch (tab) {
             case 0 -> deployment();
             case 1 -> boundary();
@@ -345,6 +349,27 @@ final class OpsScreen extends FrontScreen {
         Client.send(Client.request(op, selected));
     }
 
+    Model.Arena quickDraft(){return draft;}
+    void quickSave(){guard(this::save);}
+    void quickRestore(String json){draft=BattlefieldOps.GSON.fromJson(json,Model.Arena.class);rawFields.clear();invalid.clear();}
+    private static java.util.List<ChoiceScreen.Choice> teamChoices(boolean both){var list=new java.util.ArrayList<ChoiceScreen.Choice>();if(both)list.add(new ChoiceScreen.Choice("-1","双方",""));list.add(new ChoiceScreen.Choice("0","机械轴心",""));list.add(new ChoiceScreen.Choice("1","格雷同盟",""));return list;}
+    void chooseEditingMap(){
+        if(me()!=null){warn("请先退出房间再编辑");return;}
+        var choices=new ArrayList<ChoiceScreen.Choice>();
+        if(Client.state.has("maps"))for(var value:Client.state.getAsJsonArray("maps")){var m=value.getAsJsonObject();choices.add(new ChoiceScreen.Choice(Engine.str(m,"id",""),Engine.str(m,"name","")+" · "+Engine.str(m,"modeName",""),""));}
+        openChoice("选择要编辑的地图",selected,choices,id->discardThen(()->{selected=id;pendingLoad=true;action("state");}));
+    }
+    void quickPlace(int tool,net.minecraft.world.phys.Vec3 at,boolean freshBoundary){
+        Model.require(draft!=null,"请先选择地图");double x=Math.floor(at.x)+.5,z=Math.floor(at.z)+.5,y=at.y;
+        switch(tool){
+            case 0 -> {Model.require(draft.points.size()<24,"据点最多 24 个");var p=new Model.Point();p.id="P"+(draft.points.size()+1);while(draft.points.stream().map(v->v.id).toList().contains(p.id))p.id+="_";p.x=x;p.y=y;p.z=z;draft.points.add(p);pointIndex=draft.points.size()-1;}
+            case 1,2 -> {Model.require(draft.spawns.size()<32,"出生点最多 32 个");var p=new Model.Spawn();p.team=tool-1;p.id=(tool==1?"机械轴心":"格雷同盟")+"出生点"+(draft.spawns.size()+1);p.x=x;p.y=y;p.z=z;draft.spawns.add(p);spawnIndex=draft.spawns.size()-1;}
+            case 3 -> {Model.require(draft.supplies.size()<32,"补给点数量已满");draft.supplies.add(new VehicleSupply.Supply("补给"+(draft.supplies.size()+1),-1,x,y,z,12,true,true,true));supplyIndex=draft.supplies.size()-1;}
+            case 4 -> {Model.require(draft.eliteSpawns.size()<24,"精英点数量已满");var p=new EliteRules.Spawn();p.id="精英"+(draft.eliteSpawns.size()+1);p.x=x;p.y=y;p.z=z;draft.eliteSpawns.add(p);eliteSpawnIndex=draft.eliteSpawns.size()-1;}
+            case 5 -> {if(freshBoundary)draft.boundary.clear();Model.require(draft.boundary.size()<64,"边界最多 64 个顶点");draft.boundary.add(new Model.Vec(x,z));}
+        }
+        rawFields.clear();invalid.clear();
+    }
     private void cycleMap(int delta) {discardThen(()->cycleMapConfirmed(delta));}
     private void cycleMapConfirmed(int delta) {
         if (me() != null) {
@@ -371,6 +396,7 @@ final class OpsScreen extends FrontScreen {
         request.addProperty("baseId", savedDraft.isEmpty()?"":BattlefieldOps.GSON.fromJson(savedDraft,Model.Arena.class).id);
         request.addProperty("baseRevision",MapFiles.revision(savedDraft));
         selected = draft.id;
+        Model.require(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length<=240000,"地图配置超过 240KB，请减少复杂配件规则；草稿已保留");
         savingId=draft.id;saveStarted=System.currentTimeMillis();
         say("正在保存到服务器…");
         try{Client.send(request);}catch(RuntimeException ex){savingId="";rebuild();throw ex;}
@@ -451,9 +477,9 @@ final class OpsScreen extends FrontScreen {
         if (draft.zones == null || draft.zones.isEmpty()) return "活动区域：无限制（全图可行动）";
         boolean blue = draft.zone(0) != null, red = draft.zone(1) != null;
         if (!blue && !red) return "活动区域：无限制（全图可行动）";
-        String label = blue && red ? "双方各自区域" : blue ? "仅蓝方受限" : "仅红方受限";
+        String label = blue && red ? "双方各自区域" : blue ? "仅机械轴心受限" : "仅格雷同盟受限";
         return "活动区域：" + label + " · 出界按离开战区处理"
-                + (draft.mode.equals("BREAKTHROUGH") ? " · 突破模式不生效" : "");
+                + (draft.isStaged() ? " · 当前阶段模式不生效" : "");
     }
 
     private void deployment() {
@@ -476,13 +502,13 @@ final class OpsScreen extends FrontScreen {
             if (room) primary(form, "进入本图房间", true, () -> action("join"));
             else if (admin()) primary(form, "创建本图房间", true, () -> action("createRoom"));
             else form.paragraph("这张地图还没有房间，请等待管理员创建。", Ui.TEXT_WARN);
-            if (admin() && room) row(form, "关闭房间", "结束对局", () -> action("stop"));
+            if (admin() && room) row(form,"关闭房间","结束并结算",()->minecraft.setScreen(new ConfirmActionScreen(this,"关闭并结算房间？","仅结束当前选中地图的房间，其他房间不受影响。","关闭并结算",()->action("stop"))));
         } else {
-            form.caption("阵营  " + (team == 0 ? "蓝方" : team == 1 ? "红方" : "未选择"),
+            form.caption("阵营  " + (team == 0 ? "机械轴心" : team == 1 ? "格雷同盟" : "未选择"),
                     team < 0 ? Ui.TEXT_WARN : team == 0 ? Ui.BLUE : Ui.RED);
             if (team < 0) {
-                primary(form, "选择蓝方 / 进攻方", true, () -> join(0));
-                primary(form, "选择红方 / 防守方", true, () -> join(1));
+                primary(form, "选择机械轴心 / 进攻方", true, () -> join(0));
+                primary(form, "选择格雷同盟 / 防守方", true, () -> join(1));
             }
             if (admin() && !running) row(form, "开始本局", "锁定阵营", () -> action("start"));
             row(form, "退出房间", "恢复原背包", () -> action("leave"));
@@ -506,6 +532,8 @@ final class OpsScreen extends FrontScreen {
             if (!spawns.contains(deploySpawn)) deploySpawn = spawns.isEmpty() ? "" : spawns.getFirst();
             row(form, "部署点", deploySpawn.isEmpty() ? "无可用" : deploySpawn, () -> {
                 deploySpawn = cycle(spawns, deploySpawn);
+                var picked=sites().stream().filter(v->v.id().equals(deploySpawn)).findFirst().orElse(null);
+                if(!DeploymentRules.canSpawnNew(picked)||!deployVehicle.isEmpty()&&!picked.allows(vehicleClass(deployVehicle)))deployVehicle="";
                 rebuild();
             });
             // Vehicles are split by class because an aircraft needs a runway point; mixing them into
@@ -518,13 +546,14 @@ final class OpsScreen extends FrontScreen {
             }
             Deploy.Site here = sites().stream().filter(s -> s.id().equals(deploySpawn))
                     .findFirst().orElse(null);
+            deployVehicle=DeploymentRules.keepVehicle(here,deployVehicle);
             if (!groundVehicles.isEmpty()) {
                 List<String> options = new ArrayList<>();
                 options.add("");
                 options.addAll(groundVehicles);
                 String current = vehicleClass(deployVehicle) == 'A' ? "" : deployVehicle;
                 if (!options.contains(current)) current = "";
-                boolean fits = here == null || here.allows('G');
+                boolean fits = here != null && here.allows('G');
                 row(form, "地面载具", current.isEmpty() ? "无" : name(current),
                         "vehicle", current, fits, () -> {
                             String picked = cycle(options, vehicleClass(deployVehicle) == 'A' ? "" : deployVehicle);
@@ -541,7 +570,7 @@ final class OpsScreen extends FrontScreen {
                 options.add("");
                 options.addAll(airVehicles);
                 String current = vehicleClass(deployVehicle) == 'A' ? deployVehicle : "";
-                boolean fits = here == null || here.allows('A');
+                boolean fits = here != null && here.allows('A');
                 row(form, "航空器", current.isEmpty() ? "无" : name(current),
                         "vehicle", current, fits, () -> {
                             String picked = cycle(options, vehicleClass(deployVehicle) == 'A'
@@ -690,10 +719,11 @@ final class OpsScreen extends FrontScreen {
     private List<Model.Vec> polygon() {
         if (zone < 0) return draft.boundary;
         if (zone >= SECTOR_BASE) {
-            int index = zone - SECTOR_BASE;
-            return draft.zones.stream().filter(z -> z.team == index).findFirst().orElseGet(() -> {
+            int index=(zone-SECTOR_BASE)%2;
+            String mobility=new String[]{"ALL","I","G","A"}[(zone-SECTOR_BASE)/2];
+            return draft.zones.stream().filter(z -> z.team == index && java.util.Objects.equals(z.mobility==null?"ALL":z.mobility,mobility)).findFirst().orElseGet(() -> {
                 Model.Zone added = new Model.Zone();
-                added.team = index;
+                added.team = index;added.mobility=mobility;
                 draft.zones.add(added);
                 return added;
             }).boundary;
@@ -728,22 +758,20 @@ final class OpsScreen extends FrontScreen {
         field(form, "地图名称", draft.name, 48, value -> draft.name = value);
 
         Layout.Rect[] modeRow = form.pair(Layout.ROW);
-        place(form, modeRow[0], "模式", draft.mode.equals("CONQUEST") ? "征服" : "突破",
-                "", "", true, () -> {
-                    draft.mode = draft.mode.equals("CONQUEST") ? "BREAKTHROUGH" : "CONQUEST";
-                    rebuild();
-                });
-        place(form, modeRow[1], "编辑", zoneLabel(),
-                "", "", true, () -> {
-                    // -1 -> stages 0..7 -> blue zone -> red zone -> -1
-                    zone = zone >= ZONE_RED ? -1 : zone + 1;
-                    if (zone < 0) zone = -1;
-                    rebuild();
-                });
+        dropdown(form,modeRow[0],"模式",draft.mode,java.util.List.of(
+            new ChoiceScreen.Choice("CONQUEST","征服",""),new ChoiceScreen.Choice("BREAKTHROUGH","突破",""),new ChoiceScreen.Choice("RUSH","突袭",""),new ChoiceScreen.Choice("DEATHMATCH","团队死斗",""),new ChoiceScreen.Choice("TRAINING","靶场","")),v->{draft.mode=v;if(!draft.isStaged()&&zone>=0&&zone<SECTOR_BASE)zone=-1;rebuild();});
+        if(draft.isRush()){
+            form.paragraph("突袭：进攻方安放炸点，守方拆除；摧毁当前阶段全部目标后推进。突破仍采用据点占领。",Ui.TEXT_DIM);
+            number("安放秒数",draft.rushPlantSeconds,v->draft.rushPlantSeconds=v,1,30);number("拆除秒数",draft.rushDefuseSeconds,v->draft.rushDefuseSeconds=v,1,30);number("爆破倒计时",draft.rushFuseSeconds,v->draft.rushFuseSeconds=v,10,180);
+        }
+        var targets=new java.util.ArrayList<ChoiceScreen.Choice>();targets.add(new ChoiceScreen.Choice("-1","地图边界",""));
+        if(draft.isStaged())for(int i=0;i<SECTOR_BASE;i++)targets.add(new ChoiceScreen.Choice(""+i,"阶段 "+(i+1),""));
+        for(int i=0;i<8;i++)targets.add(new ChoiceScreen.Choice(""+(SECTOR_BASE+i),(i%2==0?"机械轴心":"格雷同盟")+" · "+new String[]{"全部单位","步兵","地面载具","航空器"}[i/2],""));
+        dropdown(form,modeRow[1],"编辑",String.valueOf(zone),targets,v->{zone=Integer.parseInt(v);rebuild();});
         if (zone >= SECTOR_BASE) {
-            form.caption("正在编辑" + (zone == ZONE_BLUE ? "蓝方" : "红方")
+            form.caption("正在编辑" + zoneLabel()
                     + "活动区域：画完即为该方的硬边界，出界按离开战区处理", Ui.TEXT_WARN);
-            form.caption("活动区域仅用于征服；突破由阶段边界推进", Ui.TEXT_FAINT);
+            form.caption("步兵 / 地面载具 / 空中载具独立；突破时与阶段边界同时生效", Ui.TEXT_FAINT);
         }
 
         form.section("画边界");
@@ -799,11 +827,12 @@ final class OpsScreen extends FrontScreen {
 
     private void points() {
         form.section("地图");
+        if(draft.isDeathmatch())form.caption("团队死斗只需双方出生点；预留据点不参与占领或部署",Ui.TEXT_DIM);
         // The map is the primary input here: a coordinate box asks the operator to know where a flag
         // goes, a click asks them to point at it. Both stay available for fine adjustment.
         form.caption(placing == null
                 ? "左键选择标记；移动需先选择放置模式"
-                : (placing.equals("point") ? "左键点地图 = 放置据点" : "左键点地图 = 放置出生点"), Ui.TEXT_WARN);
+                : (placing.equals("point") ? "左键点地图 = 放置据点" : placing.equals("elite")?"左键点地图 = 放置精英刷新点":placing.equals("supply")?"左键点地图 = 放置补给点":"左键点地图 = 放置出生点"), Ui.TEXT_WARN);
         form.caption("右键点地图 = 选中最近的标记 · 滚轮缩放 · 中键平移", Ui.TEXT_FAINT);
         row(form,"放置当前据点",placing!=null&&placing.equals("point")?"进行中":"点击启用",()->{placing="point";rebuild();});
         row(form,"放置当前出生点",placing!=null&&placing.equals("spawn")?"进行中":"点击启用",()->{placing="spawn";rebuild();});
@@ -840,17 +869,17 @@ final class OpsScreen extends FrontScreen {
         if (!draft.points.isEmpty()) {
             Model.Point point = draft.points.get(Math.min(pointIndex, draft.points.size() - 1));
             field(form, "据点名称", point.id, 32, value -> point.id = value);
-            decimal("据点 X", point.x, value -> point.x = value);
-            decimal("据点 Z", point.z, value -> point.z = value);
+            decimal("据点 X", point.x, value -> PointPlacement.move(point,value,point.y,point.z));
+            decimal("据点 Z", point.z, value -> PointPlacement.move(point,point.x,point.y,value));
             decimal("据点 Y", point.y, value -> point.y = value);
-            decimal("占领半径", point.radius, value -> point.radius = value);
+            row(form,"占领范围",point.boundary.size()>=3?"自定义 · "+point.boundary.size()+" 顶点":"圆形",()->{history.record(jsonDraft());minecraft.setScreen(new ShapeScreen(this,point,null));});
+            if(!point.boundary.isEmpty())row(form,"恢复圆形范围","保留中心与半径",()->{point.boundary.clear();rebuild();});
+            decimal(point.boundary.isEmpty()?"占领半径":"备用圆形半径", point.radius, value -> point.radius = value);
             decimal("总高度（Y 上下各一半）", point.height, value -> point.height = value);
-            number("所属阶段", point.sector, value -> point.sector = value, 0, 15);
+            if(draft.isStaged())number("所属阶段", point.sector, value -> point.sector = value, 0, 15);
             row(form, "移到脚下", "", () -> {
                 if (minecraft.player != null) {
-                    point.x = minecraft.player.getX();
-                    point.y = minecraft.player.getY();
-                    point.z = minecraft.player.getZ();
+                    PointPlacement.move(point,minecraft.player.getX(),minecraft.player.getY(),minecraft.player.getZ());
                 }
                 rebuild();
             });
@@ -886,15 +915,15 @@ final class OpsScreen extends FrontScreen {
         if (!draft.spawns.isEmpty()) {
             Model.Spawn spawn = draft.spawns.get(Math.min(spawnIndex, draft.spawns.size() - 1));
             field(form, "出生点名称", spawn.id, 32, value -> spawn.id = value);
-            row(form, "阵营", spawn.team == 0 ? "蓝方" : "红方", () -> {
-                spawn.team = spawn.team == 0 ? 1 : 0;
+            dropdown(form,"阵营",String.valueOf(spawn.team),teamChoices(false),v->{
+                spawn.team=Integer.parseInt(v);
                 rebuild();
             });
             // What kind of site this is. Distinct from the vehicle switches below: the kind is what the
             // deploy list groups by, and picking 机场 here is the one-click way to get a site that
             // launches aircraft and nothing else.
-            row(form, "类型", kindLabel(spawn.kind()), () -> {
-                spawn.kind = nextKind(spawn.kind());
+            dropdown(form,"类型",spawn.kind(),java.util.List.of(Model.Spawn.BASE,Model.Spawn.AIR,Model.Spawn.POINT).stream().map(v->new ChoiceScreen.Choice(v,kindLabel(v),"")).toList(),v->{
+                spawn.kind = v;
                 // Choosing a kind sets the vehicle mask to match, so the two cannot disagree. A site
                 // labelled an airfield that silently refuses aircraft would be worse than no label.
                 if (Model.Spawn.AIR.equals(spawn.kind)) spawn.allows = "A";
@@ -904,10 +933,15 @@ final class OpsScreen extends FrontScreen {
             if (spawn.air()) {
                 form.caption("机场：玩家在此连人带机起飞，仅提供航空器", Ui.TEXT_WARN);
             }
-            decimal("出生 X", spawn.x, value -> spawn.x = value);
-            decimal("出生 Z", spawn.z, value -> spawn.z = value);
+            row(form,"出生范围",spawn.boundary.size()>=3?"自定义 · "+spawn.boundary.size()+" 顶点":spawn.radius>0?"圆形区域":"传统单点",()->{history.record(jsonDraft());minecraft.setScreen(new ShapeScreen(this,null,spawn));});
+            row(form,"使用圆形出生范围","按下后可调整半径",()->{spawn.boundary.clear();if(spawn.radius<=0)spawn.radius=8;rebuild();});
+            if(!spawn.boundary.isEmpty()||spawn.radius>0)row(form,"恢复传统单点","只使用中心坐标",()->{spawn.boundary.clear();spawn.radius=0;rebuild();});
+            decimal("出生范围备用半径",spawn.radius,value->spawn.radius=value);
+            decimal("出生范围总高度",spawn.height,value->spawn.height=value);
+            decimal("出生 X", spawn.x, value -> PointPlacement.move(spawn,value,spawn.y,spawn.z));
+            decimal("出生 Z", spawn.z, value -> PointPlacement.move(spawn,spawn.x,spawn.y,value));
             decimal("出生 Y", spawn.y, value -> spawn.y = value);
-            number("所属阶段", spawn.sector, value -> spawn.sector = value, 0, 15);
+            if(draft.isStaged())number("所属阶段", spawn.sector, value -> spawn.sector = value, 0, 15);
             // What this point is allowed to launch. Aircraft need a runway point of their own, which
             // is the whole reason this switch exists: an air base is somewhere you take off from, not
             // somewhere a tank appears.
@@ -924,15 +958,42 @@ final class OpsScreen extends FrontScreen {
             form.paragraph(slotHint(spawn), Ui.TEXT_FAINT);
             row(form, "移到脚下并面向", "", () -> {
                 if (minecraft.player != null) {
-                    spawn.x = minecraft.player.getX();
-                    spawn.y = minecraft.player.getY();
-                    spawn.z = minecraft.player.getZ();
+                    PointPlacement.move(spawn,minecraft.player.getX(),minecraft.player.getY(),minecraft.player.getZ());
                     spawn.yaw = minecraft.player.getYRot();
                 }
                 rebuild();
             });
         }
         supplies();
+        eliteSpawns();
+    }
+
+    private void eliteSpawns(){
+        form.section("精英装备刷新点");
+        var list=draft.eliteSpawns;
+        row(form,"地图放置当前精英点", "elite".equals(placing)?"进行中":"点击启用",!list.isEmpty(),()->{placing="elite";rebuild();});
+        Layout.Rect[] nav=form.split(Layout.ROW,4);
+        place(form,nav[0],"<","","","",!list.isEmpty(),()->{eliteSpawnIndex=Math.floorMod(eliteSpawnIndex-1,list.size());rebuild();});
+        place(form,nav[1],">","","","",!list.isEmpty(),()->{eliteSpawnIndex=(eliteSpawnIndex+1)%list.size();rebuild();});
+        place(form,nav[2],"添加刷新点","","","",list.size()<32,()->{
+            var point=new EliteRules.Spawn();int suffix=1;while(true){String id="精英刷新点"+suffix++;if(list.stream().noneMatch(v->v.id.equals(id))){point.id=id;break;}}
+            if(minecraft.player!=null){point.x=minecraft.player.getX();point.y=minecraft.player.getY();point.z=minecraft.player.getZ();}
+            list.add(point);eliteSpawnIndex=list.size()-1;rebuild();
+        });
+        place(form,nav[3],"移除刷新点","","","",!list.isEmpty(),()->{list.remove(Math.min(eliteSpawnIndex,list.size()-1));eliteSpawnIndex=0;rebuild();});
+        if(list.isEmpty()){form.paragraph("添加的是领取位置，精英兵类型始终固定为参考端五类。",Ui.TEXT_DIM);return;}
+        eliteSpawnIndex=Math.max(0,Math.min(eliteSpawnIndex,list.size()-1));var point=list.get(eliteSpawnIndex);
+        field(form,"精英点名称",point.id,32,v->point.id=v);
+        row(form,"精英兵类型",EliteRules.Kind.of(point.type).name,"elite",point.type,()->openChoice("刷新点精英类型",point.type,java.util.Arrays.stream(EliteRules.Kind.values()).map(k->new ChoiceScreen.Choice(k.key,k.name,"elite")).toList(),id->{point.type=id;rebuild();}));
+        row(form,"启用刷新点",point.enabled?"是":"否",()->{point.enabled=!point.enabled;rebuild();});
+        dropdown(form,"领取阵营",String.valueOf(point.team),teamChoices(true),v->{point.team=Integer.parseInt(v);rebuild();});
+        decimal("精英点 X",point.x,v->point.x=v);decimal("精英点 Y",point.y,v->point.y=v);decimal("精英点 Z",point.z,v->point.z=v);
+        decimal("领取半径",point.radius,v->point.radius=v);
+        number("阶段（-1 不限制）",point.sector,v->point.sector=v,-1,15);
+        number("首次刷新延迟（秒）",point.initialDelaySeconds,v->point.initialDelaySeconds=v,0,3600);
+        number("阵亡/离房后刷新（秒）",point.respawnSeconds,v->point.respawnSeconds=v,0,3600);
+        row(form,"移到脚下","",()->{if(minecraft.player!=null){point.x=minecraft.player.getX();point.y=minecraft.player.getY();point.z=minecraft.player.getZ();}rebuild();});
+        form.paragraph("每个房间每方同类精英同时限一名。倒地保留精英身份，阵亡或离房后才开始刷新冷却。",Ui.TEXT_DIM);
     }
 
     /** Supply pad editor: where they are, who they serve, and what they restore. */
@@ -981,8 +1042,7 @@ final class OpsScreen extends FrontScreen {
         VehicleSupply.Supply supply = draft.supplies.get(index);
         final int at = index;
         field(form, "补给点名称", supply.id(), 32, value -> setSupply(at, supply.withId(value)));
-        row(form, "阵营", supply.team() < 0 ? "双方" : supply.team() == 0 ? "仅蓝方" : "仅红方",
-                () -> setSupply(at, supply.withTeam(supply.team() < 0 ? 0 : supply.team() == 0 ? 1 : -1)));
+        dropdown(form,"阵营",String.valueOf(supply.team()),teamChoices(true),v->setSupply(at,supply.withTeam(Integer.parseInt(v))));
         decimal("补给点 X", supply.x(), value -> setSupply(at, supply.withX(value)));
         decimal("补给点 Z", supply.z(), value -> setSupply(at, supply.withZ(value)));
         decimal("补给点 Y", supply.y(), value -> setSupply(at, supply.withY(value)));
@@ -1094,19 +1154,32 @@ final class OpsScreen extends FrontScreen {
 
     private void rules() {
         form.section("计分与兵力");
-        number("起始兵力", draft.tickets, value -> draft.tickets = value, 1, 100000);
+        if(draft.isTraining()){
+            // A firing range never ends, so the scoring/ticket/round controls do not apply and are hidden
+            // rather than shown as dead inputs.
+            form.caption("靶场不结算胜负：计分、兵力、占领与局时均不生效",Ui.TEXT_DIM);
+        }else{
+        if(draft.isDeathmatch()){
+            number("团队目标击杀数",draft.targetKills,value->draft.targetKills=value,1,100000);
+            form.caption("击倒敌人计团队击杀；友伤/自杀/环境死亡不加分",Ui.TEXT_DIM);
+            form.caption("双方从 0 分累加；超时比分高者胜，同分平局",Ui.TEXT_DIM);
+        }else number("起始兵力", draft.tickets, value -> draft.tickets = value, 1, 100000);
         number("击杀个人分", draft.killScore, value -> draft.killScore = value, 0, 10000);
+        if(!draft.isDeathmatch()){
         number("占领个人分", draft.captureScore, value -> draft.captureScore = value, 0, 10000);
         number("阵亡扣兵力", draft.deathCost, value -> draft.deathCost = value, 0, 100);
-        number("据点优势每秒扣票", draft.bleed, value -> draft.bleed = value, 0, 100);
-        number("单人占领秒数", draft.captureSeconds, value -> draft.captureSeconds = value, 1, 600);
-        number("突破阶段奖励兵力", draft.sectorBonus, value -> draft.sectorBonus = value, 0, 10000);
+        if(!draft.isStaged())number("据点优势每秒扣票", draft.bleed, value -> draft.bleed = value, 0, 100);
+        if(!draft.isRush())number("完整占领秒数（中立点为一半）", draft.captureSeconds, value -> draft.captureSeconds = value, 1, 600);
+        if(draft.isStaged())number("阶段推进奖励兵力", draft.sectorBonus, value -> draft.sectorBonus = value, 0, 10000);
+        }
+        }
 
         form.section("节奏");
         number("重生等待秒数", draft.respawnSeconds, value -> draft.respawnSeconds = value, 0, 120);
         number("越界宽限秒数", draft.outsideSeconds, value -> draft.outsideSeconds = value, 1, 120);
-        number("局时（分钟）", draft.roundMinutes, value -> draft.roundMinutes = value, 1, 240);
-        number("立即退出边界距离（格）", draft.exitMargin, value -> draft.exitMargin = value, 0, 512);
+        number("房间人数上限", draft.maxPlayers, value -> draft.maxPlayers = value, 2, 128);
+        if(!draft.isTraining())number("局时（分钟）", draft.roundMinutes, value -> draft.roundMinutes = value, 1, 240);
+        number("立即阵亡边界距离（格）", draft.exitMargin, value -> draft.exitMargin = value, 0, 512);
 
         form.section("载具与高度");
         // Vehicles are rationed by cooldown and the match-wide cap. There is deliberately no "score
@@ -1119,6 +1192,7 @@ final class OpsScreen extends FrontScreen {
         // reflect what actually happened in the fight.
         number("\u6807\u8bb0\u5f97\u5206", draft.markScore, value -> draft.markScore = value, 0, 1000);
         number("\u52a9\u653b\u5f97\u5206", draft.assistScore, value -> draft.assistScore = value, 0, 1000);
+        number("补给/侦测得分",draft.supportScore,value->draft.supportScore=value,0,1000);
         number("\u7206\u5934\u52a0\u6210", draft.headshotBonus, value -> draft.headshotBonus = value, 0, 1000);
         number("\u8fde\u6740\u52a0\u6210", draft.comboBonus, value -> draft.comboBonus = value, 0, 1000);
         number("\u590d\u4ec7\u52a0\u6210", draft.revengeBonus, value -> draft.revengeBonus = value, 0, 1000);
@@ -1127,8 +1201,46 @@ final class OpsScreen extends FrontScreen {
         number("\u5012\u5730\u51fa\u8840\u79d2\u6570", draft.downSeconds, value -> draft.downSeconds = value, 3, 120);
         number("\u6551\u63f4\u6240\u9700\u79d2\u6570", draft.reviveSeconds, value -> draft.reviveSeconds = value, 1, 30);
         number("\u6551\u63f4\u540e\u751f\u547d\u503c", draft.reviveHealth, value -> draft.reviveHealth = value, 0, 1000);
-        number("蓝方载具名额（0=禁用）", draft.vehicleLimitFor(0), value -> draft.blueVehicleLimit = value, 0, 32);
-        number("红方载具名额（0=禁用）", draft.vehicleLimitFor(1), value -> draft.redVehicleLimit = value, 0, 32);
+        form.section("入局简报与镜头");
+        row(form,"入局简报",draft.entryEnabled?"开":"关",()->{draft.entryEnabled=!draft.entryEnabled;rebuild();});
+        number("简报停留秒数（另加 1 秒淡出）",draft.entrySeconds,v->draft.entrySeconds=v,1,60);
+        field(form,"房间说明（也显示在大厅）",draft.roomDescription,1600,v->draft.roomDescription=v);
+        field(form,"提示一",draft.entryTip1,180,v->draft.entryTip1=v);
+        field(form,"提示二",draft.entryTip2,180,v->draft.entryTip2=v);
+        field(form,"提示三",draft.entryTip3,180,v->draft.entryTip3=v);
+        row(form,"入局镜头",draft.customEntryView?"已保存自定义位置":"沿用部署镜头",()->{
+            Model.require(minecraft.player!=null&&minecraft.level!=null,"请进入地图后设置镜头");
+            Model.require(minecraft.level.dimension().location().toString().equals(draft.dimension),"请先进入地图所属维度");
+            draft.customEntryView=true;draft.entryX=minecraft.player.getX();draft.entryY=minecraft.player.getEyeY();draft.entryZ=minecraft.player.getZ();draft.entryYaw=minecraft.player.getYRot();draft.entryPitch=minecraft.player.getXRot();rebuild();ok("已记录入局镜头，请保存地图后生效");
+        });
+        if(draft.customEntryView)row(form,"入局镜头沿用部署镜头","清除单独位置",()->{draft.customEntryView=false;rebuild();});
+        form.section("入局界面文字位置");
+        if(draft.entry==null)draft.entry=new Model.EntryLayout();
+        number("文字块 X（左边界，像素）",draft.entry.textX,v->draft.entry.textX=v,0,2000);
+        number("文字块 Y（顶部，像素）",draft.entry.textY,v->draft.entry.textY=v,0,2000);
+        decimal("房间名标题缩放（0.5～4）",draft.entry.titleScale,v->draft.entry.titleScale=(float)Math.max(.5,Math.min(4,v)));
+        number("描述面板最大宽度（像素）",draft.entry.descWidth,v->draft.entry.descWidth=v,90,800);
+        number("描述面板高度（像素）",draft.entry.descHeight,v->draft.entry.descHeight=v,40,600);
+        number("描述面板底部边距（像素）",draft.entry.descBottom,v->draft.entry.descBottom=v,20,400);
+        number("等待行 X（像素）",draft.entry.waitX,v->draft.entry.waitX=v,0,2000);
+        form.section("待部署战场镜头");
+        row(form,"部署镜头",draft.customDeployView?"已保存自定义位置":"自动俯视构图",()->{
+            Model.require(minecraft.player!=null&&minecraft.level!=null,"请进入地图后设置镜头");
+            Model.require(minecraft.level.dimension().location().toString().equals(draft.dimension),"请先进入地图所属维度");
+            draft.customDeployView=true;draft.deployViewX=minecraft.player.getX();draft.deployViewY=minecraft.player.getEyeY();draft.deployViewZ=minecraft.player.getZ();
+            draft.deployViewYaw=minecraft.player.getYRot();draft.deployViewPitch=minecraft.player.getXRot();rebuild();ok("已记录当前镜头，请保存地图后生效");
+        });
+        if(draft.customDeployView)row(form,"恢复自动部署镜头","按战场范围构图",()->{draft.customDeployView=false;rebuild();});
+        form.section("兵种道具自动回复");
+        number("弹药箱逐件补充间隔（秒）", draft.ammoBoxRefillSeconds, value -> draft.ammoBoxRefillSeconds = Math.max(0, Math.min(120, value)), 0, 120);
+                number("补给箱总使用次数", draft.supportBoxUses, value -> draft.supportBoxUses = Math.max(1, Math.min(128, value)), 1, 128);
+        for(var kind:SupportRules.Kind.values())number(kind.label+" 回满秒数（0=关闭）",draft.refillSeconds(kind),value->draft.gadgetRefillSeconds.put(kind.id,value),0,600);
+        number("救援距离（格）",draft.reviveDistance,v->draft.reviveDistance=v,2,6);
+        number("支援兵救援速度倍率",draft.supportReviveSpeed,v->draft.supportReviveSpeed=v,1,4);
+        row(form,"允许放弃倒地",draft.allowGiveUp?"开":"关",()->{draft.allowGiveUp=!draft.allowGiveUp;rebuild();});
+        row(form,"允许跳过部署等待",draft.allowRespawnSkip?"开":"关",()->{draft.allowRespawnSkip=!draft.allowRespawnSkip;rebuild();});
+        number("机械轴心载具名额（0=禁用）", draft.vehicleLimitFor(0), value -> draft.blueVehicleLimit = value, 0, 32);
+        number("格雷同盟载具名额（0=禁用）", draft.vehicleLimitFor(1), value -> draft.redVehicleLimit = value, 0, 32);
         number("战区最低 Y", draft.minY, value -> draft.minY = value, -2048, 2048);
         number("战区最高 Y", draft.maxY, value -> draft.maxY = value, -2048, 2048);
 
@@ -1140,14 +1252,19 @@ final class OpsScreen extends FrontScreen {
         number("每队人机数量", draft.botsPerTeam, value -> draft.botsPerTeam = value, 1, 32);
 
         form.section("开关");
+        if(!"TRAINING".equals(draft.mode))row(form,"靶场模式",draft.training?"开（任意武器/物品）":"关",()->{draft.training=!draft.training;rebuild();});
+        form.caption("靶场内可用任意已扫描枪械，离开后恢复兵种限制；对局仍禁止破坏/放置方块",Ui.TEXT_FAINT);
+        row(form,"持续满饱食与饱和",draft.defaultSaturation?"开":"关",()->{draft.defaultSaturation=!draft.defaultSaturation;rebuild();});
+        row(form,"允许饱食自然回血",draft.foodRegeneration?"开":"关",()->{draft.foodRegeneration=!draft.foodRegeneration;rebuild();});
+        form.caption("满饱和+自然回血=自动回血；关闭自然回血仍可医疗救治",Ui.TEXT_FAINT);
+        row(form,"边界粒子",draft.boundaryParticles?"开":"关",()->{draft.boundaryParticles=!draft.boundaryParticles;rebuild();});
+        row(form,"据点范围粒子",draft.objectiveParticles?"开":"关",()->{draft.objectiveParticles=!draft.objectiveParticles;rebuild();});
         row(form, "友军伤害", draft.friendlyFire ? "开" : "关", () -> {
             draft.friendlyFire = !draft.friendlyFire;
             rebuild();
         });
-        row(form, "隐藏敌方名牌", draft.hideEnemyNametags ? "开" : "关", () -> {
-            draft.hideEnemyNametags = !draft.hideEnemyNametags;
-            rebuild();
-        });
+        row(form,"友军驾驶载具允许全队登车",draft.teamWideVehicleDeploy?"全队":"驾驶员小队",()->{draft.teamWideVehicleDeploy=!draft.teamWideVehicleDeploy;rebuild();});
+        form.caption("敌方姓名条固定隐藏，仅显示授权的战术标记",Ui.TEXT_FAINT);
         row(form, "队友地图标记", draft.glowTeammates ? "开" : "关", () -> {
             draft.glowTeammates = !draft.glowTeammates;
             rebuild();
@@ -1161,57 +1278,189 @@ final class OpsScreen extends FrontScreen {
 
     // ------------------------------------------------------------------ tab 4: kits
 
+    private Model.Kit editingKit(){
+        if(kitIndex<4)return draft.kits.get(Math.max(0,Math.min(3,kitIndex)));
+        EliteRules.complete(draft);return EliteRules.template(draft,EliteRules.Kind.values()[Math.min(4,kitIndex-4)].key).kit;
+    }
+
     private void kits() {
-        form.section("兵种 " + (draft.kits.isEmpty() ? "0 / 0"
-                : (Math.min(kitIndex, draft.kits.size() - 1) + 1) + " / " + draft.kits.size()));
-        Layout.Rect[] nav = form.split(Layout.ROW, 4);
-        place(form, nav[0], "<", "", "", "", !draft.kits.isEmpty(), () -> {
-            kitIndex = Math.floorMod(kitIndex - 1, draft.kits.size());
-            rebuild();
-        });
-        place(form, nav[1], ">", "", "", "", !draft.kits.isEmpty(), () -> {
-            kitIndex = (kitIndex + 1) % draft.kits.size();
-            rebuild();
-        });
-        place(form, nav[2], "新增", "", "", "", draft.kits.size() < 16, () -> {
-            Model.Kit kit = new Model.Kit();
-            kit.id = "配装" + (draft.kits.size() + 1);
-            draft.kits.add(kit);
-            kitIndex = draft.kits.size() - 1;
-            rebuild();
-        });
-        place(form, nav[3], "删除", "", "", "", !draft.kits.isEmpty(), () -> {
-            draft.kits.remove(Math.min(kitIndex, draft.kits.size() - 1));
-            kitIndex = 0;
-            rebuild();
-        });
-        if (draft.kits.isEmpty()) {
-            form.paragraph("至少需要一个兵种，否则玩家无法部署。", Ui.TEXT_WARN);
-            return;
+        FixedClasses.complete(draft);
+        EliteRules.complete(draft);
+        kitIndex=Math.max(0,Math.min(8,kitIndex));
+        form.section("参考端固定兵种");
+        form.paragraph("固定四类普通兵和五类精英兵；不能新增、删除或改名。",Ui.TEXT_DIM);
+        for(int i=0;i<4;i++){
+            final int index=i;var role=FixedClasses.Role.values()[i];
+            FrontButton button=row(form,role.name,i==kitIndex?"正在编辑":"选择","role",role.name,()->{kitIndex=index;rebuild();});
+            button.primary=i==kitIndex;
         }
-        Model.Kit kit = draft.kits.get(Math.min(kitIndex, draft.kits.size() - 1));
-        field(form, "兵种名称", kit.id, 32, value -> kit.id = value);
-        number("每把枪备用弹药组数", kit.ammoStacks, value -> kit.ammoStacks = value, 0, 12);
+        form.section("精英兵 · 仅刷新点领取");
+        for(int i=0;i<5;i++){
+            final int index=i+4;var kind=EliteRules.Kind.values()[i];
+            FrontButton button=row(form,kind.name,index==kitIndex?"正在编辑":"选择","elite",kind.key,()->{kitIndex=index;rebuild();});button.primary=index==kitIndex;
+        }
+        Model.Kit kit=editingKit();
+        if(kitIndex>=4)form.paragraph("精英兵不能从部署界面选择。请在据点/出生页设置装备刷新点；对局内靠近后按领取键获取。",Ui.TEXT_WARN);
+        if(kitIndex<4&&!draft.legacyKits.isEmpty()){
+            row(form,"恢复旧配装到此兵种",draft.legacyKits.size()+" 项",()->{
+                List<ChoiceScreen.Choice> options=new ArrayList<>();
+                for(int i=0;i<draft.legacyKits.size();i++)options.add(new ChoiceScreen.Choice(""+i,draft.legacyKits.get(i).id,""));
+                minecraft.setScreen(new ChoiceScreen(this,"选择旧配装（与当前兵种装备交换）",options,id->{FixedClasses.restore(draft,kitIndex,Integer.parseInt(id));rebuild();}));
+            });
+        }
+        number("每把枪备用弹药个数", kit.ammoStacks, value -> kit.ammoStacks = value, 0, 512);
 
         form.section("武器库");
         long mains = kit.options(true).stream().filter(id -> !id.isEmpty()).count();
         long subs = kit.options(false).stream().filter(id -> !id.isEmpty()).count();
-        row(form, "主武器库", mains + " 把", "gun", kit.primary, () -> {
-            tab = 5;
-            rebuild();
-            fetchCatalog();
-        });
-        row(form, "副武器库", subs + " 把", "gun", kit.secondary, () -> {
-            tab = 5;
-            rebuild();
-            fetchCatalog();
-        });
+        row(form, "主武器库", mains + " 把", "gun", kit.primary, () -> openGunLibrary(0, true));
+        row(form, "副武器库", subs + " 把", "gun", kit.secondary, () -> openGunLibrary(0, false));
         row(form, "移除主武器选项", "", "", "", kit.options(true).stream().anyMatch(id -> !id.isEmpty()),
                 () -> removeOption(kit, true));
         row(form, "移除副武器选项", "", "", "", kit.options(false).stream().anyMatch(id -> !id.isEmpty()),
                 () -> removeOption(kit, false));
+        row(form, "默认近身武器", kit.melee == null || kit.melee.isEmpty() ? "无" : (ItemCatalog.isGun(kit.melee)?name(kit.melee):KitItems.name(kit.melee)),
+                kit.melee == null || kit.melee.isEmpty() ? "" : ItemCatalog.isGun(kit.melee)?"gun":"item", kit.melee, () -> pickMelee(kit));
+        if (kit.sharedPools) {
+            row(form,"添加可用近身武器",kit.meleeOptions().size()+" 项 · 分类选择",()->minecraft.setScreen(new ItemPickerScreen(this,true,id->{
+                if(kit.meleeOptions().contains(id)){say("该装备已在可用清单中");return;}
+                Model.require(kit.meleeOptions().size()<64,"近身武器最多 64 项");
+                if(kit.meleeOptions==null)kit.meleeOptions=new ArrayList<>();kit.meleeOptions.add(id);
+                if(kit.melee==null||kit.melee.isEmpty())kit.melee=id;say("已加入地图近身武器清单，请保存地图");rebuild();
+            })));
+            row(form,"移除近身武器选项","",!kit.meleeOptions().isEmpty(),()->{
+                var choices=kit.meleeOptions().stream().map(id->new ChoiceScreen.Choice(id,ItemCatalog.isGun(id)?name(id):KitItems.name(id),ItemCatalog.isGun(id)?"gun":"item")).toList();
+                minecraft.setScreen(new ChoiceScreen(this,"移除地图授权近身武器",choices,id->{var options=new ArrayList<>(kit.meleeOptions());options.remove(id);kit.meleeOptions=options;say("已更新，请保存地图");rebuild();}));
+            });
+            row(form,"添加可用投掷武器",kit.throwableOptions().size()+" 项 · 任意物品",()->minecraft.setScreen(new ItemPickerScreen(this,true,id->{
+                if(kit.throwableOptions().contains(id)){say("该物品已在可用清单中");return;}
+                Model.require(kit.throwableOptions().size()<64,"投掷武器最多 64 项");
+                if(kit.throwableOptions==null)kit.throwableOptions=new ArrayList<>();kit.throwableOptions.add(id);
+                if(kit.itemCounts==null)kit.itemCounts=new java.util.LinkedHashMap<>();
+                kit.itemCounts.putIfAbsent(id,1);
+                if(kit.throwable==null||kit.throwable.isEmpty())kit.throwable=id;say("已加入地图投掷武器清单，请保存地图");rebuild();
+            })));
+            row(form,"投掷携带数量 ▸ "+countedItems(kit,false)+" 项","",true,()->{expandThrowableCounts=!expandThrowableCounts;rebuild();});
+            if(expandThrowableCounts){
+    for(String countedId:kit.throwableOptions()){
+        if(countedId==null||countedId.isEmpty())continue;
+        number("携带 · "+KitItems.name(countedId), kit.countFor(countedId),
+                value -> {
+                                if(kit.itemCounts==null)kit.itemCounts=new java.util.LinkedHashMap<>();
+                                kit.itemCounts.put(countedId, Math.max(1, Math.min(64, value)));
+                            }, 1, 64);
+    }
+            }
+row(form,"移除投掷武器选项","",!kit.throwableOptions().isEmpty(),()->{
+                var choices=kit.throwableOptions().stream().map(id->new ChoiceScreen.Choice(id,KitItems.name(id),ItemCatalog.isGun(id)?"gun":"item")).toList();
+                minecraft.setScreen(new ChoiceScreen(this,"移除地图授权投掷武器",choices,id->{var options=new ArrayList<>(kit.throwableOptions());options.remove(id);kit.throwableOptions=options;say("已更新，请保存地图");rebuild();}));
+            });
+        }
+            row(form,"添加战术道具",kit.tacticalChoices().size()+" 项 · 任意物品",()->minecraft.setScreen(new ItemPickerScreen(this,true,id->{
+                if(kit.tacticalChoices().contains(id)){say("该物品已在战术道具清单中");return;}
+                Model.require(kit.tacticalChoices().size()<64,"战术道具最多 64 项");
+                if(kit.tacticalOptions==null)kit.tacticalOptions=new ArrayList<>();kit.tacticalOptions.add(id);
+                if(kit.itemCounts==null)kit.itemCounts=new java.util.LinkedHashMap<>();
+                kit.itemCounts.putIfAbsent(id,1);
+                say("已加入战术道具清单，请设置携带数量");rebuild();
+            })));
+            if(kit.itemCounts!=null)row(form,"战术携带数量 ▸ "+countedItems(kit,true)+" 项","",true,
+                    ()->{expandTacticalCounts=!expandTacticalCounts;rebuild();});
+            if(expandTacticalCounts)for(String countedId:kit.tacticalChoices()){
+                if(countedId==null||countedId.isEmpty())continue;
+                number("携带 · "+KitItems.name(countedId), kit.countFor(countedId),
+                        value -> {
+                                if(kit.itemCounts==null)kit.itemCounts=new java.util.LinkedHashMap<>();
+                                kit.itemCounts.put(countedId, Math.max(1, Math.min(64, value)));
+                            }, 1, 64);
+            }
+        // Only weapons that are actually configured in this kit's pools get a row; nothing is invented for
+        // guns the map never authorised, and the value shown is the one stored (not a silent default).
+        // Per-gun ammunition whitelist: the operator picks which kinds this launcher may feed on, and sets the
+        // amount for each kind; the deploy screen then lets the player take one of them.
+        // Ammunition whitelist: one toggle per type the gun declares, so the operator decides whether one,
+        // two or all of them are allowed. The deploy screen then offers exactly this set.
+        for(String gunId:allGunIds(kit)){
+            if(!SuperbAmmo.isGunId(gunId))continue;
+            var probe=SuperbAmmo.gunBundle(gunId,0);
+            if(probe.isEmpty())continue;
+            var declared=SuperbAmmo.ammoIds(probe.getFirst());
+            if(declared.size()<2)continue;
+            var allowed=kit.ammoWhitelist(gunId);
+            for(String ammoId:declared){
+                boolean on=allowed.contains(ammoId);
+                row(form,"允许 · "+KitItems.name(gunId)+" / "+KitItems.name(ammoId),on?"已允许":"─",()->{
+                    if(kit.gunAmmoWhitelist==null)kit.gunAmmoWhitelist=new java.util.LinkedHashMap<>();
+                    var list=new ArrayList<>(kit.ammoWhitelist(gunId));
+                    if(list.contains(ammoId))list.remove(ammoId);else list.add(ammoId);
+                    kit.gunAmmoWhitelist.put(gunId,list);
+                    say(list.contains(ammoId)?"已允许 "+KitItems.name(ammoId):"已禁止 "+KitItems.name(ammoId));
+                    rebuild();
+                });
+                if(on){
+                    number("数量 · "+KitItems.name(gunId)+" / "+KitItems.name(ammoId), kit.countFor(ammoId),
+                            value -> {
+                                if(kit.itemCounts==null)kit.itemCounts=new java.util.LinkedHashMap<>();
+                                kit.itemCounts.put(ammoId, Math.max(1, Math.min(64, value)));
+                            }, 1, 64);
+                }
+            }
+        }
+            row(form,"清空继承物品","旧版个人物品清单","","",!kit.gear().deduplicatedItems().isEmpty(),()->{
+                kit.gear().items.clear();say("已清空继承物品，请保存地图");rebuild();
+            });
+row(form,"移除战术道具","",!kit.tacticalChoices().isEmpty(),()->{
+                var choices=kit.tacticalChoices().stream().map(id->new ChoiceScreen.Choice(id,KitItems.name(id),ItemCatalog.isGun(id)?"gun":"item")).toList();
+                minecraft.setScreen(new ChoiceScreen(this,"移除授权战术道具",choices,id->{var options=new ArrayList<>(kit.tacticalOptions==null?List.<String>of():kit.tacticalOptions);options.remove(id);kit.tacticalOptions=options;say("已更新，请保存地图");rebuild();}));
+            });
 
+        row(form, "共用武器池", kit.sharedPools ? "已启用（两阵营共用）" : "未启用（分阵营配置）",
+                "", "", true, () -> {
+                    kit.sharedPools = !kit.sharedPools;
+                    say(kit.sharedPools ? "已切换为共用武器池，请保存地图" : "已切换为分阵营武器池，请分别配置后保存");
+                    rebuild();
+                });
+        if (!kit.sharedPools) {
+            row(form, "格雷同盟·主武器池", poolLabel(kit.primaryOptions0), "gun", kit.primary,
+                    () -> openGunLibrary(1, true));
+            row(form, "格雷同盟·副武器池", poolLabel(kit.secondaryOptions0), "gun", kit.secondary,
+                    () -> openGunLibrary(1, false));
+            row(form, "机械核心·主武器池", poolLabel(kit.primaryOptions1), "gun", kit.primary,
+                    () -> openGunLibrary(2, true));
+            row(form, "机械核心·副武器池", poolLabel(kit.secondaryOptions1), "gun", kit.secondary,
+                    () -> openGunLibrary(2, false));
+            row(form, "格雷同盟·近身池", poolLabel(kit.meleeOptions0),
+                    () -> pickIntoPool("格雷同盟近身池", kit.meleeOptions0, v -> kit.meleeOptions0 = v));
+            row(form, "格雷同盟·投掷物池", poolLabel(kit.throwableOptions0),
+                    () -> pickIntoPool("格雷同盟投掷物池", kit.throwableOptions0, v -> kit.throwableOptions0 = v));
+            row(form, "机械核心·近身池", poolLabel(kit.meleeOptions1),
+                    () -> pickIntoPool("机械核心近身池", kit.meleeOptions1, v -> kit.meleeOptions1 = v));
+            row(form, "机械核心·投掷物池", poolLabel(kit.throwableOptions1),
+                    () -> pickIntoPool("机械核心投掷物池", kit.throwableOptions1, v -> kit.throwableOptions1 = v));
+        }
+
+        row(form, "共用载具池", draft.sharedVehicles ? "已启用（两阵营共用）" : "未启用（分阵营配置）",
+                "", "", true, () -> {
+                    draft.sharedVehicles = !draft.sharedVehicles;
+                    say(draft.sharedVehicles ? "已切换为共用载具池，请保存地图" : "已切换为分阵营载具池，请分别配置后保存");
+                    rebuild();
+                });
+        if (!draft.sharedVehicles) {
+            row(form, "格雷同盟·载具池", poolLabel(draft.vehicles0), () -> pickVehiclesInto(draft.vehicles0, v -> draft.vehicles0 = v));
+            row(form, "机械核心·载具池", poolLabel(draft.vehicles1), () -> pickVehiclesInto(draft.vehicles1, v -> draft.vehicles1 = v));
+        }
+        row(form, "清空分阵营池", "恢复与共用清单一致", "", "", true, () -> {
+            kit.primaryOptions0 = new ArrayList<>(); kit.secondaryOptions0 = new ArrayList<>();
+            kit.meleeOptions0 = new ArrayList<>(); kit.throwableOptions0 = new ArrayList<>();
+            kit.primaryOptions1 = new ArrayList<>(); kit.secondaryOptions1 = new ArrayList<>();
+            kit.meleeOptions1 = new ArrayList<>(); kit.throwableOptions1 = new ArrayList<>();
+            draft.vehicles0 = new ArrayList<>(); draft.vehicles1 = new ArrayList<>();
+            say("已恢复共用清单，请保存地图"); rebuild();
+        });
+
+        if(kitIndex<4)row(form,"步兵配件权限","白名单 / 禁用 / 等级解锁",()->minecraft.setScreen(new AttachmentRulesScreen(this,kit)));
         gearSection(kit);
+        placementSection(kit);
         form.release();
     }
 
@@ -1224,44 +1473,6 @@ final class OpsScreen extends FrontScreen {
      */
     private void gearSection(Model.Kit kit) {
         KitGear gear = kit.gear();
-        form.section("个人物品 · " + gear.items.size() + " 项");
-
-        int shown = Math.min(gear.items.size(), 6);
-        for (int i = 0; i < shown; i++) {
-            final int index = i;
-            KitGear.Entry entry = gear.items.get(i);
-            Layout.Rect row = form.take(Layout.ROW);
-            Layout.Rect[] cells = Layout.columns(row, 3, 3);
-            place(form, cells[0], KiItems_name(entry.id),
-                    "×" + entry.count, "item", entry.id, true, () -> {
-                        // Cycle the count in place: the common edit is "more of this", not "replace this".
-                        entry.count = entry.count >= KitGear.MAX_COUNT ? 1 : entry.count + 1;
-                        rebuild();
-                    });
-            place(form, cells[1], "−", "", "", "", entry.count > 1, () -> {
-                entry.count = Math.max(1, entry.count - 1);
-                rebuild();
-            });
-            place(form, cells[2], "移除", "", "", "", true, () -> {
-                gear.items.remove(index);
-                rebuild();
-            });
-        }
-        if (gear.items.isEmpty()) {
-            form.caption("还没有发放任何物品。用下面的「添加物品」从全部物品里挑选。", Ui.TEXT_FAINT);
-        }
-        Layout.Rect[] add = form.pair(Layout.ROW);
-        place(form, add[0], "添加物品", "任意种类", "item", "", true, () -> pickItem(id -> {
-            KitGear.Entry entry = new KitGear.Entry(id, 1);
-            gear.items.add(entry);
-            say("已添加 " + KiItems_name(id) + "，记得保存地图");
-            rebuild();
-        }));
-        place(form, add[1], "清空物品", "", "", "", !gear.items.isEmpty(), () -> {
-            gear.items.clear();
-            rebuild();
-        });
-
         form.section("盔甲");
         for (String slot : KitGear.ARMOUR_SLOTS) {
             String id = gear.armour.getOrDefault(slot, "");
@@ -1323,6 +1534,33 @@ final class OpsScreen extends FrontScreen {
                 Ui.TEXT_FAINT);
     }
 
+    /** Editable order of everything issued after the two fixed weapon slots. */
+    private void placementSection(Model.Kit kit){
+        form.section("物品栏顺序 · 3 号位及以后");
+        form.paragraph("主武器固定 1 号位、副武器固定 2 号位；这里排列其后弹药与装备的先后。",Ui.TEXT_DIM);
+        List<String> order=new ArrayList<>(kit.issueOrder());
+        for(int i=0;i<order.size();i++){
+            String token=order.get(i);
+            String label=token.equals("main_ammo")?"主武器弹药":token.equals("side_ammo")?"副武器弹药":KiItems_name(token);
+            Layout.Rect row=form.take(Layout.ROW);
+            Layout.Rect[] cells=Layout.columns(row,3,3);
+            form.textAt(cells[0],label,Ui.TEXT);
+            final int index=i;
+            place(form,cells[1],"↑","","","",i>0,()->moveToken(kit,index,-1));
+            place(form,cells[2],"↓","","","",i<order.size()-1,()->moveToken(kit,index,1));
+        }
+        if(order.isEmpty())form.caption("还没有可排列的物品。",Ui.TEXT_FAINT);
+    }
+
+    private void moveToken(Model.Kit kit,int index,int delta){
+        List<String> order=new ArrayList<>(kit.issueOrder());
+        int j=Math.max(0,Math.min(order.size()-1,index+delta));
+        if(order.size()<2||j==index)return;
+        java.util.Collections.swap(order,index,j);
+        kit.placement=order;
+        rebuild();
+    }
+
     /** Item display name through the shared resolver, so a missing item shows its raw id here too. */
     private static String KiItems_name(String id) {
         return id == null || id.isEmpty() ? "未配置" : KitItems.name(id);
@@ -1337,10 +1575,45 @@ final class OpsScreen extends FrontScreen {
      * showing, so the list stayed empty.
      */
     private void pickItem(java.util.function.Consumer<String> chosen) {
-        minecraft.setScreen(new ItemPickerScreen(this, id -> {
+        minecraft.setScreen(new ItemPickerScreen(this,true, id -> {
             if (id == null || id.isEmpty()) return;
             chosen.accept(id);
             minecraft.setScreen(this);
+        }));
+    }
+
+    /** "共用" when the faction list is empty, otherwise the entry count. */
+    private static String poolLabel(java.util.List<String> pool) {
+        return pool == null || pool.isEmpty() ? "共用" : pool.size() + " 项";
+    }
+
+    /** Toggles one vehicle in a faction pool, using the scanned vehicle catalogue. */
+    private void pickVehiclesInto(java.util.List<String> current,
+                                  java.util.function.Consumer<java.util.List<String>> setter) {
+        java.util.List<ChoiceScreen.Choice> choices = ItemCatalog.all().stream()
+                .filter(e -> e.kind().equals("vehicle"))
+                .map(e -> new ChoiceScreen.Choice(e.id(), e.name(),
+                        (current != null && current.contains(e.id()) ? "已选 " : "    ") + e.id(), "vehicle"))
+                .toList();
+        if (choices.isEmpty()) { say("尚未扫描到载具，请先刷新目录"); return; }
+        minecraft.setScreen(new ChoiceScreen(this, "选择载具池（点击切换，关闭即保存）", choices, id -> {
+            java.util.List<String> copy = current == null ? new ArrayList<>() : new ArrayList<>(current);
+            if (copy.contains(id)) copy.remove(id); else copy.add(id);
+            setter.accept(copy);
+            say("载具池已更新，请保存地图");
+            rebuild();
+        }));
+    }
+
+    /** Adds one item to a team-1 pool through the same picker the shared lists use. */
+    private void pickIntoPool(String label, java.util.List<String> current, java.util.function.Consumer<java.util.List<String>> setter) {
+        minecraft.setScreen(new ItemPickerScreen(this, true, id -> {
+            java.util.List<String> copy = current == null ? new ArrayList<>() : new ArrayList<>(current);
+            if (copy.contains(id)) { say("该物品已在 " + label + " 中"); return; }
+            if (copy.size() >= 64) { say(label + " 最多 64 项"); return; }
+            copy.add(id);
+            setter.accept(copy);
+            say("已加入 " + label + "，请保存地图"); rebuild();
         }));
     }
 
@@ -1358,20 +1631,34 @@ final class OpsScreen extends FrontScreen {
             options.remove(id);
             if (main && kit.primary.equals(id)) kit.primary = options.isEmpty() ? "" : options.getFirst();
             if (!main && kit.secondary.equals(id)) kit.secondary = options.isEmpty() ? "" : options.getFirst();
+            if(!kit.options(true).contains(id)&&!kit.options(false).contains(id))kit.attachments.remove(id);
             say("已移除选项，记得保存地图");
         }));
+    }
+
+    /** Melee slot: any TaCZ-tagged knife, or any item. */
+    private void pickMelee(Model.Kit kit) {
+        var choices=new ArrayList<ChoiceScreen.Choice>();choices.add(new ChoiceScreen.Choice("","无 / 不装备","item"));
+        for(String id:kit.meleeOptions())choices.add(new ChoiceScreen.Choice(id,ItemCatalog.isGun(id)?name(id):KitItems.name(id),ItemCatalog.isGun(id)?"gun":"item"));
+        minecraft.setScreen(new ChoiceScreen(this,"默认近身武器 · 从地图可用清单选择",choices,id->{kit.melee=id;say("已设置默认装备，记得保存地图");rebuild();}));
     }
 
     // ------------------------------------------------------------------ tab 5: catalogue
 
     private void fetchCatalog() {
         JsonObject request = Client.request("catalog", selected);
-        request.addProperty("query", query);
+        request.addProperty("query", query);request.addProperty("category",libraryCategory);
         request.addProperty("page", catalogPage);
         Client.send(request);
     }
 
     private void catalog() {
+        row(form,"资源类别",libraryCategory.isEmpty()?"全部":libraryCategory,()->{
+            var categories=new ArrayList<ChoiceScreen.Choice>();categories.add(new ChoiceScreen.Choice("","全部类别",""));var seen=new java.util.HashSet<String>();
+            if(Client.catalog.has("gunTypes"))for(var e:Client.catalog.getAsJsonObject("gunTypes").entrySet()){String key="gun:"+e.getValue().getAsString();if(seen.add(key))categories.add(new ChoiceScreen.Choice(key,EquipmentCategories.of("gun",e.getKey()),""));}
+            if(Client.catalog.has("vehicleTypes"))for(var e:Client.catalog.getAsJsonObject("vehicleTypes").entrySet()){String display=e.getValue().getAsString(),key="vehicle:"+display.substring(display.lastIndexOf(" / ")+3);if(seen.add(key))categories.add(new ChoiceScreen.Choice(key,EquipmentCategories.of("vehicle",e.getKey()),""));}
+            openChoice("武器与载具类别",libraryCategory,categories,value->{libraryCategory=value;catalogPage=0;catalogLocal=0;fetchCatalog();});
+        });
         field(form, "搜索：名称 / @模组名", query, 96, value -> query = value);
         Layout.Rect[] top = form.pair(Layout.ROW);
         place(form, top[0], "搜索", "", "", "", true, () -> {
@@ -1677,10 +1964,10 @@ final class OpsScreen extends FrontScreen {
     private void rulesPreview(GuiGraphics graphics, Layout.Rect body) {
         int y = body.y() + 4;
         String[][] rows = {
-                {"起始兵力", "" + draft.tickets}, {"阵亡扣票", "" + draft.deathCost},
-                {"据点每秒扣票", "" + draft.bleed}, {"占领秒数", "" + draft.captureSeconds},
+                {draft.isDeathmatch()?"目标击杀":"起始兵力", "" + (draft.isDeathmatch()?draft.targetKills:draft.tickets)}, {"阵亡扣票", draft.isDeathmatch()?"不扣票":"" + draft.deathCost},
+                {"据点每秒扣票", draft.isDeathmatch()?"不生效":"" + draft.bleed}, {"占领秒数", draft.isDeathmatch()?"无占领":"" + draft.captureSeconds},
                 {"重生秒数", "" + draft.respawnSeconds}, {"越界宽限", "" + draft.outsideSeconds},
-                {"局时（分）", "" + draft.roundMinutes}, {"退出边界", draft.exitMargin + " 格"},
+                {"局时（分）", "" + draft.roundMinutes}, {"立即阵亡距离", draft.exitMargin + " 格"},
                 {"载具冷却", draft.vehicleCooldown + "s"}, {"载具名额", "蓝 "+draft.vehicleLimitFor(0)+" / 红 "+draft.vehicleLimitFor(1)},
         };
         for (String[] row : rows) {
@@ -1698,6 +1985,7 @@ final class OpsScreen extends FrontScreen {
      * which marker is selected and where the cursor is, so a click is never a blind guess.
      */
     private void pointsPreview(GuiGraphics graphics, Layout.Rect body) {
+        map.highlightElite=draft.eliteSpawns.isEmpty()?-1:Math.min(eliteSpawnIndex,draft.eliteSpawns.size()-1);
         map.highlightPoint = draft.points.isEmpty() ? -1
                 : Math.min(pointIndex, draft.points.size() - 1);
         map.highlightSupply = draft.supplies == null || draft.supplies.isEmpty() ? -1
@@ -1721,8 +2009,11 @@ final class OpsScreen extends FrontScreen {
 
     private void kitPreview(GuiGraphics graphics, Layout.Rect body) {
         if (draft.kits.isEmpty()) return;
-        Model.Kit kit = draft.kits.get(Math.min(kitIndex, draft.kits.size() - 1));
-        Layout.Rect[] halves = Layout.columns(body.pad(), 2, 6);
+        Model.Kit kit = editingKit();
+        AssetIcons.draw(graphics,kitIndex>=4?"elite":"role",kitIndex>=4?EliteRules.Kind.values()[kitIndex-4].key:kit.id,body.x()+6,body.y()+3,20,20);
+        graphics.drawString(font,kit.id+" · 固定兵种配装",body.x()+31,body.y()+9,Ui.ACCENT,false);
+        Layout.Rect area=new Layout.Rect(body.x(),body.y()+26,body.w(),Math.max(0,body.h()-26));
+        Layout.Rect[] halves = Layout.columns(area.pad(), 2, 6);
         slots(graphics, halves[0], "主武器", kit.primary);
         slots(graphics, halves[1], "副武器", kit.secondary);
     }
@@ -1921,14 +2212,59 @@ final class OpsScreen extends FrontScreen {
         return isAircraft(id) ? "航空器" : "地面载具";
     }
 
+    /** Which pool the gun library tab currently writes into: 0 shared, 1 Greg Union, 2 Mechanical Core. */
+    /** How many entries of a pool actually carry a configured count, i.e. how many rows the section shows. */
+    private static int countedItems(Model.Kit kit, boolean tactical) {
+        if (kit == null || kit.itemCounts == null) return 0;
+        int total = 0;
+        for (String id : kit.itemCounts.keySet()) {
+            if (tactical) {
+                if (kit.tacticalOptions != null && kit.tacticalOptions.contains(id)) total++;
+            } else if (kit.throwableOptions().contains(id)) {
+                total++;
+            }
+        }
+        return total;
+    }
+
+    /** Every gun id the kit can carry: main, secondary and tactical pools. */
+    private static java.util.List<String> allGunIds(Model.Kit kit) {
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<>();
+        ids.addAll(kit.options(true));
+        ids.addAll(kit.options(false));
+        if (kit.tacticalOptions != null) ids.addAll(kit.tacticalOptions);
+        return new java.util.ArrayList<>(ids);
+    }
+
+    private int poolTarget = 0;
+    private boolean expandThrowableCounts = false;
+    private boolean expandTacticalCounts = false;
+    private boolean poolTargetMain = true;
+
+    /** Opens the gun library tab aimed at one faction's pool, so the classification is the same view. */
+    private void openGunLibrary(int target, boolean main) {
+        poolTarget = target;
+        poolTargetMain = main;
+        tab = 5;
+        rebuild();
+        fetchCatalog();
+    }
+
     private void assign(boolean main) {
-        Model.require(entryKind.equals("gun") && !draft.kits.isEmpty(), "请先建立兵种");
-        Model.Kit kit = draft.kits.get(Math.min(kitIndex, draft.kits.size() - 1));
-        List<String> options = main ? kit.primaryOptions : kit.secondaryOptions;
+        Model.require(entryKind.equals("gun") && !draft.kits.isEmpty(), "请先选择固定兵种");
+        Model.Kit kit = editingKit();
+        List<String> options = switch (poolTarget) {
+            case 1 -> main ? kit.primaryOptions0 : kit.secondaryOptions0;
+            case 2 -> main ? kit.primaryOptions1 : kit.secondaryOptions1;
+            default -> main ? kit.primaryOptions : kit.secondaryOptions;
+        };
         if (!options.contains(entryId)) options.add(entryId);
-        if (main && kit.primary.isEmpty()) kit.primary = entryId;
-        if (!main && kit.secondary.isEmpty()) kit.secondary = entryId;
-        say("已加入「" + kit.id + "」可选武器库，记得保存地图");
+        if (poolTarget == 0) {
+            if (main && kit.primary.isEmpty()) kit.primary = entryId;
+            if (!main && kit.secondary.isEmpty()) kit.secondary = entryId;
+        }
+        say("已加入「" + kit.id + "」" + (poolTarget == 0 ? "共用" : poolTarget == 1 ? "格雷同盟" : "机械核心")
+                + "武器库，记得保存地图");
     }
 
     /** The map line editor's canvas: terrain, polygon, points, spawns, player. */
@@ -1936,6 +2272,7 @@ final class OpsScreen extends FrontScreen {
         Layout.Rect body = Ui.header(graphics, font, canvasPanel, "地图划线（" + zoneLabel() + "）");
         map.highlightSector = zone >= 0 && zone < SECTOR_BASE ? zone : -1;
         map.highlightZone = zone >= SECTOR_BASE ? zone - SECTOR_BASE : -1;
+        map.highlightElite=draft.eliteSpawns.isEmpty()?-1:Math.min(eliteSpawnIndex,draft.eliteSpawns.size()-1);
         map.highlightPoint = draft.points.isEmpty() ? -1
                 : Math.min(pointIndex, draft.points.size() - 1);
         map.highlightSupply = draft.supplies == null || draft.supplies.isEmpty() ? -1
@@ -1962,7 +2299,7 @@ final class OpsScreen extends FrontScreen {
     }
 
     private String zoneLabel() {
-        if (zone >= SECTOR_BASE) return zone == ZONE_BLUE ? "蓝方活动区域" : "红方活动区域";
+        if (zone >= SECTOR_BASE) return ((zone-SECTOR_BASE)%2==0?"机械轴心":"格雷同盟")+new String[]{"通用活动区域","步兵活动区域","地面载具活动区域","空中载具活动区域"}[(zone-SECTOR_BASE)/2];
         return zone < 0 ? "全图边界" : "阶段 " + zone;
     }
 
@@ -1978,7 +2315,7 @@ final class OpsScreen extends FrontScreen {
     // ------------------------------------------------------------------ input
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {if(dropdownOpen())return super.mouseClicked(mouseX,mouseY,button);
         if (inCanvas(mouseX, mouseY)) {
             List<Model.Vec> points = polygon();
             if(button==0&&hasShiftDown()){
@@ -2060,6 +2397,11 @@ final class OpsScreen extends FrontScreen {
                 say("出生点 " + spawn.id + " 已放置在 " + (int) x + ", " + (int) z);
                 return true;
             }
+            if("elite".equals(placing)){
+                if(draft.eliteSpawns.isEmpty())return false;
+                var point=draft.eliteSpawns.get(Math.min(eliteSpawnIndex,draft.eliteSpawns.size()-1));point.x=x;point.y=y;point.z=z;
+                placing=null;rebuild();say("精英刷新点已放置，记得保存地图");return true;
+            }
             if ("supply".equals(placing)) {
                 if (draft.supplies.isEmpty()) return false;
                 VehicleSupply.Supply supply = draft.supplies.get(
@@ -2094,6 +2436,8 @@ final class OpsScreen extends FrontScreen {
         String picked = pickSpawn(mouseX, mouseY);
         if (picked == null) return false;
         deploySpawn = picked;
+        var target=sites().stream().filter(s->s.id().equals(picked)).findFirst().orElse(null);
+        if(!DeploymentRules.canSpawnNew(target)||!deployVehicle.isEmpty()&&!target.allows(vehicleClass(deployVehicle)))deployVehicle="";
         rebuild();
         return true;
     }
@@ -2127,7 +2471,7 @@ final class OpsScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {if(dropdownOpen())return super.mouseDragged(mouseX,mouseY,button,dragX,dragY);
         // Middle-drag pans the canvas: at 1 block per pixel the operator needs to slide the view
         // rather than zoom out and lose the detail they were editing. The right-hand map on the
         // points page pans the same way, because placing a flag needs the same precision.
@@ -2142,13 +2486,13 @@ final class OpsScreen extends FrontScreen {
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
-    @Override public boolean mouseReleased(double x,double y,int button){
+    @Override public boolean mouseReleased(double x,double y,int button){if(dropdownOpen())return super.mouseReleased(x,y,button);
         if(movingVertex>=0){movingVertex=-1;rebuild();return true;}
         return super.mouseReleased(x,y,button);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
         Layout.Rect body = canvasBody();
         if ((tab == 1 || tab == 2) && body.inside(mouseX, mouseY)) {
             if(vertical==0)return false;

@@ -23,8 +23,11 @@ import java.util.function.Consumer;
 final class ItemPickerScreen extends FrontScreen {
     private final FrontScreen parent;
     private final Consumer<String> onPick;
+    private boolean includeWeapons;
+    private com.google.gson.JsonObject seenCatalog;private int catalogTicks;
 
     private String query = "";
+    private String category="全部";
     private int first;
     private Form listForm;
     private EditBox search;
@@ -39,14 +42,18 @@ final class ItemPickerScreen extends FrontScreen {
         this.onPick = onPick;
     }
 
+    ItemPickerScreen(FrontScreen parent,boolean includeWeapons,Consumer<String> onPick){this(parent,onPick);this.includeWeapons=includeWeapons;if(includeWeapons)Client.send(Client.request("catalogAll",""));}
+    private int lrtCount(String category){int count=0;if(Client.catalog.has("lrtEntries"))for(var e:Client.catalog.getAsJsonArray("lrtEntries"))if(Engine.str(e.getAsJsonObject(),"category","").equals(category))count++;return count;}
     @Override
     protected String subtitle() {
-        return "全部物品 · " + ItemCatalog.all().size() + " 项";
+        return includeWeapons?"任意物品 / TaCZ / LRTactical · 刀具 "+lrtCount("melee")+" / 投掷 "+lrtCount("throwable")+" / 消耗 "+lrtCount("consumable"):"全部物品 · " + ItemCatalog.all().size() + " 项";
     }
 
     /** Rebuilds after the search box changes, rather than rebuilding on every keystroke inside the box. */
     @Override
     protected void poll() {
+        if(includeWeapons&&seenCatalog!=Client.catalog){seenCatalog=Client.catalog;results=null;queryChanged=true;}
+        if(includeWeapons&&++catalogTicks%60==0&&(!Client.catalog.has("complete")||!Client.catalog.get("complete").getAsBoolean()))Client.send(Client.request("catalogAll",""));
         if (queryChanged) {
             queryChanged = false;
             rebuild();
@@ -54,12 +61,20 @@ final class ItemPickerScreen extends FrontScreen {
     }
 
     private List<ItemCatalog.Entry> filtered() {
-        if (results == null) results = ItemCatalog.search(ItemCatalog.all(), query);
+        if (results == null) results = ItemCatalog.search(includeWeapons?ItemCatalog.withWeapons():ItemCatalog.all(), query).stream().filter(e->category.equals("全部")||category.equals(itemCategory(e))).toList();
         return results;
     }
 
+    private String itemCategory(ItemCatalog.Entry e){
+        if(e.kind().equals("gun"))return "TaCZ 武器";
+        // Registered 656 support items get their own category, next to the LRTactical ones.
+        if(e.id().startsWith("battlefield_ops:")&&ConquestEquipment.kind(e.id())!=null)return "战术道具";
+        if(LrtEquipment.explicit(e.id()))return LrtEquipment.label(e.id().substring(e.id().indexOf(':')+1).split("/",2)[0]);
+        return "普通物品";
+    }
+
     @Override
-    protected void rebuild() {
+    protected void rebuildContent() {
         // The box is recreated on every rebuild, which would otherwise drop focus mid-word.
         boolean focused = search != null && search.isFocused();
         int caret = search == null ? 0 : search.getCursorPosition();
@@ -76,6 +91,7 @@ final class ItemPickerScreen extends FrontScreen {
         });
         search.setHint(net.minecraft.network.chat.Component.literal("名称 / @模组名"));
         listForm.add(search);
+        if(includeWeapons)dropdown(listForm,"道具类别",category,List.of("全部","普通物品","TaCZ 武器","近战刀具","投掷物","消耗品","战术道具").stream().map(v->new ChoiceScreen.Choice(v,v,"")).toList(),v->{category=v;results=null;first=0;rebuild();});
         if (focused) {
             setFocused(search);
             search.setFocused(true);
@@ -93,7 +109,7 @@ final class ItemPickerScreen extends FrontScreen {
         for (int i = 0; i < shown; i++) {
             ItemCatalog.Entry entry = all.get(first + i);
             place(listForm, listForm.take(Layout.ROW), entry.name(),
-                    "@" + entry.source(), "item", entry.id(), true, () -> onPick.accept(entry.id()));
+                    "@" + entry.source(), entry.kind(), entry.id(), true, () -> {onClose();onPick.accept(entry.id());});
         }
         if (all.isEmpty()) {
             listForm.paragraph(query.isBlank()
@@ -173,7 +189,7 @@ final class ItemPickerScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
         if (vertical == 0) return false;
         int rows = rowsThatFit();
         int size = filtered().size();

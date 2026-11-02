@@ -146,13 +146,18 @@ final class KitItems {
      */
     static ItemStack resolve(String id, int count) {
         if (id == null || id.isEmpty()) return ItemStack.EMPTY;
+        if(ConquestEquipment.kind(id)!=null)return ConquestEquipment.stack(id,count);
         ResourceLocation key;
         try {
             key = ResourceLocation.parse(id);
         } catch (RuntimeException malformed) {
             return ItemStack.EMPTY;
         }
-        if (!BuiltInRegistries.ITEM.containsKey(key)) return ItemStack.EMPTY;
+        if(LrtEquipment.explicit(id))return LrtEquipment.create(id,count);
+        // LRTactical registers one base item per category ("lrtactical:throwable"); a stack of it without an
+        // index component is a nameless placeholder. Never hand that out: resolve through the index or fail.
+        if(LrtEquipment.baseItem(id))return LrtEquipment.resolveBaseId(id,count);
+        if (!BuiltInRegistries.ITEM.containsKey(key))return LrtEquipment.create(id,count);
         Item item = BuiltInRegistries.ITEM.get(key);
         ItemStack stack = new ItemStack(item);
         int capped = Math.max(1, Math.min(count, stack.getMaxStackSize()));

@@ -15,30 +15,40 @@ import net.minecraft.resources.ResourceLocation;
  *
  * <p>So the target box is snapped to a whole-number multiple of 16 where possible, and the icon is
  * centred with integer offsets inside whatever box it was given. No sub-pixel placement, no stretching.
+ *
+ * <p>Public because the 656 tab lives in {@code cn.bfops.killicon.client.gui.tabs} and needs the rank
+ * medal for its provenance strip. The alternative — a second copy of the blit maths in that package —
+ * would be the way the "draw at a fractional scale" bug comes back.
  */
-final class UiIcons {
+public final class UiIcons {
     private static final ResourceLocation ATLAS =
             ResourceLocation.fromNamespaceAndPath("battlefield_ops", "textures/gui/tactical_icons.png");
 
     /** One 16x16 cell per icon, in sheet order. */
-    static final int CELL = 16;
-    static final int SAVE = 0;
-    static final int ROOM = 1;
-    static final int SEARCH = 2;
-    static final int ADD = 3;
-    static final int BACK = 4;
-    static final int DELETE = 5;
-    static final int START = 6;
-    static final int STOP = 7;
-    static final int NEXT = 8;
-    static final int PREV = 9;
+    public static final int CELL = 16;
+    public static final int SAVE = 0;
+    public static final int ROOM = 1;
+    public static final int SEARCH = 2;
+    public static final int ADD = 3;
+    public static final int BACK = 4;
+    public static final int DELETE = 5;
+    public static final int START = 6;
+    public static final int STOP = 7;
+    public static final int NEXT = 9;
+    public static final int PREV = 8;
     /** Map marker for a teammate or oneself. */
-    static final int MARKER_FRIEND = 10;
+    public static final int MARKER_FRIEND = 10;
     /** Map marker for an enemy. */
-    static final int MARKER_HOSTILE = 11;
-    static final int VEHICLE_GROUND = 12;
-    static final int VEHICLE_AIR = 13;
-    static final int COUNT = 14;
+    public static final int MARKER_HOSTILE = 11;
+    public static final int VEHICLE_GROUND = 12;
+    public static final int VEHICLE_AIR = 13;
+    /** Standings / leaderboard. A medal, not a bar chart: a chart reads as "statistics". */
+    public static final int RANK = 14;
+    /** Statistics and before/after comparisons. */
+    public static final int CHART = 15;
+    /** Maps, compass headings and anything that opens one. */
+    public static final int COMPASS = 16;
+    public static final int COUNT = 17;
 
     private UiIcons() { }
 
@@ -50,7 +60,7 @@ final class UiIcons {
      * matters — the more specific verbs are tested first, so "删除地图" reads as delete rather than as
      * the map/room glyph.
      */
-    static int action(String label) {
+    public static int action(String label) {
         if (label == null) return -1;
         if (label.contains("删除") || label.contains("丢弃") || label.contains("移除")) return DELETE;
         if (label.contains("搜索")) return SEARCH;
@@ -62,6 +72,15 @@ final class UiIcons {
         if (label.contains("下一张") || label.contains("下一")) return NEXT;
         if (label.contains("返回") || label.contains("退出") || label.equals("关闭")) return BACK;
         if (label.contains("新增") || label.contains("新建") || label.contains("创建")) return ADD;
+        // Content nouns, tested after the verbs so "删除地图" stays a delete. These three exist because
+        // the leaderboard, the statistics panes and the map rows previously had no glyph and fell back to
+        // a text label or to an unrelated shape — a standings row that drew a room icon was how this was
+        // noticed.
+        if (label.contains("排行") || label.contains("榜单") || label.contains("排名")
+                || label.contains("计分板")) return RANK;
+        if (label.contains("统计") || label.contains("对比") || label.contains("图表")
+                || label.contains("属性")) return CHART;
+        if (label.contains("地图") || label.contains("罗盘") || label.contains("导航")) return COMPASS;
         if (label.contains("房间")) return ROOM;
         if (label.contains("航空器") || label.contains("飞机")) return VEHICLE_AIR;
         if (label.contains("载具")) return VEHICLE_GROUND;
@@ -81,7 +100,7 @@ final class UiIcons {
      * centred — a 12px box showing the middle 12 rows of a 16px glyph is legible, whereas the same
      * glyph squeezed to 0.75 would be mush.
      */
-    static void draw(GuiGraphics g, int icon, int x, int y, int size) {
+    public static void draw(GuiGraphics g, int icon, int x, int y, int size) {
         if (icon < 0 || icon >= COUNT || size <= 0) return;
         int u = icon * CELL;
         if (size >= CELL) {
@@ -105,7 +124,7 @@ final class UiIcons {
      * <p>Separate from {@link #draw} because markers are positioned by their centre and must land on
      * exact pixels: a half-pixel offset here is the difference between a dot and a smudge on a map.
      */
-    static void marker(GuiGraphics g, int icon, int centerX, int centerY, int size) {
+    public static void marker(GuiGraphics g, int icon, int centerX, int centerY, int size) {
         if (size <= 0) return;
         draw(g, icon, centerX - size / 2, centerY - size / 2, size);
     }

@@ -13,7 +13,7 @@ import java.util.List;
  */
 final class Tactics {
     /** Teammates glow through walls up to this distance, so a squad can find each other. */
-    static final double MATE_GLOW_RANGE = 64.0;
+    static final double MATE_GLOW_RANGE = 150.0;
     /** Enemies only glow when they are close and actually visible; see {@link #enemyVisible}. */
     static final double ENEMY_GLOW_RANGE = 32.0;
     /** A spawn with an enemy inside this radius is only used when nothing safer exists. */
@@ -37,6 +37,14 @@ final class Tactics {
 
     static boolean mateVisible(At viewer, At target) {
         return !viewer.equals(target) && distanceSqr(viewer, target) <= MATE_GLOW_RANGE * MATE_GLOW_RANGE;
+    }
+
+    /** Only allies are shared unconditionally; spectators cannot scout hostile contacts. */
+    static boolean contactVisible(int owner, int viewerTeam, boolean deployed, boolean enemyEnabled,
+                                  At viewer, At target, boolean lineOfSight) {
+        if(viewerTeam<0)return false;
+        if(owner==viewerTeam)return true;
+        return deployed && enemyEnabled && enemyVisible(viewer,target,lineOfSight);
     }
 
     private static double distanceSqr(At a, At b) {

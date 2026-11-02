@@ -24,6 +24,7 @@ import java.util.Locale;
  * same projection that paints the markers, so a click lands on the pixel the operator aimed at.
  */
 final class MapPicker {
+    String deploymentSelection="";
     /** What a click is allowed to do. */
     enum Mode {
         /** No picking; the map is informational (stats, room list). */
@@ -46,6 +47,11 @@ final class MapPicker {
     /** World centre and span, kept here so zoom/pan survives rebuilds. */
     double cx, cz, span = 256;
 
+    /** Whether this instance is the tactical map (rotates with heading) rather than the editor. */
+    boolean rotating;
+    /** Rotation in radians currently in force, from the last {@link #draw} call's yaw. */
+    private double rotation;
+
     /** Editor overlay toggles. */
     boolean showGrid = true;
     boolean showPoints = true;
@@ -57,6 +63,7 @@ final class MapPicker {
     int highlightSpawn = -1;
     /** Index of the supply pad to ring in gold, or -1 for none. */
     int highlightSupply = -1;
+    int highlightElite=-1;
     int highlightSector = -1;
     /** Team whose activity zone is being edited (-1 for none), so the canvas rings it in gold. */
     int highlightZone = -1;
@@ -156,8 +163,23 @@ final class MapPicker {
         String dim = arena.dimension == null ? "" : arena.dimension;
         dimension = dim;
 
+        // Follow-heading: one pose transform rotates the terrain and every overlay together, so the map
+        // and the markers can never disagree about which way is up. Clicks are un-rotated by {@link
+        // #unrotate} against the same angle.
+        rotation = rotating && ClientPrefs.followHeading() ? MapRotation.radians(yaw) : 0;
         graphics.enableScissor(body.x(), body.y(), body.right(), body.bottom());
-        terrain.draw(graphics, body.x(), body.y(), body.w(), body.h(), cx, cz, span, dim);
+        if (rotation != 0) {
+            float centerX = body.x() + body.w() / 2f, centerY = body.y() + body.h() / 2f;
+            graphics.pose().pushPose();
+            graphics.pose().translate(centerX, centerY, 0);
+            graphics.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees((float) Math.toDegrees(rotation)));
+            graphics.pose().translate(-centerX, -centerY, 0);
+        }
+
+        try {
+        int margin=rotationMargin(body);
+        terrain.draw(graphics,body.x()-margin,body.y()-margin,body.w()+2*margin,body.h()+2*margin,
+                cx,cz,span*(body.w()+2*margin)/body.w(),dim);
 
         if (showGrid) {
             double step = Layout.gridStep(span, Math.max(1, body.w()));
@@ -181,7 +203,7 @@ final class MapPicker {
 
         polygon(graphics, body, arena.boundary, 0xff69bdff, 2);
         for (Model.Sector sector : arena.sectors) {
-            int color = sector.index == highlightSector ? Ui.GOLD : 0xff8a7440;
+            int color = sector.index == highlightSector ? Ui.GOLD : 0xff667d91;
             polygon(graphics, body, sector.boundary, color, sector.index == highlightSector ? 2 : 1);
         }
         // Activity zones, tinted the team colour and drawn under the markers so they read as ground
@@ -190,9 +212,10 @@ final class MapPicker {
         if (arena.zones != null) {
             for (Model.Zone zone : arena.zones) {
                 if (zone == null || !zone.active()) continue;
-                boolean selected = zone.team == highlightZone;
-                int color = selected ? Ui.GOLD : zone.team == 0 ? 0xff5a8fd6 : 0xffd65a5a;
-                polygonShade(graphics, body, zone.boundary, zone.team == 0 ? 0x185a8fd6 : 0x18d65a5a);
+                boolean selected = zone.team + 2*java.util.List.of("ALL","I","G","A").indexOf(zone.mobility==null?"ALL":zone.mobility) == highlightZone;
+                int baseColor=TacticalColors.objective(zone.team,selfTeam);
+                int color = selected ? Ui.GOLD : baseColor;
+                polygonShade(graphics, body, zone.boundary, (baseColor&0xffffff)|0x18000000);
                 polygon(graphics, body, zone.boundary, color, selected ? 2 : 1);
             }
         }
@@ -200,6 +223,7 @@ final class MapPicker {
             JsonArray flags = array(state, "flags");
             for (int i = 0; i < arena.points.size(); i++) {
                 Model.Point point = arena.points.get(i);
+                if(showPlayers&&state!=null&&!CombatHud.active(arena,point,Engine.num(state,"stage",0)))continue;
                 int owner = -1;
                 double progress = 50;
                 if (flags != null && i < flags.size() && flags.get(i).isJsonObject()) {
@@ -208,47 +232,40 @@ final class MapPicker {
                     progress = flag.has("progress") ? flag.get("progress").getAsDouble() : 50;
                 }
                 int ringColor = owner == 0 ? 0x6677bbff : owner == 1 ? 0x66ff7777 : 0x55cccccc;
-                ring(graphics, body, point.x, point.z, point.radius, ringColor);
+                if(point.boundary!=null&&point.boundary.size()>=3){polygonShade(graphics,body,point.boundary,(ringColor&0xffffff)|0x18000000);polygon(graphics,body,point.boundary,ringColor,1);}
+                else ring(graphics, body, point.x, point.z, point.radius, ringColor);
 
                 int px = sx(body, point.x), pz = sz(body, point.z);
                 boolean selected = i == highlightPoint;
-                int fill = TacticalColors.objective(owner,selfTeam);
-                graphics.fill(px - 4, pz - 4, px + 5, pz + 5, 0xff101820);
-                graphics.fill(px - 3, pz - 3, px + 4, pz + 4, fill);
-                if (selected) {
-                    Ui.rectOutline(graphics, new Layout.Rect(px - 7, pz - 7, 15, 15), Ui.GOLD);
-                }
-                TacticalColors.label(graphics,font,point.id,px,pz-15,fill);
-                if (progress > 0 && progress < 100) {
-                    int barWidth = 20;
-                    int barLeft = px - barWidth / 2;
-                    int filled = (int) Math.round(barWidth * Math.max(0, Math.min(100, progress)) / 100.0);
-                    graphics.fill(barLeft - 1, pz + 5, barLeft + barWidth + 1, pz + 9, 0xff000000);
-                    if (filled > 0) graphics.fill(barLeft, pz + 6, barLeft + filled, pz + 8, Ui.BLUE);
-                    if (filled < barWidth) {
-                        graphics.fill(barLeft + filled, pz + 6, barLeft + barWidth, pz + 8, Ui.RED);
-                    }
-                }
+                MapIcons.capture(graphics,font,point.id,px,pz,(float)progress,owner,selfTeam,selected,rotation);
             }
         }
-        if (showSpawns) {
+        if(showSpawns)for(var spawn:arena.spawns){
+            if(selfTeam>=0&&spawn.team!=selfTeam)continue;
+            int tint=TacticalColors.objective(spawn.team,selfTeam);
+            if(spawn.boundary!=null&&spawn.boundary.size()>=3){polygonShade(graphics,body,spawn.boundary,(tint&0xffffff)|0x18000000);polygon(graphics,body,spawn.boundary,tint,1);}
+            else if(spawn.radius>0)ring(graphics,body,spawn.x,spawn.z,spawn.radius,tint);
+        }
+        if (showSpawns && showPlayers && state!=null && state.has("deploySites")) {
+            for(var item:state.getAsJsonArray("deploySites")) {
+                var site=item.getAsJsonObject();
+                String kind=Engine.str(site,"kind","BASE");
+                if(kind.equals("POINT")&&site.has("spawn")&&site.get("spawn").getAsBoolean())kind="BASE";
+                    if(!kind.equals("BASE")&&!kind.equals("AIR")&&!kind.equals("BEACON"))continue;
+                int px=sx(body,site.get("x").getAsDouble()), pz=sz(body,site.get("z").getAsDouble());
+                MapIcons.site(graphics,font,Engine.str(site,"kind","BASE"),px,pz,false,rotation);
+                String label=DeploymentText.label(Engine.str(site,"id",""),kind,Engine.str(site,"label",""));
+                MapIcons.upright(graphics,px,pz,rotation,()->TacticalColors.label(graphics,font,label,px+9+font.width(label)/2,pz-4,TacticalColors.FRIEND));
+            }
+        } else if (showSpawns) {
             for (int i = 0; i < arena.spawns.size(); i++) {
                 Model.Spawn spawn = arena.spawns.get(i);
                 if (selfTeam >= 0 && spawn.team != selfTeam) continue;
                 int color = spawn.team == 0 ? Ui.BLUE : Ui.RED;
                 int px = sx(body, spawn.x), pz = sz(body, spawn.z);
-                if (spawn.allows('A')) {
-                    // Air points get a bracket so a runway is distinguishable from a ground spawn.
-                    Ui.rectOutline(graphics, new Layout.Rect(px - 6, pz - 6, 13, 13), color);
-                    Ui.handle(graphics, px, pz, 2, TacticalColors.SELF);
-                } else {
-                    Ui.handle(graphics, px, pz, 3, color);
-                }
-                if (i == highlightSpawn) {
-                    Ui.rectOutline(graphics, new Layout.Rect(px - 9, pz - 9, 19, 19), Ui.GOLD);
-                }
+                MapIcons.site(graphics,font,spawn.allows('A')?"AIR":"BASE",px,pz,i==highlightSpawn,rotation);
                 String label = spawn.allows('A') ? spawn.id + " ✈" : spawn.id;
-                TacticalColors.label(graphics,font,label,px+9+font.width(label)/2,pz-4,color);
+                MapIcons.upright(graphics,px,pz,rotation,()->TacticalColors.label(graphics,font,label,px+9+font.width(label)/2,pz-4,color));
             }
         }
         // Supply pads: a ring at the service radius plus a cross, so the area they cover is visible
@@ -261,14 +278,20 @@ final class MapPicker {
                 int color = supply.team() == 0 ? Ui.BLUE : supply.team() == 1 ? Ui.RED : Ui.TEXT_OK;
                 ring(graphics, body, supply.x(), supply.z(), supply.radius(), color);
                 int px = sx(body, supply.x()), pz = sz(body, supply.z());
-                graphics.fill(px - 1, pz - 4, px + 2, pz + 5, color);
-                graphics.fill(px - 4, pz - 1, px + 5, pz + 2, color);
+                MapIcons.marker(graphics,px,pz,rotation,supply.health()?cn.bfops.conquest.client.marker.TacticalMarkerRenderer.MarkerVisualType.MEDICAL_BOX:cn.bfops.conquest.client.marker.TacticalMarkerRenderer.MarkerVisualType.AMMO_BOX,"",1);
                 if (i == highlightSupply) {
                     Ui.rectOutline(graphics, new Layout.Rect(px - 7, pz - 7, 15, 15), Ui.GOLD);
                 }
-                TacticalColors.label(graphics, font, supply.id(), px + 7 + font.width(supply.id()) / 2,
-                        pz - 9, color);
+                MapIcons.upright(graphics,px,pz,rotation,()->TacticalColors.label(graphics, font, supply.id(), px + 9 + font.width(supply.id()) / 2,
+                        pz - 9, color));
             }
+        }
+        if(!showPlayers)for(var point:arena.eliteSpawns){
+            int px=sx(body,point.x),py=sz(body,point.z);
+            MapIcons.upright(graphics,px,py,rotation,()->{
+                HeroIcons.draw(graphics,point.type,px,py,16,point.enabled?1:.4f);
+                if(arena.eliteSpawns.indexOf(point)==highlightElite)Ui.rectOutline(graphics,new Layout.Rect(px-10,py-10,21,21),Ui.GOLD);
+            });
         }
         if (pendingBoundary != null && !pendingBoundary.isEmpty()) {
             polygon(graphics, body, pendingBoundary, Ui.GOLD, 1);
@@ -279,39 +302,30 @@ final class MapPicker {
         if (showPlayers && state != null) {
             players(graphics, body, state, selfX, selfZ, yaw);
         }
-        graphics.disableScissor();
+        if(state!=null&&state.has("deploySites")&&!deploymentSelection.isEmpty())for(var value:state.getAsJsonArray("deploySites")){
+            var site=value.getAsJsonObject();if(!deploymentSelection.equals(Engine.str(site,"id","")))continue;
+            int px=sx(body,site.get("x").getAsDouble()),py=sz(body,site.get("z").getAsDouble());
+            MapIcons.upright(graphics,px,py,rotation,()->SelectionReticle.draw(graphics,px,py,10));break;
+        }
+        } finally {
+            if (rotation != 0) graphics.pose().popPose();
+            graphics.disableScissor();
+        }
+    }
+
+    /** Un-rotates a mouse position back to north-up coordinates, for hit-testing a rotated map. */
+    double[] unrotate(Layout.Rect body, double mouseX, double mouseY) {
+        if (rotation == 0) return new double[]{mouseX, mouseY};
+        double cx = body.x() + body.w() / 2.0, cy = body.y() + body.h() / 2.0;
+        double rx = mouseX - cx, ry = mouseY - cy;
+        double cos = Math.cos(rotation), sin = Math.sin(rotation);
+        return new double[]{cx + rx * cos + ry * sin, cy - rx * sin + ry * cos};
     }
 
     /** Player blips: self as a heading triangle, mates as dots, spotted enemies as diamonds. */
     private void players(GuiGraphics graphics, Layout.Rect body, JsonObject state,
                          double selfX, double selfZ, float yaw) {
-        // Manual marks under the contacts, for the same reason as on the minimap: a live contact must stay
-        // readable on top of the ring that records where somebody was last seen.
-        for (JsonElement element : arrayOrEmpty(state, "marks")) {
-            if (!element.isJsonObject()) continue;
-            JsonObject mark = element.getAsJsonObject();
-            if (!mark.has("x") || !mark.has("z")) continue;
-            int markX = sx(body, mark.get("x").getAsDouble());
-            int markY = sz(body, mark.get("z").getAsDouble());
-            // Ring only; the countdown label was removed on request.
-            TacticalColors.mark(graphics, markX, markY, 5, TacticalColors.MARK);
-        }
-        for (JsonElement element : arrayOrEmpty(state, "mates")) {
-            if (!element.isJsonObject()) continue;
-            JsonObject mate = element.getAsJsonObject();
-            if (!mate.has("x") || !mate.has("z")) continue;
-            if (mate.has("self") && mate.get("self").getAsBoolean()) continue;
-            boolean hostile = mate.has("hostile") && mate.get("hostile").getAsBoolean();
-            int px = sx(body, mate.get("x").getAsDouble());
-            int pz = sz(body, mate.get("z").getAsDouble());
-            if (hostile) {
-                // A dot, not an arrow: the map knows an enemy was seen, not which way they face.
-                TacticalColors.dot(graphics, px, pz, 2, TacticalColors.ENEMY);
-            } else {
-                float mateYaw = mate.has("yaw") ? mate.get("yaw").getAsFloat() : 0f;
-                TacticalColors.arrow(graphics, px, pz, mateYaw, 5, TacticalColors.FRIEND);
-            }
-        }
+        MapIcons.contacts(graphics,net.minecraft.client.Minecraft.getInstance().font,state,value->sx(body,value),value->sz(body,value),rotation);
         // Own marker plus view cone, matching the minimap so the two never disagree about what is visible.
         int selfPx = sx(body, selfX), selfPz = sz(body, selfZ);
         double blocksPerPixel = Math.max(1e-6, span / Math.max(1, body.w()));
@@ -336,9 +350,13 @@ final class MapPicker {
         if (arena == null || !body.inside(mouseX, mouseY)) return null;
         if (mode == Mode.VIEW) return null;
 
+        // The map may be rotated; hit-test in north-up coordinates against the same projection it drew with.
+        double[] um = unrotate(body, mouseX, mouseY);
+        double ux = um[0], uy = um[1];
+
         final int radius = 10;
         if (mode == Mode.PICK) {
-            int spawn = nearestSpawn(body, arena, mouseX, mouseY, radius);
+            int spawn = nearestSpawn(body, arena, ux, uy, radius);
             if (spawn >= 0) {
                 Model.Spawn found = arena.spawns.get(spawn);
                 return new Hit(Kind.SPAWN, spawn, found.x, found.y, found.z);
@@ -352,17 +370,17 @@ final class MapPicker {
         }
 
         // PLACE: grab an existing marker within reach, otherwise drop a new one here.
-        int spawn = nearestSpawn(body, arena, mouseX, mouseY, radius);
+        int spawn = nearestSpawn(body, arena, ux, uy, radius);
         if (spawn >= 0) {
             Model.Spawn found = arena.spawns.get(spawn);
             return new Hit(Kind.SPAWN, spawn, found.x, found.y, found.z);
         }
-        int point = nearestPoint(body, arena, mouseX, mouseY, radius);
+        int point = nearestPoint(body, arena, ux, uy, radius);
         if (point >= 0) {
             Model.Point found = arena.points.get(point);
             return new Hit(Kind.POINT, point, found.x, found.y, found.z);
         }
-        double x = worldX(body, mouseX), z = worldZ(body, mouseY);
+        double x = worldX(body, ux), z = worldZ(body, uy);
         return new Hit(Kind.BOUNDARY, -1, Math.rint(x), 0, Math.rint(z));
     }
 
@@ -406,6 +424,10 @@ final class MapPicker {
         return chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x & 15, z & 15) + 1;
     }
 
+    private int rotationMargin(Layout.Rect body){
+        return rotation==0?0:(int)Math.ceil((Math.hypot(body.w(),body.h())-Math.min(body.w(),body.h()))/2)+2;
+    }
+
     // ------------------------------------------------------------------ primitives
 
     void polygon(GuiGraphics graphics, Layout.Rect body, List<Model.Vec> points, int color, int thickness) {
@@ -414,7 +436,7 @@ final class MapPicker {
             Model.Vec a = points.get(i);
             Model.Vec b = points.get((i + 1) % points.size());
             int[] segment=MapGeometry.clip(sx(body,a.x()),sz(body,a.z()),sx(body,b.x()),sz(body,b.z()),
-                    body.x(),body.y(),body.right()-1,body.bottom()-1);
+                    body.x()-rotationMargin(body),body.y()-rotationMargin(body),body.right()-1+rotationMargin(body),body.bottom()-1+rotationMargin(body));
             if(segment!=null)Ui.line(graphics,segment[0],segment[1],segment[2],segment[3],color,thickness);
         }
     }
@@ -435,23 +457,27 @@ final class MapPicker {
             top = Math.min(top, pz);
             bottom = Math.max(bottom, pz);
         }
-        top = Math.max(top, body.y());
-        bottom = Math.min(bottom, body.bottom() - 1);
+        int margin=rotationMargin(body);
+        top = Math.max(top, body.y()-margin);
+        bottom = Math.min(bottom, body.bottom() - 1+margin);
         for (int py = top; py <= bottom; py++) {
-            double worldZ = cz + (py + 0.5 - (body.y() + body.h() / 2.0)) * span / Math.max(1, body.h());
+            // Inverse-map the row through the same projection the outline uses. Inverting with span/h here
+            // (as it once did) misplaces the shade whenever the panel is not exactly square, because the
+            // projection scales both world axes by the panel width and treats the extra height as padding.
+            double rowZ = worldZ(body, py + 0.5);
             double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
             for (int i = 0; i < n; i++) {
                 Model.Vec a = points.get(i), b = points.get((i + 1) % n);
                 double az = a.z(), bz = b.z();
-                if ((az > worldZ) == (bz > worldZ)) continue;
-                double t = (worldZ - az) / (bz - az);
+                if ((az > rowZ) == (bz > rowZ)) continue;
+                double t = (rowZ - az) / (bz - az);
                 double x = a.x() + t * (b.x() - a.x());
                 lo = Math.min(lo, x);
                 hi = Math.max(hi, x);
             }
             if (lo > hi) continue;
-            int x0 = Math.max(body.x(), sx(body, lo));
-            int x1 = Math.min(body.right() - 1, sx(body, hi));
+            int x0 = Math.max(body.x()-margin, sx(body, lo));
+            int x1 = Math.min(body.right() - 1+margin, sx(body, hi));
             if (x1 > x0) graphics.fill(x0, py, x1, py + 1, color);
         }
     }
@@ -474,8 +500,9 @@ final class MapPicker {
         if (!body.inside(mouseX, mouseY)) {
             return String.format(Locale.ROOT, "视野 %.0f 格 · %.2f 格/像素", span, blocksPerPixel(body));
         }
+        double[] position=unrotate(body,mouseX,mouseY);
         return String.format(Locale.ROOT, "X %.0f  Z %.0f · 视野 %.0f 格 · %.2f 格/像素",
-                worldX(body, mouseX), worldZ(body, mouseY), span, blocksPerPixel(body));
+                worldX(body, position[0]), worldZ(body, position[1]), span, blocksPerPixel(body));
     }
 
     private static JsonArray array(JsonObject json, String key) {

@@ -1,0 +1,31 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "cn.bfops.mixin",
+  "plugin": "cn.bfops.compat.BattlefieldMixinPlugin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameRendererMixin",
+    "TeamOutlineMixin",
+    "TeamColorMixin",
+    "DistantGunMixin",
+    "DistantGunLayersMixin",
+    "MatchMusicMixin",
+    "MatchDropMixin",
+    "SupportItemMixin",
+    "XaeroOverlayMixin",
+    "XaeroRadarMixin",
+    "XaeroVisibilityMixin",
+    "XaeroInfoMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "mixins": [
+    "DownedJumpMixin",
+    "BattleFoodMixin",
+    "SupportBoundsMixin",
+    "RoomSystemMessageMixin",
+    "SableRapierNativeMixin"
+  ]
+}

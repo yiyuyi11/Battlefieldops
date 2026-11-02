@@ -5,28 +5,20 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 
-/**
- * One control row, following the reference UI's shape: a flat body, a centred label, a thin accent
- * underline that lights up on hover, and an optional icon on the left.
- *
- * <p>Two changes from the previous version fix reported bugs rather than restyling them. The body is
- * now <em>opaque</em>, so a row is never translucent over the pane behind it and over the world at
- * once — that double transparency is what made rows look like they floated on another layer. And the
- * label / value split (dim label left, bright value right) means a row can say
- * {@code 出生点   东侧} instead of cramming both into one string, which is what the old UI did and
- * why long values were silently truncated.
- *
- * <p>A disabled row is dimmed but still drawn: "this action exists but you cannot use it" is
- * information, and hiding the row entirely was why the deployment page looked half-empty in some
- * states.
- */
+/** Flat source-style button with a 200 ms eased hover underline and native equipment artwork. */
 final class FrontButton extends Button {
     private final String label;
     private final String value;
     private final String iconKind;
     private final String iconId;
-    /** Primary rows are taller and use the accent colour, so the page's main action stands out. */
-    boolean primary;
+    /** Icons are reserved for class and objective markers; action rows stay text-only. */
+    boolean primary;boolean showActionIcon=true;
+    /** Selected rows (the room list's current entry) get a tinted fill and a left accent bar. */
+    boolean selected;
+    /** Group headers (a mode name over its rooms) read as a band, not as a clickable row. */
+    boolean header;
+    private float hoverProgress;
+    private long lastFrame=System.nanoTime();
 
     FrontButton(String label, int x, int y, int w, int h, Runnable action) {
         this(label, "", x, y, w, h, "", "", true, action);
@@ -38,7 +30,11 @@ final class FrontButton extends Button {
 
     FrontButton(String label, String value, int x, int y, int w, int h,
                 String iconKind, String iconId, boolean enabled, Runnable action) {
-        super(x, y, w, h, Component.literal(compose(label, value)), b -> action.run(), DEFAULT_NARRATION);
+        super(x, y, w, h, Component.literal(compose(label, value)), b -> {
+            var screen=Minecraft.getInstance().screen;
+            if(screen!=null)screen.setFocused(b);
+            action.run();
+        }, DEFAULT_NARRATION);
         this.label = label == null ? "" : label;
         this.value = value == null ? "" : value;
         this.iconKind = iconKind == null ? "" : iconKind;
@@ -84,29 +80,17 @@ final class FrontButton extends Button {
     protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         var font = Minecraft.getInstance().font;
         boolean on = isHoveredOrFocused() && active;
-        int body = !active ? Ui.PANEL_SUNKEN
-                : primary ? (on ? Ui.mix(Ui.ACCENT, Ui.PANEL_ALT, 0.72) : Ui.mix(Ui.ACCENT, Ui.PANEL_ALT, 0.86))
-                : (on ? Ui.PANEL_ALT : Ui.PANEL);
-        g.fill(getX()+2,getY(),getX()+width-2,getY()+height,body);
-        g.fill(getX(),getY()+2,getX()+width,getY()+height-2,body);
-        if(on){g.fill(getX()+2,getY(),getX()+width-2,getY()+1,Ui.FRAME_LIGHT);}
-        if(primary)g.fill(getX(),getY()+3,getX()+2,getY()+height-3,Ui.ACCENT);
-        // A disabled row gets a hatched body instead of a flat one. "Dimmed" alone was too close to
-        // "unselected" at a glance, and an operator repeatedly clicking a row that looks normal is the
-        // most common way a disabled control reads as a broken one.
-        if (!active) hatch(g);
-        // 1px solid underline, never a translucent stroke: alpha lines over terrain are exactly what
-        // read as blur.
-        int underline = !active ? Ui.FRAME
-                : primary ? Ui.ACCENT
-                : (on ? Ui.FRAME_LIGHT : Ui.ACCENT_DIM);
-        g.fill(getX() + 1, getY() + height - 1, getX() + width - 1, getY() + height, underline);
-        // Hover leaves a bracket on the trailing edge so the pointer's target is unambiguous even when
-        // the row body is already bright (a primary action, or a selected tab-like row).
-        if (on) {
-            g.fill(getX() + width - 3, getY() + 3, getX() + width - 1, getY() + height - 3, Ui.ACCENT);
+        long now=System.nanoTime();float dt=Math.min(.1f,(now-lastFrame)/1_000_000_000f);lastFrame=now;
+        hoverProgress=Math.clamp(hoverProgress+(on?1:-1)*dt*5,0,1);
+        g.fill(getX(),getY(),getX()+width,getY()+height,header?0xb0202a34:!active?0x30203038:Ui.PANEL_ALT);
+        if(header)g.fill(getX(),getY()+height-1,getX()+width,getY()+height,Ui.FRAME);
+        if(selected&&active){
+            g.fill(getX(),getY(),getX()+width,getY()+height,0x585f7c8a);
+            g.fill(getX(),getY(),getX()+2,getY()+height,Ui.ACCENT);
         }
-
+        if(hoverProgress>0){float ease=1-(float)Math.pow(1-hoverProgress,3);
+            g.fill(getX(),getY()+height-1,getX()+(int)(width*ease),getY()+height,0xff8a9aa8);}
+        if(primary)g.fill(getX(),getY()+3,getX()+2,getY()+height-3,Ui.ACCENT);
         int inset = 5;
         int textLeft = getX() + inset;
         if (!iconId.isEmpty() && height >= 14) {
@@ -115,12 +99,22 @@ final class FrontButton extends Button {
             AssetIcons.draw(g, iconKind, iconId, textLeft, getY() + 3, boxWidth, box);
             textLeft += boxWidth + 4;
         }
-        int actionIcon=UiIcons.action(label);
+        int actionIcon=showActionIcon?UiIcons.action(label):-1;
         if(iconId.isEmpty()&&actionIcon>=0&&width>=76&&height>=14){
             // Never taller than the row minus its frame, so the glyph cannot touch the underline or the
             // top border. Shrinking below 16px crops the glyph instead of resampling it, which is what
             // keeps it sharp.
             int glyph=Math.max(8, Math.min(UiIcons.CELL, height-4));
+            // A 1px plate behind the glyph: several of the icons are open shapes (the chevrons, the
+            // compass) whose thin strokes vanish against the panel body unless they get a slightly
+            // darker ground. On hover the plate picks up the accent, which ties the icon to the row state.
+            int plateY=getY()+(height-glyph)/2;
+            if(glyph<height-2){
+                g.fill(textLeft,plateY,textLeft+glyph,plateY+glyph,
+                        !active?Ui.PANEL_SUNKEN:(on?Ui.mix(Ui.ACCENT,Ui.PANEL_SUNKEN,0.84):Ui.PANEL_SUNKEN));
+                g.fill(textLeft,plateY,textLeft+glyph,plateY+1,
+                        !active?Ui.BEVEL_LO:(on?Ui.FRAME_LIGHT:Ui.BEVEL_HI));
+            }
             UiIcons.draw(g,actionIcon,textLeft,getY()+(height-glyph)/2,glyph);
             textLeft+=glyph+4;
         }
@@ -132,13 +126,13 @@ final class FrontButton extends Button {
         if (valueWidth > 0 && valueWidth + 12 <= room) {
             String labelText = Ui.clip(font, label, room - valueWidth - 6);
             g.drawString(font, labelText, textLeft, textY,
-                    !active ? Ui.TEXT_FAINT : (on ? Ui.TEXT : Ui.TEXT_DIM), false);
+                    !active ? Ui.TEXT_FAINT : header ? Ui.ACCENT : (on ? Ui.TEXT : Ui.TEXT_DIM), false);
             g.drawString(font, value, textRight - valueWidth, textY,
                     !active ? Ui.TEXT_FAINT : (primary ? Ui.TEXT : Ui.ACCENT), false);
         } else {
             String text = value.isEmpty() ? label : label + "  " + value;
             g.drawString(font, Ui.clip(font, text, room), textLeft, textY,
-                    !active ? Ui.TEXT_FAINT : (on || primary ? Ui.TEXT : Ui.TEXT_DIM), false);
+                    !active ? Ui.TEXT_FAINT : header ? Ui.ACCENT : (on || primary ? Ui.TEXT : Ui.TEXT_DIM), false);
         }
     }
 }

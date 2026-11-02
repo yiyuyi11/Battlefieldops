@@ -20,6 +20,8 @@ import java.util.*;
  *   <li>BREAKTHROUGH - only the attacker (team 0) owns a pool; every point of the current stage must
  *       be taken to advance, the final stage wins, and the defender wins on timeout.</li>
  *   <li>Kills and captures only award personal score; they never unlock kits.</li>
+ *   <li>DEATHMATCH - enemy eliminations increase a separate team score; no flag capture or ticket
+ *       drain. First to the target wins; on timeout the higher score wins, or equal scores draw.</li>
  * </ul>
  */
 public final class Rules {
@@ -37,14 +39,23 @@ public final class Rules {
     public final Model.Arena map;
     public final List<Flag> flags = new ArrayList<>();
     public final int[] tickets;
+    /** Team eliminations are separate from personal score and from ticket pools. */
+    public final int[] teamScores = {0,0};
+    public record Notice(int team, String text) {}
+    private final List<Notice> notices = new ArrayList<>();
+    private final boolean[][] milestones = new boolean[2][3];
+    private int previousLeader = -1;
     public int stage, elapsed = 0, winner = -2;
+    public boolean rushArmed;
 
     public Rules(Model.Arena map) {
         this.map = map;
         this.tickets = new int[]{map.tickets, map.tickets};
+        // A firing range is not a match: no capture points, no ticket pools, nothing to win.
+        if (map.isTraining()) return;
         for (Model.Point ignored : map.points) {
             Flag flag = new Flag();
-            if (isBreakthrough()) {
+            if (isStaged()) {
                 // The defender starts holding every stage; the attacker pushes the bar to 100.
                 flag.owner = 1;
                 flag.progress = 0;
@@ -55,12 +66,13 @@ public final class Rules {
         }
     }
 
-    public boolean isBreakthrough() {
-        return map.mode.equals("BREAKTHROUGH");
+    public boolean isBreakthrough(){return map.mode.equals("BREAKTHROUGH");}
+    public boolean isStaged() {
+        return map.isStaged();
     }
 
     public boolean active(int index) {
-        return !isBreakthrough() || map.points.get(index).sector == stage;
+        return !map.isDeathmatch() && (!isStaged() || map.points.get(index).sector == stage);
     }
 
     public int stageCount() {
@@ -75,15 +87,21 @@ public final class Rules {
     }
 
     public List<Capture> tick(int[][] presence) {
+        if (map.isTraining()) {
+            // Only the clock runs; everything else (capture bars, bleed, end conditions) is match logic.
+            elapsed++;
+            return java.util.List.of();
+        }
         List<Capture> captures = new ArrayList<>();
         if (winner != -2) return captures;
         elapsed++;
+        if(map.isDeathmatch()){checkEnd();return captures;}
         // One call == one second of match time, so a fully uncontested side walks the whole
         // 100-point bar in exactly captureSeconds seconds and a neutral point flips in half that.
         double delta = 100.0 / Math.max(1, map.captureSeconds);
 
         for (int i = 0; i < flags.size(); i++) {
-            if (!active(i)) continue;
+            if (!active(i)||map.isRush()) continue;
             Flag flag = flags.get(i);
             int a = presence[i][0], b = presence[i][1];
             flag.contested = a > 0 && b > 0;
@@ -98,7 +116,7 @@ public final class Rules {
             }
         }
 
-        if (isBreakthrough()) {
+        if (isStaged()) {
             boolean cleared = true;
             for (int i = 0; i < flags.size(); i++) {
                 if (active(i) && flags.get(i).owner != 0) cleared = false;
@@ -144,21 +162,47 @@ public final class Rules {
 
     /** Breakthrough only exposes the attacker pool; conquest exposes both. */
     public boolean tracksTickets(int team) {
-        return !isBreakthrough() || team == 0;
+        return team>=0&&team<2&&!map.isDeathmatch()&&(!isStaged() || team == 0);
     }
+
+    /** Called only from the server's once-per-elimination credit path, never from a client score. */
+    public void kill(int killerTeam,int victimTeam) {
+        if(!map.isDeathmatch()||winner!=-2||killerTeam<0||killerTeam>1||victimTeam<0||victimTeam>1||killerTeam==victimTeam)return;
+        int score=++teamScores[killerTeam],target=Math.max(1,map.targetKills);
+        if(score>=target){winner=killerTeam;return;}
+        if(!milestones[killerTeam][0]&&(long)score*2>=target){milestones[killerTeam][0]=true;notices.add(new Notice(killerTeam,"累计击杀已过半"));}
+        if(!milestones[killerTeam][1]&&(long)score*5>=(long)target*4){milestones[killerTeam][1]=true;notices.add(new Notice(killerTeam,"距离目标还剩 "+(target-score)+" 次击杀"));}
+        if(score>teamScores[1-killerTeam]&&previousLeader!=killerTeam){
+            if(previousLeader>=0)notices.add(new Notice(killerTeam,"已经反超比分"));
+            previousLeader=killerTeam;
+        }
+        if(!milestones[killerTeam][2]&&(long)(score-teamScores[1-killerTeam])*5>=target){milestones[killerTeam][2]=true;notices.add(new Notice(killerTeam,"保持领先优势"));}
+    }
+
+    public List<Notice> drainNotices(){var out=List.copyOf(notices);notices.clear();return out;}
+
+    /** Ticket death is settled before personal credit, so its final kill must still be paid. */
+    public boolean acceptsKillCredit(){return !map.isDeathmatch()||winner==-2;}
 
     private void checkEnd() {
         if (winner != -2) return;
-        if (tickets[0] <= 0) {
-            winner = !isBreakthrough() && tickets[1] <= 0 ? -1 : 1;
+        // A firing range never ends: players stay to test weapons and loadouts.
+        if(map.isTraining())return;
+        if(map.isDeathmatch()){
+            if(elapsed>=map.roundMinutes*60)winner=teamScores[0]==teamScores[1]?-1:teamScores[0]>teamScores[1]?0:1;
             return;
         }
-        if (!isBreakthrough() && tickets[1] <= 0) {
+        if(map.isRush()&&(rushArmed||java.util.stream.IntStream.range(0,flags.size()).filter(this::active).allMatch(i->flags.get(i).owner==0)))return; // A live charge gets its final detonation/defuse window.
+        if (tickets[0] <= 0) {
+            winner = !isStaged() && tickets[1] <= 0 ? -1 : 1;
+            return;
+        }
+        if (!isStaged() && tickets[1] <= 0) {
             winner = 0;
             return;
         }
         if (elapsed >= map.roundMinutes * 60) {
-            if (isBreakthrough()) {
+            if (isStaged()) {
                 winner = 1;
             } else {
                 winner = Integer.compare(tickets[0], tickets[1]) == 0 ? -1 : tickets[0] > tickets[1] ? 0 : 1;
@@ -167,11 +211,12 @@ public final class Rules {
     }
 
     public String result() {
-        return switch (winner) {
+        String verdict = switch (winner) {
             case -1 -> "平局";
-            case 0 -> isBreakthrough() ? "蓝方 / 进攻方胜利" : "蓝方胜利";
-            case 1 -> isBreakthrough() ? "红方 / 防守方胜利" : "红方胜利";
+            case 0 -> isStaged() ? "机械轴心 / 进攻方胜利" : "机械轴心胜利";
+            case 1 -> isStaged() ? "格雷同盟 / 防守方胜利" : "格雷同盟胜利";
             default -> "进行中";
         };
+        return map.isDeathmatch()&&winner!=-2?verdict+" · 团队击杀 "+Board.label(0)+" "+teamScores[0]+" : "+Board.label(1)+" "+teamScores[1]:verdict;
     }
 }

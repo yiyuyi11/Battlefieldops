@@ -15,6 +15,9 @@ package cn.bfops;
  * can be checked headless.
  */
 final class Medic {
+    static boolean lethal(float health,float finalDamage) {
+        return Float.isFinite(finalDamage) && finalDamage>0 && health>0 && finalDamage>=health;
+    }
     static boolean continuingRescue(long now, long lastHeld, boolean validTarget) {
         return validTarget && now >= lastHeld && now - lastHeld <= 6;
     }

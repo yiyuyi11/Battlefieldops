@@ -1,2633 +1,6074 @@
 package cn.bfops;
 
-import com.google.gson.*;
+import cn.bfops.voice.common.audio.CampType;
+import cn.bfops.voice.common.audio.FrontVoicePlayRequest;
+import cn.bfops.voice.common.audio.FrontVoicePlaybackMode;
+import cn.bfops.voice.common.audio.VoiceCue;
+import cn.bfops.voice.network.ClientboundPlayAudioPayload;
+import cn.bfops.voice.network.VoiceNetwork;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.mojang.authlib.GameProfile;
+import io.netty.channel.embedded.EmbeddedChannel;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.UUID;
+import java.util.Map.Entry;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.DustParticleOptions;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketSendListener;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.Entity.RemovalReason;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.ItemLike;
+import net.minecraft.world.level.ClipContext.Block;
+import net.minecraft.world.level.ClipContext.Fluid;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Vector3f;
+import net.minecraft.world.phys.HitResult.Type;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.*;
-
-/**
- * Server-authoritative match engine.
- *
- * <p>Every client request is re-validated here: the client may only ask, never decide. Maps,
- * teams, kits, spawns, vehicle grants, tickets and personal score all live on this side, so an
- * edited client cannot award itself a kit it is not entitled to, spawn outside its own stage, or
- * push tickets around.
- *
- * <p>Deployment follows the reference flow: joining a match backs the player's inventory and
- * position up to disk, then the kit is granted from the map whitelist. Leaving (or a server stop,
- * or a crash) restores that backup, so testing never eats a real save.
- */
 public final class Engine {
-    /**
-     * How close a living teammate must be for an empty vehicle to count as still in use.
-     *
-     * <p>Generous on purpose: parking a tank and walking to a nearby ridge is normal play, and the
-     * cost of keeping a hull too long is a wasted slot while the cost of reclaiming one too eagerly is
-     * destroying a player's vehicle under them. 64 blocks covers a capture point and its approaches.
-     */
-    private static final double VEHICLE_ORPHAN_RANGE = 64.0;
-    public static final class Member {
-        public String map, name;
-        public int team, score, kills, deaths, captures, outside;
-        /**
-         * Retired currency. Vehicles are rationed by cooldown and the per-match cap instead.
-         *
-         * <p>Still accumulated so the scoreboard has a per-player running total to build on, but it is
-         * no longer displayed as a spendable balance and nothing is deducted from it. Kept as a field
-         * rather than deleted so any persisted match state still loads.
-         */
-        public int credits;
-        public boolean alive;
-        /**
-         * Downed: alive but out of the fight, bleeding out and revivable.
-         *
-         * <p>Separate from {@link #alive} because almost everything that checks "is this player in the match"
-         * must still see them as present — they are on the map, they can be shot at and revived, and they must
-         * not be treated as a deployment candidate.
-         */
-        public boolean downed;
-        public long bleedOutAt;
-        public String downedByName = "";
-        public java.util.UUID downedBy;
-        public int reviveProgress;
-        /** The downed teammate this player is currently reviving, or null. */
-        public java.util.UUID reviving;
-        /** Whether the kill for this member's current down was already credited to the downer. */
-        public boolean killCredited;
-        boolean claimKill() {
-            if (killCredited) return false;
-            killCredited = true;
-            return true;
-        }
-        public long reviveHeldAt = -100;
-        public long readyAt, vehicleAt;
-        /** Last boundary warning second shown, so the title is not resent every tick. */
-        public int warnedSecond = -1;
-        /** Set while the player is glowing as a teammate marker, so it can be cleared exactly once. */
-        public boolean glowing;
-        /** True when this member is an AI soldier (a fake {@code ServerPlayer}) rather than a real player. */
-        public boolean bot;
-        /** Tick (engine ticks) at which this bot may re-plan its path / land its next melee hit. */
-        public long botNextPathAt;
-        public long botNextAttackAt;
+  /** Server tick of the last hit each player took; medical support stops while this is recent. */
+  private final java.util.Map<java.util.UUID,Integer> damageTicks = new java.util.HashMap<>();
+   private static final double VEHICLE_ORPHAN_RANGE = 64.0;
+   private final MinecraftServer server;
+   private final Path folder;
+   private final Map<String, TerrainBake> bakes = new HashMap<>();
+   private final Map<String, TerrainMap> terrainMaps = new HashMap<>();
+   private final Map<String, Set<UUID>> terrainWaiters = new HashMap<>();
+   private final Map<String, Model.Arena> maps = new TreeMap<>();
+   private final Map<String, Engine.Match> matches = new HashMap<>();
+   public final Map<UUID, Engine.Member> members = new HashMap<>();
+   public final Set<UUID> vehicles = new HashSet<>();
+   private final Map<UUID, Long> requests = new HashMap<>();
+   private final Map<UUID, Long> polls = new HashMap<>();
+   private final Map<String, String> results = new HashMap<>();
+   private final Catalog catalog = new Catalog();
+   final GadgetRefill refills;
+   private final Board board;
+   private final Compat compat;
+   private boolean sidebarShown;
+   private LobbySettings lobbySettings = new LobbySettings();
+   private long ticks;
+   final ConquestSupport support;
+   final FinalHonours finalHonours;
+   private final BattleAtmosphere atmosphere;
+   private final RushObjectives rush;
+   private final PlayerProgress progress;
+   private final CareerStats career;
+   private Map<String, Object> armamentCache;
+   private final Map<String, Long> padReadyAt = new HashMap<>();
+   private final Map<UUID, Engine.Beacon> beacons = new LinkedHashMap<>();
+   private final Map<UUID, Integer> beaconUses = new HashMap<>();
+   private final Map<UUID, Float> beaconHealth = new HashMap<>();
+   private static final ResourceLocation CRAWL_SPEED = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "downed_crawl");
+   private final Map<UUID, ServerPlayer> recentAttacker = new HashMap<>();
+   private final Map<UUID, Long> recentAttackerAt = new HashMap<>();
+   private static final long RECENT_ATTACKER_TICKS = 300L;
+   final CosmeticKills cosmeticKills = new CosmeticKills();
 
-        public Member(String map, String name, int team) {
-            this.map = map;
-            this.name = name;
-            this.team = team;
-        }
-    }
+   Engine(MinecraftServer var1) {
+      this.server = var1;
+      this.support = new ConquestSupport(this, var1);
+      this.finalHonours = new FinalHonours(this, var1);
+      this.atmosphere = new BattleAtmosphere(this);
+      this.rush = new RushObjectives(this, var1);
+      this.board = new Board(var1);
+      this.refills = new GadgetRefill(this, var1);
+      this.folder = var1.getWorldPath(LevelResource.ROOT).resolve("battlefield_ops");
+      this.progress = new PlayerProgress(this.folder);
+      this.career = new CareerStats(this.folder);
+      this.compat = Compat.load(this.folder, BattlefieldOps.LOG);
+      this.board.compat(this.compat);
 
-    static final class Match {
-        final Rules rules;
-        boolean running;
-        final Set<UUID> vehicles = new HashSet<>();
-        /**
-         * Vehicle entity -> owning team, recorded when it spawns.
-         *
-         * <p>Ownership is taken from the deploying player, never from who is currently sitting in
-         * the vehicle: an empty hull still belongs to the team that bought it, and reading the
-         * driver would flip the colour of a parked tank to "enemy" the moment its crew stepped out.
-         */
-        final Map<UUID, Integer> vehicleTeams = new HashMap<>();
-        /** Manual marks for both teams; each carries its own team so one list is enough. */
-        final List<Spotting.Mark> marks = new ArrayList<>();
-        /** Recent damage per victim, for assists. */
-        final Map<UUID, List<Awards.Hit>> hits = new HashMap<>();
-        /** Who last killed each player, for revenge. */
-        final Map<UUID, UUID> lastKiller = new HashMap<>();
-        /** When each player last killed someone, and how many in a row, for streaks. */
-        final Map<UUID, Long> lastKillAt = new HashMap<>();
-        final Map<UUID, Integer> streak = new HashMap<>();
-        /** UUIDs of the AI soldiers for the match, present only while the map enables bot mode. */
-        final List<java.util.UUID> bots = new ArrayList<>();
-        /** Whether {@link #bots} has been populated, so a death timer cannot re-spawn them twice. */
-        boolean botsSpawned;
+      try {
+         Files.createDirectories(this.folder.resolve("maps"));
+         Files.createDirectories(this.folder.resolve("players"));
 
-        Match(Model.Arena map) {
-            rules = new Rules(map);
-        }
-    }
+         try (Stream<Path> var2 = Files.list(this.folder.resolve("maps"))) {
+            var2.filter(var0 -> var0.toString().endsWith(".json")).forEach(var1x -> {
+               try {
+                  Model.Arena var2x = (Model.Arena)BattlefieldOps.GSON.fromJson(Files.readString(var1x), Model.Arena.class);
+                  boolean var3x = FixedClasses.migrateLegacy(var2x);
+                  EliteRules.complete(var2x);
+                  var2x.validate();
+                  if (var3x) {
+                     Path var4x = var1x.resolveSibling(var1x.getFileName() + ".classes-legacy.bak");
+                     if (!Files.exists(var4x)) {
+                        Files.copy(var1x, var4x);
+                     }
 
-    private final MinecraftServer server;
-    private final Path folder;
-    /**
-     * Bakes in flight, keyed by arena id.
-     *
-     * <p>One per map, not per player: the work is identical for everyone looking at the same map, and
-     * letting each request start its own bake would multiply the chunk loading for no benefit.
-     */
-    private final Map<String, TerrainBake> bakes = new HashMap<>();
-    /** Completed bakes, kept in memory so the second viewer costs no disk read. */
-    private final Map<String, TerrainMap> terrainMaps = new HashMap<>();
-    /** Players waiting for a bake to finish, so they are told the moment it lands. */
-    private final Map<String, Set<java.util.UUID>> terrainWaiters = new HashMap<>();
-    private final Map<String, Model.Arena> maps = new TreeMap<>();
-    private final Map<String, Match> matches = new HashMap<>();
-    public final Map<UUID, Member> members = new HashMap<>();
-    public final Set<UUID> vehicles = new HashSet<>();
-    private final Map<UUID, Long> requests = new HashMap<>();
-    private final Map<UUID, Long> polls = new HashMap<>();
-    private final Map<String, String> results = new HashMap<>();
-    private final Catalog catalog = new Catalog();
-    private final Board board;
-    /**
-     * Proxy-plugin / HUD-mod coexistence policy. Never null once constructed, so every call site can
-     * use it without a null check on the hot path.
-     */
-    private final Compat compat;
-    /**
-     * Whether the sidebar is actually being displayed by this mod right now. The HUD mirrors the
-     * sidebar's contents when this is false, so it must reflect the real outcome rather than the
-     * intent — the write can be skipped because TAB owns the slot or because two matches are live.
-     */
-    private boolean sidebarShown;
-    private long ticks;
+                     BattlefieldOps.LOG.info("Converted legacy classes in {}; original retained at {}", var2x.id, var4x);
+                  }
 
-    Engine(MinecraftServer server) {
-        this.server = server;
-        this.board = new Board(server);
-        this.folder = server.getWorldPath(LevelResource.ROOT).resolve("battlefield_ops");
-        this.compat = Compat.load(folder, BattlefieldOps.LOG);
-        this.board.compat(compat);
-        try {
-            Files.createDirectories(folder.resolve("maps"));
-            Files.createDirectories(folder.resolve("players"));
-            try (var files = Files.list(folder.resolve("maps"))) {
-                files.filter(path -> path.toString().endsWith(".json")).forEach(path -> {
-                    try {
-                        Model.Arena arena = BattlefieldOps.GSON.fromJson(Files.readString(path), Model.Arena.class);
-                        arena.validate();
-                        maps.put(arena.id, arena);
-                    } catch (Exception ex) {
-                        BattlefieldOps.LOG.error("Invalid battlefield map {}", path, ex);
-                    }
-                });
-            }
-        } catch (IOException ex) {
-            throw new IllegalStateException("无法读取战地配置目录", ex);
-        }
-        catalog.scan(server);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) recover(player);
-    }
+                  this.maps.put(var2x.id, var2x);
+               } catch (Exception var5) {
+                  BattlefieldOps.LOG.error("Invalid battlefield map {}", var1x, var5);
+               }
+            });
+         }
+      } catch (IOException var8) {
+         throw new IllegalStateException("无法读取战地配置目录", var8);
+      }
 
-    ServerLevel level(Model.Arena map) {
-        // Explicit rather than letting a null dereference throw: this used to surface as a bare NPE that
-        // callers caught and reported as "no data", which hid a real bug behind a plausible-looking message.
-        Model.require(map != null, "内部错误：未指定地图，无法定位维度");
-        ServerLevel level = server.getLevel(
-                ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(map.dimension)));
-        Model.require(level != null, "地图维度未加载：" + map.dimension);
-        return level;
-    }
+      Path var9 = this.folder.resolve("lobby.json");
+      if (Files.exists(var9)) {
+         try {
+            LobbySettings var3 = (LobbySettings)BattlefieldOps.GSON.fromJson(Files.readString(var9), LobbySettings.class);
+            Model.require(var3 != null, "大厅配置为空");
+            var3.validate();
+            this.lobbySettings = var3;
+         } catch (Exception var6) {
+            BattlefieldOps.LOG.error("Invalid lobby config; automatic transfer disabled", var6);
+         }
+      }
 
-    /** The map's dimension, or {@code null} when it is not loaded (bots retry rather than fail). */
-    private ServerLevel levelOrNull(Model.Arena map) {
-        if (map == null) return null;
-        return server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(map.dimension)));
-    }
+      this.board.clearAll();
+      this.catalog.scan(var1);
 
-    /** True when this member is an AI soldier rather than a real player. */
-    public boolean isBot(ServerPlayer player) {
-        Member member = player == null ? null : members.get(player.getUUID());
-        return member != null && member.bot;
-    }
+      for (ServerPlayer var4 : var1.getPlayerList().getPlayers()) {
+         this.recover(var4);
+      }
+   }
 
-    static String str(JsonObject json, String key, String fallback) {
-        return json.has(key) ? json.get(key).getAsString() : fallback;
-    }
+   ServerLevel level(Model.Arena var1) {
+      Model.require(var1 != null, "内部错误：未指定地图，无法定位维度");
+      ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var1.dimension)));
+      Model.require(var2 != null, "地图维度未加载：" + var1.dimension);
+      return var2;
+   }
 
-    static int num(JsonObject json, String key, int fallback) {
-        return json.has(key) ? json.get(key).getAsInt() : fallback;
-    }
+   private ServerLevel levelOrNull(Model.Arena var1) {
+      return var1 == null ? null : this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var1.dimension)));
+   }
 
-    // ------------------------------------------------------------------ requests
+   public boolean isBot(ServerPlayer var1) {
+      Engine.Member var2 = var1 == null ? null : this.members.get(var1.getUUID());
+      return var2 != null && var2.bot;
+   }
 
-    public void request(ServerPlayer player, String json) {
-        if (!Network.supported(player)) return;
-        if (json.length() > 20000) return;
-        String selected = "";
-        try {
-            JsonObject request = JsonParser.parseString(json).getAsJsonObject();
-            String op = str(request, "op", "");
-            Map<UUID, Long> limiter = op.equals("state") || op.equals("open") ? polls : requests;
-            if (ticks - limiter.getOrDefault(player.getUUID(), -100L) < 2) return;
-            limiter.put(player.getUUID(), ticks);
-            selected = str(request, "map", "");
-            switch (op) {
-                case "open", "state" -> state(player, selected, op.equals("open"), "");
-                case "catalog" -> catalog(player, request);
-                case "terrain" -> terrain(player, request);
-                case "mark" -> mark(player, request);
-                case "revive" -> {
-                    String target = str(request,"target", "");
-                    ServerPlayer patient = target.isEmpty() ? null : server.getPlayerList().getPlayer(UUID.fromString(target));
-                    if (patient != null) reviveStart(player, patient);
-                }
-                case "fittings" -> fittings(player,request);
-                // Compatibility state is server-wide, so it is an admin surface like scan/save.
-                // Every mode change is re-validated here; the GUI sends a name, never a decision.
-                case "compatMode" -> {
-                    admin(player);
-                    String extra = str(request, "extra", "");
-                    int split = extra.indexOf('=');
-                    Model.require(split > 0, "兼容参数格式错误");
-                    String key = extra.substring(0, split);
-                    String raw = extra.substring(split + 1);
-                    // The Xaero-in-match switch is a boolean, not a tri-state mode, so it is handled
-                    // before the Mode parsing rather than contorting it into one.
-                    if (key.equals("hideXaero")) {
-                        boolean on = switch (raw.toLowerCase(Locale.ROOT)) {
-                            case "true", "1", "on", "yes" -> true;
-                            case "false", "0", "off", "no" -> false;
-                            default -> throw new IllegalArgumentException("hideXaero 需要 true 或 false");
+   int playerLevel(ServerPlayer var1) throws IOException {
+      return this.progress.level(var1.getUUID());
+   }
+
+   void setPlayerLevel(ServerPlayer var1, int var2) throws IOException {
+      this.progress.setLevel(var1.getUUID(), var2);
+   }
+
+   static String str(JsonObject var0, String var1, String var2) {
+      return var0.has(var1) ? var0.get(var1).getAsString() : var2;
+   }
+
+   static int num(JsonObject var0, String var1, int var2) {
+      return var0.has(var1) ? var0.get(var1).getAsInt() : var2;
+   }
+
+   public void request(ServerPlayer var1, String var2) {
+      if (Network.supported(var1)) {
+         if (var2.length() <= 20000) {
+            String var3 = "";
+            String var4 = "";
+
+            try {
+               JsonObject var5 = JsonParser.parseString(var2).getAsJsonObject();
+               var4 = str(var5, "op", "");
+               var3 = str(var5, "map", "");
+               boolean var22 = var4.equals("open") || var4.equals("lobby") && var5.has("open") && var5.get("open").getAsBoolean();
+               boolean var7 = var4.equals("prone") || var4.equals("editorEnd");
+               boolean var8 = var4.equals("catalogAll") || var4.equals("state") || var4.equals("lobby") && !var22;
+               var var9 = var8 ? this.polls : this.requests;
+               if (!var22 && !var7 && this.ticks - var9.getOrDefault(var1.getUUID(), -100L) < 2L) {
+                  if (var8) {
+                     return;
+                  }
+
+                  throw new IllegalArgumentException("操作过快，请稍后重试");
+               }
+
+               if (!var22 && !var7) {
+                  var9.put(var1.getUUID(), this.ticks);
+               }
+
+               if (Set.of(
+                     "selectTeam",
+                     "deploy",
+                     "redeploy",
+                     "squad",
+                     "placeBeacon",
+                     "removeBeacon",
+                     "mark",
+                     "revive",
+                     "rescueCall",
+                     "leave",
+                     "elitePickup",
+                     "prone",
+                     "rushInteract",
+                     "giveUp",
+                     "skipRespawn"
+                  )
+                  .contains(var4)) {
+                  Engine.Member var10 = this.members.get(var1.getUUID());
+                  Model.require(RoomPolicy.sameRoom(var10 == null ? null : var10.map, var3), "房间已变化，请刷新后重试");
+               }
+
+               switch (var4) {
+                  case "career":
+                     for (Entry var40 : this.members.entrySet()) {
+                        ServerPlayer var43 = this.server.getPlayerList().getPlayer((UUID)var40.getKey());
+                        if (var43 != null) {
+                           this.career.poll(var43, (Engine.Member)var40.getValue());
+                        }
+                     }
+
+                     this.career.send(var1, str(var5, "sort", "score"));
+                     break;
+                  case "open":
+                     this.open(var1);
+                     break;
+                  case "state":
+                     this.state(var1, var3, false, "");
+                     break;
+                  case "lobby":
+                     boolean var34 = var5.has("open") && var5.get("open").getAsBoolean();
+                     Model.require(!var34 || !this.members.containsKey(var1.getUUID()), "请先退出当前房间，再进入游戏大厅");
+                     this.lobby(var1, var34, "");
+                     break;
+                  case "lobbyCreate":
+                     this.createRoom(var3, var1);
+                     this.lobby(var1, false, "房间已创建，玩家可进入后选队");
+                     break;
+                  case "lobbyStart":
+                     this.requireRoomControl(var1, var3);
+                     this.startRoom(var3);
+                     this.lobby(var1, false, "该房间已开始，其他房间继续运行");
+                     break;
+                  case "lobbyClose":
+                     this.requireRoomControl(var1, var3);
+                     Model.require(this.matches.containsKey(var3), "房间已关闭");
+                     this.finish(var3, "房主或管理员结束对局");
+                     this.lobby(var1, false, "该房间已关闭");
+                     break;
+                  case "lobbyJoin":
+                     this.join(var1, var3);
+                     this.state(var1, var3, true, "已进入房间，请选择阵营");
+                     break;
+                  case "lobbyReturn":
+                     Model.require(var1.isAlive(), "请先完成重生，再返回大厅");
+                     this.leave(var1);
+                     boolean var33 = !Files.exists(this.folder.resolve("players").resolve(var1.getUUID() + ".nbt"));
+                     this.state(var1, "", false, var33 ? "已退出房间，背包已恢复" : "背包恢复失败，备份已保留");
+                     Model.require(var33, "原背包尚未恢复，备份已保留，请联系管理员");
+                     this.transferToLobby(var1);
+                     this.lobby(var1, true, "已返回游戏大厅");
+                     break;
+                  case "lobbySet":
+                     this.admin(var1);
+                     this.setLobby(var1);
+                     this.lobby(var1, false, "共享大厅已设为你当前的位置");
+                     break;
+                  case "lobbyDisable":
+                     this.admin(var1);
+                     LobbySettings var32 = (LobbySettings)BattlefieldOps.GSON.fromJson(BattlefieldOps.GSON.toJson(this.lobbySettings), LobbySettings.class);
+                     var32.enabled = false;
+                     MapFiles.save(this.folder, "lobby", BattlefieldOps.GSON.toJson(var32));
+                     this.lobbySettings = var32;
+                     this.lobby(var1, false, "共享大厅传送已关闭，离房恢复原位置");
+                     break;
+                  case "catalog":
+                     this.catalog(var1, var5);
+                     break;
+                  case "terrain":
+                     this.terrain(var1, var5);
+                     break;
+                  case "mark":
+                     this.mark(var1, var5);
+                     break;
+                  case "rushInteract":
+                     this.rush.interact(var1, this.ticks);
+                     break;
+                  case "elitePickup":
+                     this.claimElite(var1);
+                     this.state(var1, this.member(var1).map, false, "已领取精英装备");
+                     break;
+                  case "squad":
+                     this.changeSquad(var1, num(var5, "squad", 0));
+                     this.state(var1, this.member(var1).map, false, "小队已更新");
+                     break;
+                  case "placeBeacon":
+                     this.placeBeacon(var1);
+                     this.state(var1, this.member(var1).map, false, "信标已放置：有效 10 分钟");
+                     break;
+                  case "removeBeacon":
+                     this.removeOwnedBeacon(var1.getUUID());
+                     this.state(var1, this.member(var1).map, false, "已回收自己的信标");
+                     break;
+                  case "revive":
+                     this.server
+                        .getPlayerList()
+                        .getPlayers()
+                        .stream()
+                        .filter(var2x -> var2x != var1 && this.canRescue(var1, var2x))
+                        .sorted(Comparator.comparingDouble(var1::distanceToSqr))
+                        .filter(var2x -> this.reviveStart(var1, var2x))
+                        .findFirst();
+                     break;
+                  case "giveUp":
+                     Engine.Member var31 = this.member(var1);
+                     Engine.Match var39 = this.matches.get(var31.map);
+                     if (var39 != null && var39.running && var31.alive && var31.downed && var39.rules.map.allowGiveUp) {
+                        if (this.ticks - var31.giveUpHeldAt > 6L || var31.giveUpAt < 0L) {
+                           var31.giveUpAt = this.ticks;
+                        }
+
+                        var31.giveUpHeldAt = this.ticks;
+                     }
+                     break;
+                  case "skipRespawn":
+                     Engine.Member var30 = this.member(var1);
+                     Engine.Match var38 = this.matches.get(var30.map);
+                     Model.require(var38 != null && var38.running && !var30.alive && var30.team >= 0 && var38.rules.map.allowRespawnSkip, "当前不能跳过部署等待");
+                     var30.readyAt = this.ticks;
+                     this.state(var1, var30.map, false, "已跳过等待，请选择部署点");
+                     break;
+                  case "prone":
+                     Engine.Member var29 = this.member(var1);
+                     Engine.Match var37 = this.matches.get(var29.map);
+                     Model.require(
+                        var37 != null && var37.running && var29.team >= 0 && var29.alive && !var29.downed && !var1.isSpectator() && !var1.isPassenger(),
+                        "当前状态不能切换趴下"
+                     );
+                     boolean var42 = var5.has("value") && var5.get("value").getAsBoolean();
+                     Model.require(!var42 || var1.onGround(), "落地后可以趴下");
+                     if (!var42 || this.ticks - var29.proneAt >= 2L) {
+                        if (var42) {
+                           var29.proneAt = this.ticks;
+                        }
+
+                        TaczProneBridge.set(var1, var42);
+                     }
+                     break;
+                  case "leaderboard":
+                     Engine.Member var28 = this.members.get(var1.getUUID());
+                     if (var28 != null && this.matches.containsKey(var28.map) && this.matches.get(var28.map).running) {
+                        this.state(var1, var28.map, false, "");
+                     } else {
+                        this.career
+                           .leaderboard(var1, num(var5, "offset", 0), num(var5, "limit", 64), var5.has("requestId") ? var5.get("requestId").getAsLong() : 0L);
+                     }
+                     break;
+                  case "catalogAll":
+                     JsonObject var27 = new JsonObject();
+                     var27.addProperty("all", true);
+                     this.catalog(var1, var27);
+                     break;
+                  case "editorStart":
+                     this.admin(var1);
+                     EditorFlight.start(var1, this.maps.get(var3));
+                     break;
+                  case "editorEnd":
+                     EditorFlight.restore(var1);
+                     Network.send(var1, Map.of("type", "editorFlight", "active", false));
+                     break;
+                  case "rescueCall":
+                     this.callRescue(var1);
+                     break;
+                  case "fittings":
+                     this.fittings(var1, var5);
+                     break;
+                  case "trainingLoadout":
+                     this.rearm(var1, var5);
+                     break;
+                  case "attachmentCatalog":
+                     this.admin(var1);
+                     String var26 = str(var5, "id", "");
+                     Model.require(this.catalog.guns.contains(var26), "未扫描到武器");
+                     Network.send(var1, Map.of("type", "attachmentCatalog", "id", var26, "groups", this.catalog.gunFittings.getOrDefault(var26, List.of())));
+                     break;
+                  case "compatMode":
+                     this.admin(var1);
+                     String var25 = str(var5, "extra", "");
+                     int var36 = var25.indexOf(61);
+                     Model.require(var36 > 0, "兼容参数格式错误");
+                     String var41 = var25.substring(0, var36);
+                     String var15 = var25.substring(var36 + 1);
+                     if (var41.equals("hideXaero")) {
+                        String var17 = var15.toLowerCase(Locale.ROOT);
+
+                        boolean var16 = switch (var17) {
+                           case "true", "1", "on", "yes" -> true;
+                           case "false", "0", "off", "no" -> false;
+                           default -> throw new IllegalArgumentException("hideXaero 需要 true 或 false");
                         };
-                        compat.settings().hideXaeroInMatch = on;
-                        compat.save(BattlefieldOps.LOG);
-                        state(player, selected, false, on
-                                ? "对局中将隐藏 Xaero 小地图" : "对局中保持 Xaero 小地图显示");
-                        break;
-                    }
-                    String value = raw.toUpperCase(Locale.ROOT);
-                    CompatPolicy.Mode mode;
-                    try {
-                        mode = CompatPolicy.Mode.valueOf(value);
-                    } catch (IllegalArgumentException ex) {
-                        throw new IllegalArgumentException("未知的兼容模式：" + value);
-                    }
-                    switch (key) {
-                        case "sidebar" -> compat.settings().sidebar = mode;
-                        case "teams" -> compat.settings().teams = mode;
-                        case "minimap" -> compat.settings().minimap = mode;
-                        default -> throw new IllegalArgumentException("未知的兼容项：" + key);
-                    }
-                    // Changing a mode is an explicit operator decision, so drop the sticky
-                    // observations and let the surfaces be re-evaluated from scratch.
-                    compat.reset();
-                    compat.save(BattlefieldOps.LOG);
-                    state(player, selected, false, "兼容设置已更新：" + key + " = " + value);
-                }
-                // Minimap corner. Its own op rather than another "compatMode" key because the value is a
-                // corner name, not one of the AUTO/ALWAYS/NEVER tri-states that op parses.
-                case "compatCorner" -> {
-                    admin(player);
-                    String value = Briefing.normaliseCorner(str(request, "value", ""));
-                    compat.settings().minimapCorner = value;
-                    compat.save(BattlefieldOps.LOG);
-                    state(player, selected, false,
-                            "小地图位置：" + Briefing.minimapCornerName(value));
-                }
-                case "compatReset" -> {
-                    admin(player);
-                    compat.reset();
-                    state(player, selected, false, "已清除兼容自检结果，下次对局将重新检测");
-                }
-                case "compatSave" -> {
-                    admin(player);
-                    compat.save(BattlefieldOps.LOG);
-                    state(player, selected, false, "兼容配置已写入 " + folder.resolve("compat.json"));
-                }
-                case "scan" -> {
-                    admin(player);
-                    catalog.scan(server);
-                    // The station table is derived from the scan, so a rescan must drop it or the editor
-                    // would keep showing weapons of mods that are no longer installed.
-                    armamentCache = null;
-                    state(player, selected, false,
-                            "扫描完成：" + catalog.guns.size() + " 把武器，"
-                                    + catalog.vehicles.size() + " 种载具；" + catalog.diagnostics);
-                }
-                case "save" -> {
-                    admin(player);
-                    Model.Arena arena = BattlefieldOps.GSON.fromJson(request.get("arena"), Model.Arena.class);
-                    arena.validate();
-                    if(request.has("baseRevision")){
-                        String baseId=str(request,"baseId","");
-                        Model.Arena base=maps.get(baseId);
-                        MapFiles.expect(base==null?"":BattlefieldOps.GSON.toJson(base),str(request,"baseRevision",""));
-                        Model.require(arena.id.equals(baseId)||!maps.containsKey(arena.id),"地图 ID 已存在，请换一个 ID");
-                    }
-                    Model.require(!matches.containsKey(arena.id), "请先结束这张地图的对局");
-                    Model.require(maps.containsKey(arena.id) || maps.size() < 64, "最多 64 张地图");
-                    level(arena);
-                    catalog.check(arena);
-                    save(arena);
-                    maps.put(arena.id, arena);
-                    Network.send(player,Map.of("type","saved","arena",arena));
-                    state(player, arena.id, false, "地图已保存");
-                }
-                case "delete" -> {
-                    admin(player);
-                    Model.require(!matches.containsKey(selected), "请先结束对局");
-                    Model.require(maps.containsKey(selected), "地图不存在");
-                    Files.move(folder.resolve("maps").resolve(selected + ".json"),
-                            folder.resolve("maps").resolve(selected + ".json.deleted"),
-                            StandardCopyOption.REPLACE_EXISTING);
-                    maps.remove(selected);
-                    state(player, "", false, "已移到 .deleted 备份");
-                }
-                case "createRoom" -> {
-                    admin(player);
-                    createRoom(selected);
-                    state(player, selected, false, "房间已创建，请先进入房间再选队");
-                }
-                case "selectTeam" -> {
-                    selectTeam(player, num(request, "team", -1));
-                    state(player, member(player).map, false, "阵营已选择");
-                }
-                case "start" -> {
-                    admin(player);
-                    // A new match re-observes every contested surface: TAB may have been restarted
-                    // or reconfigured since the last one, and a stale "yielded" flag would silently
-                    // keep the sidebar off for the whole match.
-                    compat.reset();
-                    Model.require(member(player).map.equals(selected), "请先进入该房间");
-                    Match room = matches.get(selected);
-                    Model.require(room != null && !room.running, "房间不存在或已经开始");
-                    room.running = true;
-                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-                        Member m = members.get(p.getUUID());
-                        if (m != null && m.map.equals(selected)) state(p, selected, false, "对局开始，可以部署");
-                    }
-                    state(player, selected, false, "对局开始，请选择阵营");
-                }
-                case "stop" -> {
-                    admin(player);
-                    finish(selected, "管理员结束对局");
-                    state(player, selected, false, "对局已结束");
-                }
-                case "join" -> {
-                    join(player, selected);
-                    state(player, selected, false, "已进入房间，请选择红蓝方");
-                }
-                case "leave" -> {
-                    leave(player);
-                    state(player, selected, false, "已退出，原背包与位置已恢复");
-                }
-                case "redeploy" -> {
-                    Member member = member(player);
-                    Model.require(member.alive, "已在部署界面");
-                    death(player, null);
-                    state(player, member.map, true, "重新部署会扣除一次阵亡兵力");
-                }
-                case "deploy" -> {
-                    deploy(player, str(request, "kit", ""), str(request, "spawn", ""), str(request, "vehicle", ""),
-                            str(request,"primary",null),str(request,"secondary",null),request);
-                    state(player, member(player).map, false, "已部署");
-                }
-                default -> throw new IllegalArgumentException("未知操作");
+                        this.compat.settings().hideXaeroInMatch = var16;
+                        this.compat.save(BattlefieldOps.LOG);
+                        this.state(var1, var3, false, var16 ? "对局中将隐藏 Xaero 小地图" : "对局中保持 Xaero 小地图显示");
+                     } else {
+                        String var44 = var15.toUpperCase(Locale.ROOT);
+
+                        CompatPolicy.Mode var45;
+                        try {
+                           var45 = CompatPolicy.Mode.valueOf(var44);
+                        } catch (IllegalArgumentException var20) {
+                           throw new IllegalArgumentException("未知的兼容模式：" + var44);
+                        }
+
+                        switch (var41) {
+                           case "sidebar":
+                              this.compat.settings().sidebar = var45;
+                              break;
+                           case "teams":
+                              this.compat.settings().teams = var45;
+                              break;
+                           case "minimap":
+                              this.compat.settings().minimap = var45;
+                              break;
+                           default:
+                              throw new IllegalArgumentException("未知的兼容项：" + var41);
+                        }
+
+                        this.compat.reset();
+                        this.compat.save(BattlefieldOps.LOG);
+                        this.state(var1, var3, false, "兼容设置已更新：" + var41 + " = " + var44);
+                     }
+                     break;
+                  case "compatCorner":
+                     this.admin(var1);
+                     String var24 = Briefing.normaliseCorner(str(var5, "value", ""));
+                     this.compat.settings().minimapCorner = var24;
+                     this.compat.save(BattlefieldOps.LOG);
+                     this.state(var1, var3, false, "小地图位置：" + Briefing.minimapCornerName(var24));
+                     break;
+                  case "compatReset":
+                     this.admin(var1);
+                     this.compat.reset();
+                     this.state(var1, var3, false, "已清除兼容自检结果，下次对局将重新检测");
+                     break;
+                  case "compatSave":
+                     this.admin(var1);
+                     this.compat.save(BattlefieldOps.LOG);
+                     this.state(var1, var3, false, "兼容配置已写入 " + this.folder.resolve("compat.json"));
+                     break;
+                  case "scan":
+                     this.admin(var1);
+                     this.catalog.scan(this.server);
+                     this.armamentCache = null;
+                     this.state(
+                        var1, var3, false, "扫描完成：" + this.catalog.guns.size() + " 把武器，" + this.catalog.vehicles.size() + " 种载具；" + this.catalog.diagnostics
+                     );
+                     break;
+                  case "save":
+                     this.admin(var1);
+                     Model.Arena var23 = (Model.Arena)BattlefieldOps.GSON.fromJson(var5.get("arena"), Model.Arena.class);
+                     var23.validate();
+                     FixedClasses.complete(var23);
+                     EliteRules.complete(var23);
+                     if (var5.has("baseRevision")) {
+                        String var13 = str(var5, "baseId", "");
+                        Model.Arena var14 = this.maps.get(var13);
+                        MapFiles.expect(var14 == null ? "" : BattlefieldOps.GSON.toJson(var14), str(var5, "baseRevision", ""));
+                        Model.require(var23.id.equals(var13) || !this.maps.containsKey(var23.id), "地图 ID 已存在，请换一个 ID");
+                     }
+
+                     Model.require(!this.matches.containsKey(var23.id), "请先结束这张地图的对局");
+                     Model.require(this.maps.containsKey(var23.id) || this.maps.size() < 64, "最多 64 张地图");
+                     this.level(var23);
+                     this.catalog.check(var23);
+                     this.save(var23);
+                     this.maps.put(var23.id, var23);
+                     Network.send(var1, Map.of("type", "saved", "arena", var23));
+                     this.state(var1, var23.id, false, "地图已保存");
+                     break;
+                  case "delete":
+                     this.admin(var1);
+                     Model.require(!this.matches.containsKey(var3), "请先结束对局");
+                     Model.require(this.maps.containsKey(var3), "地图不存在");
+                     Files.move(
+                        this.folder.resolve("maps").resolve(var3 + ".json"),
+                        this.folder.resolve("maps").resolve(var3 + ".json.deleted"),
+                        StandardCopyOption.REPLACE_EXISTING
+                     );
+                     this.maps.remove(var3);
+                     this.state(var1, "", false, "已移到 .deleted 备份");
+                     break;
+                  case "createRoom":
+                     this.createRoom(var3, var1);
+                     this.state(var1, var3, false, "房间已创建，请先进入房间再选队");
+                     break;
+                  case "selectTeam":
+                     this.selectTeam(var1, num(var5, "team", -1));
+                     this.state(var1, this.member(var1).map, false, "阵营已选择");
+                     break;
+                  case "start":
+                     this.requireRoomControl(var1, var3);
+                     Model.require(this.member(var1).map.equals(var3), "请先进入该房间");
+                     this.startRoom(var3);
+                     break;
+                  case "stop":
+                     this.requireRoomControl(var1, var3);
+                     this.finish(var3, "房主或管理员结束对局");
+                     this.state(var1, var3, false, "对局已结束");
+                     break;
+                  case "join":
+                     this.join(var1, var3);
+                     this.state(var1, var3, false, "已进入房间，请选择红机械轴心");
+                     break;
+                  case "leave":
+                     this.leave(var1);
+                     this.state(var1, var3, false, "已退出，原背包与位置已恢复");
+                     break;
+                  case "redeploy":
+                     Engine.Member var12 = this.member(var1);
+                     Model.require(var12.alive, "已在部署界面");
+                     this.death(var1, null);
+                     this.state(var1, var12.map, true, "重新部署会扣除一次阵亡兵力");
+                     break;
+                  case "deploy":
+                     this.deploy(
+                        var1,
+                        str(var5, "kit", ""),
+                        str(var5, "spawn", ""),
+                        str(var5, "vehicle", ""),
+                        str(var5, "primary", null),
+                        str(var5, "secondary", null),
+                        str(var5, "melee", null),
+                        var5
+                     );
+                     this.state(var1, this.member(var1).map, false, "已部署");
+                     break;
+                  default:
+                     throw new IllegalArgumentException("未知操作");
+               }
+            } catch (Exception var21) {
+               BattlefieldOps.LOG.debug("Battlefield request rejected", var21);
+               String var6 = var21.getMessage() == null ? var21.getClass().getSimpleName() : var21.getMessage();
+               if (var4.startsWith("lobby")) {
+                  this.lobby(var1, var4.equals("lobbyReturn"), "操作失败：" + var6);
+               } else {
+                  this.state(var1, var3, false, "操作失败：" + var6);
+               }
             }
-        } catch (Exception ex) {
-            BattlefieldOps.LOG.debug("Battlefield request rejected", ex);
-            String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            state(player, selected, false, "操作失败：" + message);
-        }
-    }
+         }
+      }
+   }
 
-    /** Cached armament description for the whole catalogue; cleared whenever the catalogue is rescanned. */
-    private Map<String, Object> armamentCache;
+   private ServerLevel probeLevel() {
+      ServerLevel var1 = this.server.overworld();
+      if (var1 != null) {
+         return var1;
+      } else {
+         Iterator var2 = this.server.getAllLevels().iterator();
+         return var2.hasNext() ? (ServerLevel)var2.next() : null;
+      }
+   }
 
-    /**
-     * A level to instantiate probe entities in.
-     *
-     * <p>Vehicle data is read from an entity instance, so reading a vehicle's weapon table needs a level
-     * even though nothing is ever spawned into the world. Uses the overworld like the catalogue scanner,
-     * and falls back to any loaded level so a server without one still answers instead of silently
-     * reporting no data.
-     */
-    private ServerLevel probeLevel() {
-        ServerLevel overworld = server.overworld();
-        if (overworld != null) return overworld;
-        var levels = server.getAllLevels().iterator();
-        return levels.hasNext() ? levels.next() : null;
-    }
+   private Map<String, Object> armamentTable() {
+      if (this.armamentCache != null) {
+         return this.armamentCache;
+      } else {
+         LinkedHashMap var1 = new LinkedHashMap();
 
-    /**
-     * Everything the editor needs to configure a vehicle's ammunition: slot count, stations, and the stack
-     * size of every ammunition type.
-     *
-     * <p>Computed once for the whole catalogue and reused. Probing instantiates an entity per vehicle, and
-     * this payload is rebuilt on every page change and every search keystroke, so doing it per request
-     * would multiply an already expensive step for no benefit.
-     */
-    private Map<String, Object> armamentTable() {
-        if (armamentCache != null) return armamentCache;
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (String id : catalog.vehicles) {
-            Map<String, Object> info = armamentInfo(id);
-            if (info != null) out.put(id, info);
-        }
-        armamentCache = out;
-        return out;
-    }
-
-    /**
-     * One vehicle's stations, ammunition and rack size, or {@code null} when its data cannot be read.
-     *
-     * <p>Returning {@code null} rather than an empty object is deliberate: the editor distinguishes
-     * "resource library not scanned" from "this vehicle has no readable weapons", and an empty object
-     * would blur the two into the same useless message.
-     */
-    private Map<String, Object> armamentInfo(String id) {
-        try {
-            EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id));
-            if (type == null) return null;
-            // The overworld, exactly as the catalogue scanner does. Passing a null arena here dereferenced
-            // map.dimension inside level(), threw, and was swallowed — so every vehicle reported "no
-            // weapon-station data" no matter how healthy its data was.
-            ServerLevel level = probeLevel();
-            if (level == null) return null;
-            Entity probe = type.create(level);
-            if (probe == null) return null;
-            try {
-                Map<String, Object> stations = new LinkedHashMap<>();
-                for (var entry : VehicleEquip.stationStacks(probe).entrySet()) {
-                    List<Map<String, Object>> ammo = new ArrayList<>();
-                    for (ItemStack stack : entry.getValue()) {
-                        Map<String, Object> one = new LinkedHashMap<>();
-                        one.put("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-                        one.put("stack", Math.max(1, stack.getMaxStackSize()));
-                        ammo.add(one);
-                    }
-                    if (!ammo.isEmpty()) stations.put(entry.getKey(), ammo);
-                }
-                if (stations.isEmpty()) return null;
-                Map<String, Object> info = new LinkedHashMap<>();
-                info.put("slots", VehicleEquip.containerSize(probe));
-                info.put("stations", stations);
-                return info;
-            } finally {
-                probe.discard();
+         for (String var3 : this.catalog.vehicles) {
+            var var4 = this.armamentInfo(var3);
+            if (var4 != null) {
+               var1.put(var3, var4);
             }
-        } catch (Exception ex) {
-            // Warn, not debug: a vehicle whose data cannot be read shows up in the editor as "no weapon
-            // stations", and without a log line there is nothing to correlate that message with.
-            BattlefieldOps.LOG.warn("Cannot read weapon stations for " + id, ex);
+         }
+
+         this.armamentCache = var1;
+         return var1;
+      }
+   }
+
+   private Map<String, Object> armamentInfo(String var1) {
+      try {
+         EntityType var2 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(var1));
+         if (var2 == null) {
             return null;
-        }
-    }
-
-    private void catalog(ServerPlayer player, JsonObject request) {
-        int page = Math.max(0, num(request, "page", 0));
-        String query = str(request, "query", "").toLowerCase(Locale.ROOT);
-        Model.require(query.length() < 100, "检索词过长");
-        List<Catalog.Entry> all = catalog.entries.stream()
-                .filter(entry -> LibrarySearch.matches(query,entry.id(),entry.name(),LibrarySource.searchable(entry.id(),entry.kind())))
-                .toList();
-        int from = Math.min(all.size(), page * 64);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("type", "catalog");
-        out.put("page", page);
-        out.put("total", all.size());
-        out.put("entries", all.subList(from, Math.min(all.size(), from + 64)));
-        out.put("diagnostics", catalog.diagnostics);
-        // Classification travels with the catalogue so the designer can label a vehicle as ground or
-        // air while authorising it, instead of finding out later that no point can launch it.
-        Map<String, String> types = new LinkedHashMap<>();
-        Map<String, String> classes = new LinkedHashMap<>();
-        for (String id : catalog.vehicles) {
-            String type = catalog.vehicleTypes.get(id);
-            if (type != null) types.put(id, Catalog.vehicleTypeLabel(type) + " / " + type);
-            classes.put(id, String.valueOf(catalog.vehicleClass(id)));
-        }
-        out.put("vehicleTypes", types);
-        out.put("vehicleClasses", classes);
-        // Ammunition each whitelisted-on-the-catalogue vehicle accepts, so the armament editor can offer
-        // real choices instead of asking the operator to type item ids from memory. Bounded by the
-        // catalogue size, and per-vehicle lists are short (a handful of shell types at most).
-        // Per station, not per vehicle: the editor must only offer ammunition a given station can
-        // actually fire, otherwise an operator can assign a shell to a machine-gun slot and the
-        // allocation silently drops it.
-        // Per station: what it accepts and how large a stack of each is, plus the rack's slot count. The
-        // editor needs all three to show a round count and to say whether it physically fits — a round
-        // count alone cannot be checked, because a slot holds a different number of rounds per type.
-        out.put("vehicleArmament", armamentTable());
-        Network.send(player, out);
-    }
-
-
-    private void admin(ServerPlayer player) {
-        Model.require(player.hasPermissions(2), "需要管理员权限（OP 2）");
-    }
-
-    private Member member(ServerPlayer player) {
-        Member member = members.get(player.getUUID());
-        Model.require(member != null, "尚未加入对局");
-        return member;
-    }
-
-    private void save(Model.Arena map) throws IOException {
-        MapFiles.save(folder.resolve("maps"),map.id,BattlefieldOps.GSON.toJson(map));
-    }
-
-    // ------------------------------------------------------------------ lifecycle
-
-    private void createRoom(String id) {
-        Model.Arena original = maps.get(id);
-        Model.require(original != null, "先保存地图");
-        Model.require(!matches.containsKey(id), "该地图已经有一个房间");
-        original.validate();
-        catalog.scan(server);
-        catalog.check(original);
-        for (Match active : matches.values()) {
-            Model.Arena other = active.rules.map;
-            if (other.dimension.equals(original.dimension)) {
-                Model.require(!boxesOverlap(original, other), "与正在运行的地图范围重叠");
-            }
-        }
-        Model.Arena copy = BattlefieldOps.GSON.fromJson(BattlefieldOps.GSON.toJson(original), Model.Arena.class);
-        Match match = new Match(copy);
-        matches.put(id, match);
-        results.remove(id);
-        sidebar(match);
-    }
-
-    private boolean boxesOverlap(Model.Arena a, Model.Arena b) {
-        double ax = a.boundary.stream().mapToDouble(Model.Vec::x).min().orElse(0);
-        double aX = a.boundary.stream().mapToDouble(Model.Vec::x).max().orElse(0);
-        double az = a.boundary.stream().mapToDouble(Model.Vec::z).min().orElse(0);
-        double aZ = a.boundary.stream().mapToDouble(Model.Vec::z).max().orElse(0);
-        double bx = b.boundary.stream().mapToDouble(Model.Vec::x).min().orElse(0);
-        double bX = b.boundary.stream().mapToDouble(Model.Vec::x).max().orElse(0);
-        double bz = b.boundary.stream().mapToDouble(Model.Vec::z).min().orElse(0);
-        double bZ = b.boundary.stream().mapToDouble(Model.Vec::z).max().orElse(0);
-        return ax <= bX && aX >= bx && az <= bZ && aZ >= bz;
-    }
-
-    private void join(ServerPlayer player, String id) throws IOException {
-        Model.require(Network.supported(player), "安装战地风云客户端模组后才能加入对局");
-        Model.require(!members.containsKey(player.getUUID()), "请先退出当前房间");
-        Match room = matches.get(id);
-        Model.require(room != null, "请先创建房间");
-        Model.require(player.isAlive() && !player.isPassenger(), "请存活且离开载具后加入");
-        recover(player);
-        player.closeContainer();
-        backup(player);
-        members.put(player.getUUID(), new Member(id, player.getScoreboardName(), -1));
-        player.getInventory().clearContent();
-        player.setGameMode(GameType.SPECTATOR);
-    }
-
-    private void selectTeam(ServerPlayer player, int team) {
-        Member member = member(player);
-        Match room = matches.get(member.map);
-        Model.require(room != null, "房间已关闭");
-        Model.require(team == 0 || team == 1, "阵营无效");
-        Model.require(!member.alive, "请在部署阶段选择阵营");
-        Model.require(!room.running || member.team < 0 || member.team == team, "对局开始后不能更换阵营");
-        long own = members.values().stream().filter(m -> m != member && m.map.equals(member.map) && m.team == team).count();
-        long other = members.values().stream().filter(m -> m != member && m.map.equals(member.map) && m.team == 1-team).count();
-        Model.require(own <= other || member.team == team, "该阵营人数较多，请加入另一方");
-        Model.Spawn spawn = Tactics.safestSpawn(deploySpawns(room.rules, team), enemiesOf(room.rules, team));
-        Model.require(spawn != null, "该阵营缺少出生点");
-        member.team = team;
-        board.apply(player, member.map, team, room.rules.map.friendlyFire, room.rules.map.hideEnemyNametags);
-        // Put the deploy camera over the team's activity area instead of over their feet: the whole
-        // point of the deploy screen is choosing where to go, and that needs a view of the area, not a
-        // view of the spawn point. The player is a spectator at this stage, so this is only a viewpoint.
-        DeployView.Placement view = deployView(room.rules.map, team);
-        player.teleportTo(level(room.rules.map), view.x(), view.y(), view.z(), view.yaw(), view.pitch());
-        String warning = DeployView.warning(room.rules.map.extent(room.rules.map.viewArea(team))[2], viewDistance());
-        if (warning != null) announce(player, "部署视角", warning);
-    }
-
-    /** The overhead viewpoint for a team's deploy stage. */
-    private DeployView.Placement deployView(Model.Arena map, int team) {
-        double[] extent = map.extent(map.viewArea(team));
-        double centreX = extent[0], centreZ = extent[1], span = extent[2];
-        // Ground height at the centre, falling back to the middle of the allowed height band when the
-        // level is not loaded there — the camera still has to be placed somewhere sane.
-        double groundY = (map.minY + map.maxY) / 2.0;
-        ServerLevel level = level(map);
-        if (level != null && level.hasChunkAt(BlockPos.containing(centreX, map.maxY, centreZ))) {
-            groundY = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
-                    (int) Math.floor(centreX), (int) Math.floor(centreZ));
-        }
-        return DeployView.place(centreX, centreZ, span, groundY, viewDistance());
-    }
-
-    /**
-     * The horizontal view distance the camera may use.
-     *
-     * <p>Read from the server's own setting rather than assumed: a server running a short render
-     * distance cannot show a wide area from above, and the warning message needs the real number.
-     */
-    private int viewDistance() {
-        try {
-            return server.getPlayerList().getViewDistance() * 16;
-        } catch (RuntimeException ex) {
-            return DeployView.DEFAULT_VIEW;
-        }
-    }
-
-    /** Own-team spawns that are legal right now, i.e. inside the current breakthrough stage. */
-    private List<Model.Spawn> legalSpawns(Rules rules, int team) {
-        Model.Arena map = rules.map;
-        // A spawn outside the team's own activity zone is not a legal spawn: choosing it would deposit
-        // the player outside their area, and the very next tick would start the boundary countdown.
-        return map.spawns.stream()
-                .filter(s -> s.team == team && (!rules.isBreakthrough() || s.sector == rules.stage))
-                .filter(s -> map.inZone(team, s.x, s.z))
-                .toList();
-    }
-
-    /** Every deploy site the team may use right now: spawns plus the capture points it holds. */
-    private List<Model.Spawn> deploySpawns(Rules rules, int team) {
-        return Deploy.sites(rules.map, team, rules.stage, rules.isBreakthrough(), Deploy.owners(rules))
-                .stream().map(site -> site.asSpawn(team)).toList();
-    }
-
-    /**
-     * Services supply pads: ammunition, battery and hull health for vehicles, health for players.
-     *
-     * <p>Runs once a second with the rest of the match tick. Restocking continuously from a pad would
-     * make damage pointless while a vehicle sits in one, which is why this restores to the deployed
-     * loadout rather than inventing more — the pad is a place to re-arm, not a place to become
-     * invulnerable. Health is the exception the operator chooses to enable, and it is off unless the
-     * pad says so.
-     *
-     * <p>Players are serviced whether or not they are in a vehicle, because a dismounted crew that has
-     * to walk back to base for a bandage is not what "supply point" was asked for.
-     */
-    /**
-     * Ages out expired manual marks.
-     *
-     * <p>There is deliberately no automatic team-wide visibility here. A contact one soldier can see does not
-     * appear on a teammate's map by itself — the teammate has to be told, and the mark key is how they tell.
-     * Without that, sharing costs nothing and the key would be pointless.
-     */
-    private void refreshMarks(Match match) {
-        if (match == null) return;
-        long now = System.currentTimeMillis();
-        match.marks.removeIf(mark -> mark == null || !mark.active(now));
-        while (match.marks.size() > Spotting.MAX_MARKS * 2) match.marks.removeFirst();
-    }
-
-    /**
-     * The map id a match belongs to.
-     *
-     * <p>Read from the arena the match holds rather than stored twice: a match and its map cannot then
-     * disagree about which map is being played.
-     */
-    private static String whereIs(Match match) {
-        return match == null || match.rules == null || match.rules.map == null ? "" : match.rules.map.id;
-    }
-
-    /**
-     * The map's armament limits for a live vehicle entity.
-     *
-     * <p>Resolved through the entity's registry id rather than remembered at spawn time: a hull can
-     * outlive the configuration that created it (the operator saves a new draft mid-match), and reading
-     * the id back keeps deployment and resupply consulting the same table.
-     */
-    private static VehicleArmament armamentFor(Model.Arena map, Entity vehicle) {
-        if (map == null || vehicle == null) return new VehicleArmament();
-        String id = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
-                .getKey(vehicle.getType()).toString();
-        return map.armament(id);
-    }
-
-    private void updateSupply(Model.Arena map, List<ServerPlayer> players) {        if (map.supplyPoints().isEmpty()) return;
-        for (ServerPlayer player : players) {
-            Member member = members.get(player.getUUID());
-            if (member == null || member.team < 0 || !member.alive || !player.isAlive()) continue;
-            VehicleSupply.Supply pad = map.supplyAt(member.team, player.getX(), player.getY(), player.getZ());
-            if (pad == null) continue;
-            Entity riding = player.getVehicle();
-            if (riding != null && vehicles.contains(riding.getUUID())) {
-                // While riding, the hull is what needs servicing; the driver takes no damage anyway.
-                // The map's own armament limits apply here too: a pad must not be able to load
-                // ammunition the operator restricted away, or it becomes a way around the restriction.
-                if (VehicleEquip.resupply(riding, pad, armamentFor(map, riding))) {
-                    player.displayClientMessage(Component.literal("§b补给点 §f已补充 " + pad.id()), true);
-                }
-            } else if (VehicleEquip.resupplyPlayer(player, pad)) {
-                player.displayClientMessage(Component.literal("§b补给点 §f已恢复生命 " + pad.id()), true);
-            }
-        }
-    }
-
-    /**
-     * Removes hulls that nobody is using and that no living player of that team could return to.
-     *
-     * <p>The per-match vehicle cap counts every hull in the world, so a vehicle whose crew died and
-     * respawned at base would keep its slot for the rest of the match. On a map with a limit of six that
-     * is the entire allowance gone after six deaths, and the symptom is "vehicles stopped working"
-     * rather than "you left a tank in a field".
-     *
-     * <p>Deliberately conservative: an empty hull is only removed when it also has no living member of
-     * its own team within {@link #VEHICLE_ORPHAN_RANGE} blocks. A tank parked next to a firefight is a
-     * usable asset and stays; one abandoned on the far side of the map after its driver respawned is
-     * just a used-up slot. Crew members who dismount and walk away keep their vehicle as long as they
-     * stay nearby, which is the normal case of parking and coming back.
-     */
-    private void reapEmptyVehicles(Match match) {
-        if (match.vehicles.isEmpty()) return;
-        for (UUID uuid : new ArrayList<>(match.vehicles)) {
-            Entity vehicle = findEntity(uuid);
-            if (vehicle == null || vehicle.isRemoved()) {
-                match.vehicles.remove(uuid);
-                match.vehicleTeams.remove(uuid);
-                vehicles.remove(uuid);
-                continue;
-            }
-            if (!vehicle.getPassengers().isEmpty()) continue;
-            int owner = match.vehicleTeams.getOrDefault(uuid, -1);
-            if (owner < 0) continue;
-            double nearest = Double.MAX_VALUE;
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                Member member = members.get(player.getUUID());
-                if (member == null || member.team != owner || !member.alive) continue;
-                nearest = Math.min(nearest, Math.sqrt(player.distanceToSqr(vehicle)));
-            }
-            if (!VehicleDeploy.orphaned(vehicle.getPassengers().size(), nearest, VEHICLE_ORPHAN_RANGE)) {
-                continue;
-            }
-            vehicle.discard();
-            match.vehicles.remove(uuid);
-            match.vehicleTeams.remove(uuid);
-            vehicles.remove(uuid);
-        }
-    }
-
-    /** Living enemy positions for the given team, used for spawn selection and glow checks. */
-    private List<Tactics.At> enemiesOf(Rules rules, int team) {
-        List<Tactics.At> positions = new ArrayList<>();
-        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            Member mate = members.get(other.getUUID());
-            if (mate == null || mate.team == team || !mate.alive) continue;
-            if (!mate.map.equals(rules.map.id)) continue;
-            positions.add(new Tactics.At(other.getX(), other.getY(), other.getZ()));
-        }
-        return positions;
-    }
-
-    private void backup(ServerPlayer player) throws IOException {
-        CompoundTag tag = new CompoundTag();
-        tag.put("inventory", player.getInventory().save(new ListTag()));
-        // Accessories live outside the vanilla inventory, so they need saving separately. Without this the
-        // kit's accessories stayed equipped after leaving a match: the player kept them for free, and the
-        // backup no longer described what they actually owned.
-        ListTag curios = CuriosSupport.save(player);
-        if (curios != null) tag.put("curios", curios);
-        tag.putString("dimension", player.level().dimension().location().toString());
-        tag.putDouble("x", player.getX());
-        tag.putDouble("y", player.getY());
-        tag.putDouble("z", player.getZ());
-        tag.putFloat("yaw", player.getYRot());
-        tag.putFloat("pitch", player.getXRot());
-        tag.putInt("mode", player.gameMode.getGameModeForPlayer().getId());
-        tag.putFloat("health", player.getHealth());
-        tag.putInt("food", player.getFoodData().getFoodLevel());
-        tag.putFloat("saturation", player.getFoodData().getSaturationLevel());
-        Path file = folder.resolve("players").resolve(player.getUUID() + ".nbt");
-        Model.require(!Files.exists(file), "尚有未恢复的背包备份，请先联系管理员处理");
-        Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-        NbtIo.writeCompressed(tag, tmp);
-        Files.move(tmp, file);
-    }
-
-    /** Restores a backed-up inventory, or does nothing when the player has no pending backup. */
-    public void recover(ServerPlayer player) {
-        if (members.containsKey(player.getUUID())) return;
-        Path file = folder.resolve("players").resolve(player.getUUID() + ".nbt");
-        if (!Files.exists(file)) return;
-        try {
-            CompoundTag tag = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
-            ServerLevel level = server.getLevel(
-                    ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(tag.getString("dimension"))));
-            Model.require(level != null, "原维度不存在，备份已保留等待恢复");
-            player.closeContainer();
-            player.stopRiding();
-            player.getInventory().clearContent();
-            player.getInventory().load(tag.getList("inventory", Tag.TAG_COMPOUND));
-            // Clear first, then restore: whatever is equipped now was issued by the match, and an old
-            // backup written before accessories were supported must not leave them behind either.
-            CuriosSupport.clear(player);
-            if (tag.contains("curios")) {
-                CuriosSupport.load(player, tag.getList("curios", Tag.TAG_COMPOUND));
-            }
-            player.setGameMode(GameType.byId(tag.getInt("mode")));
-            player.teleportTo(level, tag.getDouble("x"), tag.getDouble("y"), tag.getDouble("z"),
-                    tag.getFloat("yaw"), tag.getFloat("pitch"));
-            player.setHealth(Math.max(1, Math.min(player.getMaxHealth(), tag.getFloat("health"))));
-            player.getFoodData().setFoodLevel(tag.getInt("food"));
-            player.getFoodData().setSaturation(tag.getFloat("saturation"));
-            player.inventoryMenu.broadcastChanges();
-            Files.delete(file);
-        } catch (Exception ex) {
-            BattlefieldOps.LOG.error("Cannot restore player {}", player.getUUID(), ex);
-            player.sendSystemMessage(Component.literal("战地背包恢复失败，备份已保留：" + ex.getMessage()));
-        }
-    }
-
-    public void leave(ServerPlayer player) {
-        Member member = members.remove(player.getUUID());
-        if (member != null) {
-            downPose(player, false);
-            clearReviver(player.getUUID());
-            player.stopRiding();
-            board.clearPlayer(player);
-            clearGlow(player, member);
-            recover(player);
-            Match match = matches.get(member.map);
-            if (match != null) sidebar(match);
-        }
-        requests.remove(player.getUUID());
-        polls.remove(player.getUUID());
-    }
-
-    private void exitAtCurrentPosition(ServerPlayer player) {
-        ServerLevel current = player.serverLevel();
-        double x = player.getX(), y = player.getY(), z = player.getZ();
-        float yaw = player.getYRot(), pitch = player.getXRot();
-        leave(player);
-        player.teleportTo(current, x, y, z, yaw, pitch);
-        player.fallDistance = 0;
-    }
-
-    private void teleport(ServerPlayer player, ServerLevel level, Model.Spawn spawn) {
-        player.teleportTo(level, spawn.x, spawn.y, spawn.z, spawn.yaw, 0);
-        player.setDeltaMovement(Vec3.ZERO);
-        player.fallDistance = 0;
-    }
-
-    // ------------------------------------------------------------------ deployment
-
-    static Map<String,String> selections(JsonObject request,String key){
-        Map<String,String> out=new LinkedHashMap<>();
-        if(!request.has(key))return out;
-        for(var entry:request.getAsJsonObject(key).entrySet()){
-            Model.require(out.size()<32&&entry.getKey().length()<128,"改装参数过多或过长");
-            String value=entry.getValue().getAsString();Model.require(value.length()<160,"配件 ID 过长");out.put(entry.getKey(),value);
-        }
-        return out;
-    }
-    private void fittings(ServerPlayer player,JsonObject request)throws Exception{
-        Member member=member(player);Model.Arena map=maps.get(member.map);
-        Model.require(map!=null,"请先进入房间");
-        String id=str(request,"id",""),kind=str(request,"kind","");
-        List<Fittings.Group> groups;
-        if(kind.equals("gun")){
-            Model.require(map.kits.stream().anyMatch(k->k.options(true).contains(id)||k.options(false).contains(id)),"武器未获本图授权");
-            groups=Fittings.gunOptions(catalog.gun(player,id,0).getFirst());
-        }else{
-            Model.require(kind.equals("vehicle")&&map.vehicles.contains(id),"载具未获本图授权");
-            EntityType<?> type=BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(id));
-            Entity sample=type.create(level(map));Model.require(sample!=null&&catalog.isVehicleEntity(sample),"载具不可用");
-            groups=Fittings.vehicleOptions(sample);
-        }
-        Network.send(player,Map.of("type","fittings","id",id,"kind",kind,"groups",groups));
-    }
-
-    private void deploy(ServerPlayer player, String kitId, String spawnId, String vehicle, String primary, String secondary, JsonObject deployment) throws Exception {
-        Member member = member(player);
-        Match match = matches.get(member.map);
-        Model.require(match != null && match.running && member.team >= 0, "请等待开局并选择阵营");
-        Model.Arena map = match.rules.map;
-        Model.require(!member.alive, "只能在部署阶段切换配装");
-        Model.require(!member.downed, "倒地状态下无法部署，等待队友救援或出血阵亡");
-        Model.require(ticks >= member.readyAt, "重生倒计时尚未结束");
-
-        Model.Kit kit = map.kits.stream()
-                .filter(k -> k.id.equals(kitId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("配装未获地图授权：" + kitId));
-
-        // Deploy sites are spawn points plus capture points this team holds. Computed once, from the
-        // same rule the client draws with, so the two cannot disagree about what is legal.
-        List<Deploy.Site> sites = Deploy.sites(map, member.team, match.rules.stage,
-                match.rules.isBreakthrough(), Deploy.owners(match.rules));
-        Model.require(!sites.isEmpty(), "本方当前没有可用的部署点");
-        Deploy.Site requested = sites.stream()
-                .filter(s -> s.id().equals(spawnId))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("部署点未获授权或阶段不符：" + spawnId));
-        Model.Spawn requestedSpawn = requested.asSpawn(member.team);
-
-        // Validate the vehicle *before* choosing a site, because the site fallback below must be
-        // restricted to sites that can actually launch it. Everything here is a pure check: nothing is
-        // written, so a rejected request leaves the player exactly as they were.
-        char vehicleClass = 0;
-        EntityType<?> vehicleType = null;
-        if (!vehicle.isEmpty()) {
-            Model.require(map.vehicles.contains(vehicle) && catalog.isVehicle(vehicle), "载具未获地图授权：" + vehicle);
-            Model.require(catalog.deployableVehicle(vehicle), "该载具不能用于部署：" + vehicle);
-            // Vehicles are rationed by cooldown and by the per-match cap, not by personal score. Score
-            // is now purely a record of what the player did, so spending it on a hull would also make
-            // the scoreboard read as a wallet — which is exactly the confusion this removes.
-            Model.require(ticks >= member.vehicleAt,
-                    "载具冷却尚未结束（" + (member.vehicleAt - ticks + 19) / 20 + " 秒）");
-            match.vehicles.removeIf(uuid -> findEntity(uuid) == null);
-            Model.require(teamVehicles(match,member.team) < map.vehicleLimitFor(member.team), "本方载具名额已满");
-            vehicleClass = catalog.vehicleClass(vehicle);
-            vehicleType = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(vehicle));
-            Model.require(vehicleType != null, "载具实体未注册：" + vehicle);
-            // The requested site must be able to launch this class. Checked up front so the player gets
-            // a precise message instead of being silently moved somewhere that cannot launch it.
-            Model.require(requested.allows(vehicleClass), vehicleClass == 'A'
-                    ? requested.id() + " 不是飞机点位，无法放飞航空器"
-                    : requested.id() + " 不提供载具刷新");
-        }
-
-        // A site camped by the enemy is worse than useless, so fall back to the safest legal one.
-        // The choice is still made here: the client cannot ask for an unauthorised site.
-        //
-        // The candidate list must be restricted to sites that can launch the requested vehicle. Without
-        // that restriction, Tactics.chooseSpawn looks at *every* site when the requested one is camped,
-        // and relocates the player to one that launches nothing but infantry. The vehicle check then
-        // rejected the whole deployment — so an enemy standing 16 blocks from the airfield turned
-        // "bring a jet" into "you cannot deploy at all". Infantry keep the full list.
-        List<Model.Spawn> candidateSpawns = sites.stream().map(s -> s.asSpawn(member.team)).toList();
-        if (!vehicle.isEmpty()) {
-            List<Model.Spawn> launchable = Deploy.sitesFor(sites, vehicleClass).stream()
-                    .map(s -> s.asSpawn(member.team)).toList();
-            if (!launchable.isEmpty()) candidateSpawns = launchable;
-        }
-        List<Tactics.At> enemies = enemiesOf(match.rules, member.team);
-        Model.Spawn chosen = Tactics.chooseSpawn(requestedSpawn, candidateSpawns, enemies);
-        Deploy.Site spawn = sites.stream().filter(s -> s.id().equals(chosen.id)).findFirst().orElse(requested);
-        if (!spawn.id().equals(requested.id())) {
-            announce(player, "部署点被敌人压制", "已改到 " + spawn.id());
-        }
-        // A safety net rather than a possibility: candidateSpawns only contains launchable sites, so
-        // this can fire only if the map changed between the two checks. Re-checking is cheap and turns
-        // a silent "deployed without the vehicle" into a clear refusal. Routed through VehicleDeploy so
-        // the rule has one home and is covered by VehicleDeploySim.
-        if (vehicleType != null) {
-            VehicleDeploy.Gate gate = VehicleDeploy.Gate.of(
-                    spawn.allows(vehicleClass), teamVehicles(match,member.team), map.vehicleLimitFor(member.team), true);
-            Model.require(gate.success(), gate.blocker());
-        }
-
-        List<ItemStack> mainItems=catalog.gun(player,kit.select(true,primary),kit.ammoStacks);
-        List<ItemStack> sideItems=catalog.gun(player,kit.select(false,secondary),kit.ammoStacks);
-        Map<String,String> mainFittings=selections(deployment,"primaryFittings"),sideFittings=selections(deployment,"secondaryFittings"),vehicleFittings=selections(deployment,"vehicleFittings");
-        if(!mainItems.isEmpty())Fittings.applyGun(mainItems.getFirst(),mainFittings,player.registryAccess());
-        else Model.require(mainFittings.isEmpty(),"没有主武器可改装");
-        if(!sideItems.isEmpty())Fittings.applyGun(sideItems.getFirst(),sideFittings,player.registryAccess());
-        else Model.require(sideFittings.isEmpty(),"没有副武器可改装");
-        if(vehicleType!=null){
-            Entity sample=vehicleType.create(level(map));Model.require(sample!=null,"载具数据不可用");
-            List<Fittings.Group> groups=Fittings.vehicleOptions(sample);
-            Fittings.validate(groups,vehicleFittings);
-            // The operator's allow-list is enforced here, not only where the hull is filled in. Filling
-            // a tank in around a restricted round would still let a client send that station index, and
-            // the vehicle would switch to ammunition the map forbade. Rejecting the request is the only
-            // point at which the restriction is actually authoritative.
-            VehicleArmament armament=armamentFor(map,sample);
-            Fittings.restrict(groups,vehicleFittings,armament);
-        }
-        else Model.require(vehicleFittings.isEmpty(),"未选择载具");
-        List<ItemStack> items=new ArrayList<>(mainItems);items.addAll(sideItems);
-        // Kit gear is validated and appended before the capacity check so that a kit overflowing the
-        // inventory is refused outright rather than partially delivered.
-        List<ItemStack> gear=KitItems.build(kit, player);
-        items.addAll(gear);
-        Model.require(items.size() <= 35, "配装超过背包容量");
-
-        ServerLevel level = level(map);
-        level.getChunkAt(BlockPos.containing(spawn.x(), spawn.y(), spawn.z()));
-        Model.Spawn target = spawn.asSpawn(member.team);
-        Model.require(level.noCollision(player, player.getBoundingBox()
-                        .move(target.x - player.getX(), target.y - player.getY(), target.z - player.getZ())),
-                "部署点空间被方块占用，请调整位置");
-
-        player.closeContainer();
-        player.getInventory().clearContent();
-        for (ItemStack stack : items) player.getInventory().add(stack);
-        // Armour and accessories are worn, not handed over: a chestplate left in the inventory means the
-        // player deploys unarmoured, which defeats configuring armour at all. Done after the inventory is
-        // cleared so a previous deployment's armour cannot survive into this one. Accessories live outside
-        // the inventory and therefore need clearing explicitly.
-        CuriosSupport.clear(player);
-        KitItems.wear(kit, player);
-        player.getInventory().add(new ItemStack(Items.COOKED_BEEF, 16));
-        teleport(player, level, target);
-        player.setGameMode(GameType.ADVENTURE);
-        player.setHealth(player.getMaxHealth());
-        player.clearFire();
-        player.getFoodData().setFoodLevel(20);
-        player.getFoodData().setSaturation(5);
-        member.alive = true;
-        member.downed = false;
-        downPose(player, false);
-        member.outside = 0;
-        member.warnedSecond = -1;
-        member.killCredited = false;
-        member.reviving = null;
-        clearGlow(player, member);
-        player.inventoryMenu.broadcastChanges();
-        player.setGlowingTag(false);
-
-        if (vehicleType != null) {
-            String result = spawnVehicle(player, level, map, match, member, vehicleType, spawn,vehicleFittings);
-            if (result != null) {
-                // The player has already been teleported, re-equipped and marked alive at this point, so
-                // the deployment cannot simply be undone. Returning them to the deploy screen is the
-                // honest outcome: nothing was deducted, so re-deploying is free apart from the wait they
-                // would have had anyway. This used to leave them standing at the site with the message
-                // "未扣分", which reads as "you have your vehicle" to someone who does not read closely.
-                member.alive = false;
-                member.readyAt = ticks;
-                player.stopRiding();
-                state(player, member.map, true, result);
-                player.sendSystemMessage(Component.literal("§e" + result + " —— 已返回部署界面，未扣任何费用"));
-                throw new IllegalArgumentException(result);
-            }
-        }
-        announce(player, "已部署 · " + spawn.id(), Board.label(member.team) + " · " + kit.id);
-    }
-
-    /**
-     * Creates the vehicle <em>at the spawn point, with the player already inside</em>.
-     *
-     * <p>This replaces the previous behaviour, which put the player on the spawn and the hull 8 blocks
-     * to the east: on a runway that offset put the aircraft on its side, and on uneven ground it put
-     * the hull inside terrain. Seating the driver first also means the vehicle cannot be left ownerless
-     * if the player disconnects during the same tick.
-     *
-     * @return a warning to show the player, or {@code null} on success
-     */
-    private String spawnVehicle(ServerPlayer player, ServerLevel level, Model.Arena map, Match match,
-                                Member member, EntityType<?> vehicleType, Deploy.Site site,Map<String,String> fittings) {
-        Entity vehicle;
-        try {
-            vehicle = vehicleType.create(level);
-        } catch (Exception ex) {
-            return "载具生成失败，未扣分";
-        }
-        if (vehicle == null || !catalog.isVehicleEntity(vehicle)) return "载具生成失败，未扣分";
-
-        // Place the hull exactly on the site, facing its yaw, then verify it fits.
-        vehicle.moveTo(site.x(), site.y(), site.z(), site.yaw(), 0);
-        if (!Model.contains(map.boundary, vehicle.getX(), vehicle.getZ())) {
-            return "载具刷新点在地图边界外";
-        }
-        // Block collision only. Checking *entity* collisions here would always fail: the deploying
-        // player is standing on this exact spot, having been teleported there a few lines earlier, so
-        // the hull would collide with its own driver and every single deployment would be refused with
-        // "空间不足". Whether the seat accepts them is decided by the seat itself, below.
-        if (!level.noBlockCollision(vehicle, vehicle.getBoundingBox())) {
-            return "刷新点空间不足以放下载具";
-        }
-
-        try{Fittings.applyVehicle(vehicle,fittings);}catch(ReflectiveOperationException|IllegalArgumentException ex){vehicle.discard();return "载具弹种应用失败："+ex.getMessage();}
-        // Operator-configured attachments, applied after the ammunition choice so a station's allowed
-        // ammunition list has already been honoured. A failure here is logged and ignored rather than
-        // costing the player their vehicle: an attachment index that this weapon does not define is a
-        // configuration mistake, not a reason to refuse the deployment.
-        VehicleArmament armament = armamentFor(map, vehicle);
-        try {
-            Fittings.applyVehicleAttachments(vehicle, armament);
-        } catch (ReflectiveOperationException | IllegalArgumentException ex) {
-            BattlefieldOps.LOG.warn("Cannot apply configured vehicle attachments", ex);
-        }
-        vehicle.addTag("bfops_vehicle");
-        UUID uuid = vehicle.getUUID();
-        vehicles.add(uuid);
-        match.vehicles.add(uuid);
-        match.vehicleTeams.put(uuid, member.team);
-        if (!level.addFreshEntity(vehicle)) {
-            vehicles.remove(uuid);
-            match.vehicles.remove(uuid);
-            match.vehicleTeams.remove(uuid);
-            return "载具生成失败，未扣分";
-        }
-        // Fill the hull in *before* seating: the seat's own validation (some vehicles refuse a driver
-        // until they are powered) is allowed to look at a working vehicle, not an empty shell.
-        // A hull from EntityType#create has no rounds and no charge by default. The vehicle type is read
-        // by VehicleEquip from the addon's own table, so the loadout depends on one source rather than
-        // on the catalogue's copy of the same field.
-        String equipSummary=VehicleEquip.equip(vehicle, VehicleEquip.kindOf(vehicle), armament);
-        player.sendSystemMessage(Component.literal("载具配装："+equipSummary));
-
-        // Seat the driver. If the seat refuses them the vehicle is discarded rather than left behind:
-        // an unoccupied hull would still count against the per-match cap, so a player who hit this
-        // repeatedly would quietly ratchet the team's allowance down to zero while being told that
-        // nothing had happened. Nothing was deducted, so discarding the hull costs them only the wait,
-        // which is also not charged in this branch.
-        if (!player.startRiding(vehicle, true)) {
-            vehicle.discard();
-            vehicles.remove(uuid);
-            match.vehicles.remove(uuid);
-            match.vehicleTeams.remove(uuid);
-            return "未能坐进载具，载具已回收，未扣冷却";
-        }
-        // Only the cooldown is charged, and only on success. Nothing is deducted from the player.
-        member.vehicleAt = ticks + map.vehicleCooldown * 20L;
-        return null;
-    }
-
-    private int teamVehicles(Match match,int team){
-        return (int)match.vehicles.stream().filter(id->match.vehicleTeams.getOrDefault(id,-1)==team).filter(id->{Entity e=findEntity(id);return e!=null&&e.isAlive();}).count();
-    }
-
-    private Entity findEntity(UUID id) {
-        for (ServerLevel level : server.getAllLevels()) {
-            Entity entity = level.getEntity(id);
-            if (entity != null) return entity;
-        }
-        return null;
-    }
-
-    // ------------------------------------------------------------------ combat
-
-    /** Blocks friendly fire, cross-match fire and hits on players who are not deployed yet. */
-    public boolean blockDamage(ServerPlayer victim, Entity attacker) {
-        Member target = members.get(victim.getUUID());
-        if (target != null && !target.alive) return true;
-        // A downed player is out of the fight; letting them be shot again would just be a slower bleed-out.
-        if (target != null && target.downed) return true;
-        if (attacker instanceof ServerPlayer shooter) {
-            Member source = members.get(shooter.getUUID());
-            if ((target == null) != (source == null)) return true;
-            if (target != null && source != null) {
-                if (!target.map.equals(source.map) || !source.alive) return true;
-                Match match = matches.get(target.map);
-                return match == null || (target.team == source.team && !match.rules.map.friendlyFire);
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Advances every downed player: bleed-out, or a revive being held by a nearby teammate.
-     *
-     * <p>Runs every tick rather than once a second, because the revive bar is a sub-second interaction and a
-     * one-second granularity would make a four-second revive feel arbitrary.
-     */
-    private void tickDowned() {
-        for (ServerPlayer patient : new ArrayList<>(server.getPlayerList().getPlayers())) {
-            Member member = members.get(patient.getUUID());
-            if (member == null || !member.downed) continue;
-            Match match = matches.get(member.map);
-            if (match == null) continue;
-            int required = Medic.reviveTicks(match.rules.map.reviveSeconds);
-
-            ServerPlayer helper = null;
-            for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-                if (other == patient) continue;
-                Member otherMember = members.get(other.getUUID());
-                if (otherMember == null || !otherMember.alive || otherMember.downed) continue;
-                if (!otherMember.map.equals(member.map) || otherMember.team != member.team) continue;
-                // Must have actually started this revive and still be standing next to the patient.
-                if (!patient.getUUID().equals(otherMember.reviving)) continue;
-                if (!Medic.continuingRescue(ticks, otherMember.reviveHeldAt, canRescue(other, patient))) { otherMember.reviving = null; continue; }
-                helper = other;
-                break;
-            }
-            // Re-applied every tick: vanilla derives the pose from movement and would stand them up again.
-            downPose(patient, true);
-            member.reviveProgress = Medic.progress(member.reviveProgress, helper != null, required);
-            if (member.reviveProgress >= required) {
-                revive(patient, member, helper);
-                continue;
-            }
-            if (Medic.expired(member.bleedOutAt, ticks)) {
-                ServerPlayer killer = member.downedBy == null ? null
-                        : server.getPlayerList().getPlayer(member.downedBy);
-                member.downed = false;
-                member.reviveProgress = 0;
-                clearReviver(patient.getUUID());
-                downPose(patient, false);
-                death(patient, killer);
-            }
-        }
-    }
-
-    /**
-     * Turns a lethal hit into a downed state, if this map uses one.
-     *
-     * @return true when the hit was converted, meaning the caller must cancel the damage
-     */
-    public boolean tryDown(ServerPlayer victim, ServerPlayer attacker, float damage) {
-        Member member = members.get(victim.getUUID());
-        if (member == null || !member.alive || member.downed) return false;
-        // Bots die outright rather than going down: a downed bot has nobody to revive it and would
-        // otherwise lie there forever.
-        if (member.bot) return false;
-        Match match = matches.get(member.map);
-        if (match == null || !match.rules.map.downEnabled) return false;
-        if (!victim.isAlive() || victim.getHealth() - damage > 0) return false;
-        // Being downed inside a moving vehicle makes no sense and would strand them: leave those deaths alone.
-        if (victim.getVehicle() != null) return false;
-
-        Member shooter = attacker == null ? null : members.get(attacker.getUUID());
-        member.downed = true;
-        member.bleedOutAt = ticks + Medic.bleedOutTicks(match.rules.map.downSeconds);
-        member.reviveProgress = 0;
-        member.reviving = null;
-        member.downedByName = shooter == null ? "" : shooter.name;
-        member.downedBy = shooter == null ? null : attacker.getUUID();
-        victim.setHealth(1);
-        // Downed means prone and crawling, and nothing else. No blindness, no weakness: the player keeps their
-        // view and their gun; crawling uses an owned speed modifier instead of potion effects.
-        // A knockdown is a kill: the score, streak, headshot, assist and revenge all settle now. If the
-        // victim is later revived, that only decides whether the body gets back up — the kill stays credited.
-        if (member.claimKill()) creditKill(victim, attacker);
-        downPose(victim, true);
-        victim.displayClientMessage(Component.literal("§c你倒下了！§f等待队友救援，"
-                + match.rules.map.downSeconds + " 秒后出血阵亡"), true);
-        if (attacker != null) {
-            attacker.displayClientMessage(Component.literal("§e" + member.name
-                    + " 被你击倒（可被救起）"), true);
-        }
-        for (ServerPlayer mate : server.getPlayerList().getPlayers()) {
-            Member other = members.get(mate.getUUID());
-            if (other == null || other.team != member.team || other == member) continue;
-            if (!other.map.equals(member.map) || !other.alive) continue;
-            mate.displayClientMessage(Component.literal("§e队友 §f" + member.name
-                    + " §e倒地，空手右键救援"), false);
-        }
-        state(victim, member.map, false, "");
-        return true;
-    }
-
-    /**
-     * Applies or removes the prone crawl.
-     *
-     * <p>The pose has to be re-applied every tick: vanilla recomputes the pose from movement each tick and will
-     * otherwise stand the player back up, which makes a downed player look untouched.
-     */
-    private static final ResourceLocation CRAWL_SPEED = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "downed_crawl");
-    private static void downPose(ServerPlayer player, boolean downed) {
-        if (player == null) return;
-        var speed = player.getAttribute(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED);
-        if (speed != null) {
-            if (downed && !speed.hasModifier(CRAWL_SPEED)) speed.addTransientModifier(
-                    new net.minecraft.world.entity.ai.attributes.AttributeModifier(CRAWL_SPEED, -0.75,
-                            net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL));
-            if (!downed) speed.removeModifier(CRAWL_SPEED);
-        }
-        CrawlPose.apply(player, downed);
-    }
-
-    private static boolean canRescue(ServerPlayer helper, ServerPlayer patient) {
-        if (!helper.getMainHandItem().isEmpty() || helper.level() != patient.level()
-                || helper.distanceToSqr(patient) > 3.5 * 3.5 || !helper.hasLineOfSight(patient)) return false;
-        Vec3 eye = helper.getEyePosition();
-        return patient.getBoundingBox().inflate(0.15).clip(eye, eye.add(helper.getLookAngle().scale(3.5))).isPresent();
-    }
-
-    /**
-     * Starts a revive: an empty-handed teammate right-clicks a downed player.
-     *
-     * <p>The click only begins the channel — completing it still requires the helper to stay within reach
-     * for the map's configured seconds. Validated server-side because the client only signals intent, and
-     * a client-supplied target would otherwise let anyone "revive" an enemy or a player across the map.
-     *
-     * @return true when the interaction was consumed as a revive
-     */
-    public boolean reviveStart(ServerPlayer helper, ServerPlayer target) {
-        Member helperMember = members.get(helper.getUUID());
-        Member targetMember = members.get(target.getUUID());
-        if (helperMember == null || targetMember == null) return false;
-        if (!helperMember.alive || helperMember.downed) return false;
-        if (!targetMember.downed) return false;
-        if (!helperMember.map.equals(targetMember.map) || helperMember.team != targetMember.team) return false;
-        // Empty hand only: the player must put their weapon away to help, so reviving is a deliberate choice.
-        if (!canRescue(helper, target)) return false;
-        helperMember.reviving = target.getUUID();
-        helperMember.reviveHeldAt = ticks;
-        helper.displayClientMessage(Component.literal("§b救援 " + targetMember.name + " "
-                + (int)(100 * Medic.fraction(targetMember.reviveProgress, Medic.reviveTicks(matches.get(targetMember.map).rules.map.reviveSeconds)))
-                + "% · 保持空手并按住右键"), true);
-        return true;
-    }
-
-    /** Clears anyone currently reviving the given downed player. */
-    private void clearReviver(java.util.UUID patientId) {
-        for (Member member : members.values()) {
-            if (patientId.equals(member.reviving)) member.reviving = null;
-        }
-    }
-
-    /** Brings a downed player back, and tells both sides. */
-    private void revive(ServerPlayer patient, Member member, ServerPlayer helper) {
-        Match match = matches.get(member.map);
-        member.downed = false;
-        member.reviveProgress = 0;
-        member.bleedOutAt = 0;
-        member.killCredited = false;
-        clearReviver(patient.getUUID());
-        downPose(patient, false);
-        float restored = Medic.revivedHealth(
-                match == null ? 0 : match.rules.map.reviveHealth, patient.getMaxHealth());
-        patient.setHealth(restored);
-        patient.displayClientMessage(Component.literal("§a你被救起了"), true);
-        if (helper != null) {
-            Member helperMember = members.get(helper.getUUID());
-            if (helperMember != null && match != null) {
-                helperMember.score += match.rules.map.assistScore;
-                helperMember.credits += match.rules.map.assistScore;
-            }
-            helper.displayClientMessage(Component.literal("§a已救起 §f" + member.name), true);
-            award(helper, "救援", match == null ? 0 : match.rules.map.assistScore,
-                    member.name, "assist");
-        }
-        state(patient, member.map, false, "");
-    }
-
-    public void death(ServerPlayer player, ServerPlayer killer) {
-        Member member = members.get(player.getUUID());
-        if (member == null) return;
-        Match match = matches.get(member.map);
-        if (match == null) return;
-        player.setHealth(player.getMaxHealth());
-        if (!member.alive) return;
-        member.alive = false;
-        member.downed = false;
-        downPose(player, false);
-        clearReviver(player.getUUID());
-        member.deaths++;
-        member.readyAt = ticks + match.rules.map.respawnSeconds * 20L;
-        member.outside = 0;
-        player.stopRiding();
-        player.setGameMode(GameType.SPECTATOR);
-        player.clearFire();
-        player.getInventory().clearContent();
-        match.rules.death(member.team);
-
-        // A knockdown already paid the kill; a direct death pays it now. The victim's "you died" line is
-        // separate because a downed player was told "you are down" instead.
-        Member credited = member.claimKill() ? creditKill(player, killer) : null;
-        if (credited != null) {
-            player.sendSystemMessage(Component.literal("§c被 §f" + credited.name + " §c击杀"));
-        } else {
-            player.sendSystemMessage(Component.literal("§7你阵亡了"));
-        }
-        clearGlow(player, member);
-        player.sendSystemMessage(Component.literal("§7重生倒计时 §f"
-                + match.rules.map.respawnSeconds + "§7 秒，按部署键重新部署"));
-        state(player, member.map, true, "已阵亡，等待重新部署");
-    }
-
-    /**
-     * Credits a kill to the killer: score, streak, headshot, revenge, assists and the kill feed.
-     *
-     * <p>Called once per elimination — at the knockdown when the map uses a revive system (a knockdown is a
-     * kill, and the revive only decides whether the body gets back up), and at death otherwise. The victim's
-     * own message is left to the caller, because a downed player is told "you are down" rather than "you died".
-     *
-     * @return the credited killer, or null when the death has no credited killer (fall, environment, etc.)
-     */
-    private Member creditKill(ServerPlayer victim, ServerPlayer killer) {
-        Member member = members.get(victim.getUUID());
-        if (member == null) return null;
-        Match match = matches.get(member.map);
-        if (match == null) return null;
-        Member credited = killer == null ? null : members.get(killer.getUUID());
-        if (credited != null && credited != member && credited.alive
-                && credited.map.equals(member.map) && credited.team != member.team) {
-            credited.kills++;
-            credited.score += match.rules.map.killScore;
-            credited.credits += match.rules.map.killScore;
-            killer.sendSystemMessage(Component.literal("§a击杀 §f" + member.name
-                    + " §7(+" + match.rules.map.killScore + ")"));
-            long now = System.currentTimeMillis();
-            Model.Arena map = match.rules.map;
-            long comboWindow = map.comboSeconds * 1000L;
-            long assistWindow = map.assistSeconds * 1000L;
-
-            // Streak first: the label replaces the plain "击杀" so the feed reads as one award, not two.
-            int count = Awards.streak(match.streak.getOrDefault(killer.getUUID(), 0),
-                    match.lastKillAt.getOrDefault(killer.getUUID(), 0L), now, comboWindow);
-            match.streak.put(killer.getUUID(), count);
-            match.lastKillAt.put(killer.getUUID(), now);
-            int killPoints = map.killScore + (count > 1 ? map.comboBonus : 0);
-            credited.score += count > 1 ? map.comboBonus : 0;
-            credited.credits += count > 1 ? map.comboBonus : 0;
-            
-
-            // Headshot: judged from the height of the blow that landed, not from where the attacker stood.
-            boolean headshot = cosmeticKills.headshot(victim, killer, Awards.headshot(Awards.lastHitY(match.hits.get(victim.getUUID())),
-                    victim.getY(), victim.getY() + victim.getBbHeight()));
-            award(killer, Awards.streakLabel(count), killPoints, member.name, headshot ? "headshot" : "kill");
-            if (headshot) {
-                credited.score += map.headshotBonus;
-                credited.credits += map.headshotBonus;
-                award(killer, "爆头", map.headshotBonus, member.name, "headshot");
-            }
-
-            // Revenge: this player's last death was caused by the player they just killed.
-            if (Awards.revenge(match.lastKiller.get(killer.getUUID()), victim.getUUID())) {
-                credited.score += map.revengeBonus;
-                credited.credits += map.revengeBonus;
-                award(killer, "复仇", map.revengeBonus, member.name, "revenge");
-            }
-
-            // Assists: everyone else who put damage in recently. Paid even if they have since died, because
-            // the damage they dealt is what made the kill possible.
-            List<UUID> helpers = Awards.assists(match.hits.get(victim.getUUID()), killer.getUUID(),
-                    now, assistWindow);
-            for (UUID helper : helpers) {
-                Member helperMember = members.get(helper);
-                if (helperMember == null || helperMember.team == member.team || !helperMember.map.equals(member.map)) continue;
-                helperMember.score += map.assistScore;
-                helperMember.credits += map.assistScore;
-                ServerPlayer helperPlayer = server.getPlayerList().getPlayer(helper);
-                if (helperPlayer != null) {
-                    award(helperPlayer, "助攻", map.assistScore, member.name, "assist");
-                }
-            }
-            // The victim's ledger is spent; a later death starts fresh.
-            match.hits.remove(victim.getUUID());
-            match.lastKiller.put(victim.getUUID(), killer.getUUID());
-        }
-        broadcastKill(credited, member, match);
-        return credited;
-    }
-
-    /** Broadcasts a one-line kill feed to everyone in the same match. */
-    private void broadcastKill(Member killer, Member victim, Match match) {
-        String prefix = killer == null ? "§7" : killer.team == 0 ? "§9" : "§c";
-        String text = (killer == null ? "§7阵亡" : prefix + killer.name + " §7→ "
-                + (victim.team == 0 ? "§9" : "§c") + victim.name);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            Member member = members.get(player.getUUID());
-            if (member == null || member.team < 0 || !member.map.equals(match.rules.map.id)) continue;
-            player.sendSystemMessage(Component.literal(text));
-        }
-    }
-
-    // ------------------------------------------------------------------ bots (人机模式)
-
-    /** A connection that drops every outbound packet: a bot has no client to receive them. */
-    private static final class BotConnection extends net.minecraft.network.Connection {
-        BotConnection() {
-            super(net.minecraft.network.protocol.PacketFlow.SERVERBOUND);
-            // Other mods (TaCZ, and anything watching EntityJoinLevelEvent) send packets to any
-            // ServerPlayer they see. NeoForge's channel validation dereferences connection.channel(),
-            // so give it a dummy embedded channel: the validation then reports "no such channel"
-            // and drops the packet instead of throwing.
-            try {
-                java.lang.reflect.Field channel = net.minecraft.network.Connection.class.getDeclaredField("channel");
-                channel.trySetAccessible();
-                channel.set(this, new io.netty.channel.embedded.EmbeddedChannel());
-            } catch (Throwable t) {
-                // Best effort; the no-op send overrides below still prevent unbounded packet buffering.
-            }
-        }
-        @Override public void send(net.minecraft.network.protocol.Packet<?> packet) { }
-        @Override public void send(net.minecraft.network.protocol.Packet<?> packet, net.minecraft.network.PacketSendListener listener) { }
-        @Override public void send(net.minecraft.network.protocol.Packet<?> packet, net.minecraft.network.PacketSendListener listener, boolean flush) { }
-        @Override public void disconnect(Component component) { }
-        @Override public void handleDisconnection() { }
-    }
-
-    /**
-     * Spawns every configured bot for a match as a fake {@link ServerPlayer}, split across the two
-     * teams at their own legal spawn points. Idempotent per match: guarded by {@link Match#botsSpawned}.
-     */
-    private void spawnBots(Match match, ServerLevel level) {
-        Model.Arena map = match.rules.map;
-        for (int team = 0; team < 2; team++) {
-            List<Model.Spawn> spawns = legalSpawns(match.rules, team);
-            if (spawns.isEmpty()) continue;
-            for (int i = 0; i < map.botsPerTeam; i++) {
-                spawnBotPlayer(match, level, team, (team == 0 ? "蓝" : "红") + "人机" + (i + 1),
-                        spawns.get(i % spawns.size()));
-            }
-        }
-    }
-
-    /** Creates one fake player for a bot, registers its member, and deploys it at a spawn point. */
-    private void spawnBotPlayer(Match match, ServerLevel level, int team, String name, Model.Spawn spawn) {
-        ServerPlayer bot;
-        try {
-            bot = new ServerPlayer(server, level,
-                    new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), name),
-                    net.minecraft.server.level.ClientInformation.createDefault());
-        } catch (Exception ex) {
-            BattlefieldOps.LOG.warn("Cannot create bot player", ex);
-            return;
-        }
-        try {
-            // Swap in a connection that drops every packet: the real serverbound connection would
-            // buffer every chat/title packet forever and leak. The BotConnection also carries a dummy
-            // embedded channel so other mods' sendToPlayer validation does not NPE.
-            bot.connection = new net.minecraft.server.network.ServerGamePacketListenerImpl(server,
-                    new BotConnection(), bot,
-                    net.minecraft.server.network.CommonListenerCookie.createInitial(bot.getGameProfile(), false));
-            // Place the bot at its spawn before adding it, so the spawn packet goes out at the right
-            // position. addFreshEntity puts it in the entity tracker, which sends the client a spawn
-            // packet; addNewPlayer only adds to the level's player list and would leave it invisible.
-            bot.moveTo(spawn.x, spawn.y, spawn.z, spawn.yaw, 0);
-            if (!level.addFreshEntity(bot)) {
-                BattlefieldOps.LOG.warn("Cannot add bot player to the map dimension");
-                return;
-            }
-            Member member = new Member(match.rules.map.id, name, team);
-            member.bot = true;
-            members.put(bot.getUUID(), member);
-            match.bots.add(bot.getUUID());
-            // Deploy first (survival mode, health, team), then broadcast the player info, so the
-            // ADD_PLAYER packet carries the correct game mode.
-            deployBot(bot, member, match.rules, level, spawn);
-            broadcastPlayerInfo(bot, true);
-        } catch (Throwable t) {
-            // A third-party listener on EntityJoinLevelEvent must never be able to take the server tick
-            // down; drop this bot rather than crashing the loop.
-            BattlefieldOps.LOG.warn("Cannot spawn bot player " + name, t);
-            try { bot.discard(); } catch (Throwable ignored) { }
-        }
-    }
-
-    /** Puts a bot back on its feet at a spawn point, in survival mode with full health. */
-    private void deployBot(ServerPlayer bot, Member member, Rules rules, ServerLevel level, Model.Spawn spawn) {
-        member.alive = true;
-        member.downed = false;
-        member.killCredited = false;
-        member.reviving = null;
-        member.outside = 0;
-        bot.stopRiding();
-        bot.setGameMode(GameType.SURVIVAL);
-        bot.getInventory().clearContent();
-        bot.setHealth(bot.getMaxHealth());
-        bot.getFoodData().setFoodLevel(20);
-        bot.teleportTo(level, spawn.x, spawn.y, spawn.z, spawn.yaw, 0);
-        bot.fallDistance = 0;
-        board.apply(bot, member.map, member.team, rules.map.friendlyFire, rules.map.hideEnemyNametags);
-    }
-
-    /** Broadcasts the bot's name to real clients so the player model renders with a name tag. */
-    private void broadcastPlayerInfo(ServerPlayer bot, boolean add) {
-        try {
-            if (add) {
-                var packet = new net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket(
-                        net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, bot);
-                for (ServerPlayer viewer : server.getPlayerList().getPlayers()) viewer.connection.send(packet);
+         } else {
+            ServerLevel var3 = this.probeLevel();
+            if (var3 == null) {
+               return null;
             } else {
-                var packet = new net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket(List.of(bot.getUUID()));
-                for (ServerPlayer viewer : server.getPlayerList().getPlayers()) viewer.connection.send(packet);
+               Entity var4 = var2.create(var3);
+               if (var4 == null) {
+                  return null;
+               } else {
+                  Map var17;
+                  try {
+                     LinkedHashMap var5 = new LinkedHashMap();
+
+                     for (Entry var7 : VehicleEquip.stationStacks(var4).entrySet()) {
+                        var var8 = new ArrayList();
+
+                        for (ItemStack var10 : (java.lang.Iterable<ItemStack>)((List)var7.getValue())) {
+                           LinkedHashMap var11 = new LinkedHashMap();
+                           var11.put("id", BuiltInRegistries.ITEM.getKey(var10.getItem()).toString());
+                           var11.put("stack", Math.max(1, var10.getMaxStackSize()));
+                           var8.add(var11);
+                        }
+
+                        if (!var8.isEmpty()) {
+                           var5.put((String)var7.getKey(), var8);
+                        }
+                     }
+
+                     if (!var5.isEmpty()) {
+                        var17 = new LinkedHashMap();
+                        var17.put("slots", VehicleEquip.containerSize(var4));
+                        var17.put("stations", var5);
+                        return var17;
+                     }
+
+                     var17 = null;
+                  } finally {
+                     var4.discard();
+                  }
+
+                  return var17;
+               }
             }
-        } catch (RuntimeException | LinkageError ex) {
-            BattlefieldOps.LOG.debug("Cannot broadcast bot player info", ex);
-        }
-    }
+         }
+      } catch (Exception var16) {
+         BattlefieldOps.LOG.warn("Cannot read weapon stations for " + var1, var16);
+         return null;
+      }
+   }
 
-    /** Removes every bot of a match, called when the match ends. */
-    private void removeBots(Match match) {
-        for (java.util.UUID uuid : match.bots) {
-            Entity entity = findEntity(uuid);
-            if (entity instanceof ServerPlayer bot) {
-                broadcastPlayerInfo(bot, false);
-                // The player path: also drop the level's player-list entry, not just the entity.
-                bot.serverLevel().removePlayerImmediately(bot, Entity.RemovalReason.DISCARDED);
-            } else if (entity != null) {
-                entity.discard();
+   private void catalog(ServerPlayer var1, JsonObject var2) {
+      int var3 = var2.has("all") && var2.get("all").getAsBoolean() ? -1 : Math.max(0, num(var2, "page", 0));
+      String var4 = str(var2, "query", "").toLowerCase(Locale.ROOT);
+      Model.require(var4.length() < 100, "检索词过长");
+      String var5 = str(var2, "category", "");
+      List var6 = this.catalog
+         .entries
+         .stream()
+         .filter(var2x -> var5.isEmpty() || var5.equals(this.catalog.category(var2x)))
+         .filter(var1x -> LibrarySearch.matches(var4, var1x.id(), var1x.name(), LibrarySource.searchable(var1x.id(), var1x.kind())))
+         .toList();
+      int var7 = var3 < 0 ? 0 : Math.min(var6.size(), var3 * 64);
+      LinkedHashMap var8 = new LinkedHashMap();
+      var8.put("type", "catalog");
+      var8.put("page", var3);
+      var8.put("total", var6.size());
+      var8.put("entries", var3 < 0 ? var6 : var6.subList(var7, Math.min(var6.size(), var7 + 64)));
+      var8.put("complete", var3 < 0);
+      var8.put("diagnostics", this.catalog.diagnostics);
+      LinkedHashMap var9 = new LinkedHashMap();
+      LinkedHashMap var10 = new LinkedHashMap();
+
+      for (String var12 : this.catalog.vehicles) {
+         String var13 = this.catalog.vehicleTypes.get(var12);
+         if (var13 != null) {
+            var9.put(var12, Catalog.vehicleTypeLabel(var13) + " / " + var13);
+         }
+
+         var10.put(var12, String.valueOf(this.catalog.vehicleClass(var12)));
+      }
+
+      var8.put("gunTypes", this.catalog.gunTypes);
+      var8.put("vehicleTypes", var9);
+      var8.put("vehicleClasses", var10);
+      var8.put("knives", this.catalog.knives());
+      var var14 = LrtEquipment.entries();
+      var8.put("lrtEntries", var14);
+      var8.put("meleeEntries", var14.stream().filter(var0 -> ((String)var0.get("category")).equals("melee")).toList());
+      if (var3 < 0) {
+         Network.send(var1, var8);
+      } else {
+         var8.put("vehicleArmament", this.armamentTable());
+         Network.send(var1, var8);
+      }
+   }
+
+   private void admin(ServerPlayer var1) {
+      Model.require(var1.hasPermissions(2), "需要管理员权限（OP 2）");
+   }
+
+   private Engine.Member member(ServerPlayer var1) {
+      Engine.Member var2 = this.members.get(var1.getUUID());
+      Model.require(var2 != null, "尚未加入对局");
+      return var2;
+   }
+
+   private void save(Model.Arena var1) throws IOException {
+      MapFiles.save(this.folder.resolve("maps"), var1.id, BattlefieldOps.GSON.toJson(var1));
+   }
+
+   private void createRoom(String var1, ServerPlayer var2) {
+      Model.Arena var3 = this.maps.get(var1);
+      Model.require(var3 != null, "先保存地图");
+      Model.require(!this.matches.containsKey(var1), "该地图已经有一个房间");
+      Model.require(
+         !this.lobbySettings.enabled || !RoomPolicy.hubConflict(var3, this.lobbySettings.dimension, this.lobbySettings.x, this.lobbySettings.z),
+         "地图及退出缓冲区过于接近共享大厅，请调整地图边界或大厅位置"
+      );
+      var3.validate();
+      this.catalog.check(var3);
+
+      for (Engine.Match var5 : this.matches.values()) {
+         Model.Arena var6 = var5.rules.map;
+         if (var6.dimension.equals(var3.dimension)) {
+            Model.require(!RoomPolicy.overlaps(var3, var6), "地图及退出缓冲区与其他房间占用相同区块");
+         }
+      }
+
+      Model.Arena var7 = (Model.Arena)BattlefieldOps.GSON.fromJson(BattlefieldOps.GSON.toJson(var3), Model.Arena.class);
+      Engine.Match var8 = new Engine.Match(var7);
+      var8.owner = var2.getUUID();
+      var8.ownerName = var2.getScoreboardName();
+      this.matches.put(var1, var8);
+      this.results.remove(var1);
+      this.sidebar(var8);
+   }
+
+   private void releaseElite(UUID var1, Engine.Member var2) {
+      Engine.Match var3 = this.matches.get(var2.map);
+      if (var3 != null) {
+         var3.elites.release(var1, this.ticks);
+      }
+
+      var2.eliteType = "";
+   }
+
+   private String eliteBlocker(Engine.Match var1, Engine.Member var2, ServerPlayer var3, EliteRules.Spawn var4) {
+      EliteRules.Template var5 = EliteRules.template(var1.rules.map, var4.type);
+      if (!EliteRules.configured(var5)) {
+         return "未配置精英装备";
+      } else if (var1.rules.isStaged() && var4.sector >= 0 && var4.sector != var1.rules.stage) {
+         return "阶段未解锁";
+      } else {
+         long var6 = EliteRules.delayRemaining(var1.elites.startedAt, var4, this.ticks);
+         return var6 > 0L ? "首次刷新 " + (var6 + 19L) / 20L + " 秒" : var1.elites.blocker(var3.getUUID(), var2.team, var4.type, this.ticks);
+      }
+   }
+
+   private List<Map<String, Object>> eliteSnapshot(ServerPlayer var1, Engine.Member var2, Engine.Match var3) {
+      var var4 = new ArrayList();
+
+      for (EliteRules.Spawn var6 : var3.rules.map.eliteSpawns) {
+         if (var6.enabled && (var6.team < 0 || var6.team == var2.team)) {
+            LinkedHashMap var7 = new LinkedHashMap();
+            var7.put("id", var6.id);
+            var7.put("type", var6.type);
+            var7.put("name", EliteRules.Kind.of(var6.type).name);
+            var7.put("x", Double.valueOf(var6.x));
+            var7.put("y", Double.valueOf(var6.y));
+            var7.put("z", Double.valueOf(var6.z));
+            var7.put("radius", Double.valueOf(var6.radius));
+            var7.put("reason", this.eliteBlocker(var3, var2, var1, var6));
+            var4.add(var7);
+         }
+      }
+
+      return var4;
+   }
+
+   private void claimElite(ServerPlayer var1) throws Exception {
+      Engine.Member var2 = this.member(var1);
+      Engine.Match var3 = this.matches.get(var2.map);
+      Model.require(var3 != null && var3.running && var2.team >= 0 && var2.alive && !var2.downed && var1.isAlive() && !var1.isSpectator(), "仅存活且已部署的玩家可领取精英装备");
+      Model.require(var2.eliteType.isEmpty(), "当前已是精英兵");
+      Model.require(!var1.isPassenger() && var1.containerMenu == var1.inventoryMenu, "请离开载具并关闭容器后领取");
+      Model.Arena var4 = var3.rules.map;
+      Model.require(var1.serverLevel() == this.level(var4), "不在当前战区");
+      EliteRules.Spawn var5 = var4.eliteSpawns
+         .stream()
+         .filter(var3x -> EliteRules.reachable(var3x, var2.team, var3.rules.stage, var3.rules.isStaged(), var1.getX(), var1.getY(), var1.getZ()))
+         .min(Comparator.<EliteRules.Spawn>comparingDouble(var1x -> var1.distanceToSqr(var1x.x, var1x.y, var1x.z)).thenComparing(var0 -> var0.id))
+         .orElseThrow(() -> new IllegalArgumentException("附近没有可领取的精英刷新点"));
+      String var6 = this.eliteBlocker(var3, var2, var1, var5);
+      Model.require(var6.isEmpty(), var6);
+      BlockHitResult var7 = var1.level().clip(new ClipContext(var1.getEyePosition(), new Vec3(var5.x, var5.y + 0.5, var5.z), Block.COLLIDER, Fluid.NONE, var1));
+      Model.require(var7.getType() == Type.MISS, "刷新点被遮挡");
+      Model.Kit var8 = EliteRules.template(var4, var5.type).kit;
+      var var9 = new ArrayList();
+
+      for (KitGear.Entry var11 : var8.gear().items) {
+         var9.add(var11.id);
+      }
+
+      var9.addAll(var8.gear().armour.values());
+      var9.addAll(var8.gear().accessories.values());
+
+      for (String var19 : (java.lang.Iterable<String>)(var9)) {
+         Model.require(!KitItems.resolve(var19, 1).isEmpty(), "精英装备物品未安装：" + var19);
+      }
+
+      Model.require(var8.gear().accessories.isEmpty() || CuriosSupport.available(), "未安装饰品支持，无法完整领取此套精英装备");
+      var var18 = new ArrayList<>(this.catalog.gunRounds(var1, var8.options(true).getFirst(), ammoStacks(var8, var8.options(true).getFirst())));
+      var18.addAll(this.catalog.gunRounds(var1, var8.options(false).getFirst(), ammoStacks(var8, var8.options(false).getFirst())));
+      var18.addAll(KitItems.build(var8, var1));
+      Model.require(!var18.isEmpty() || !var8.gear().armour.isEmpty(), "精英兵须配置有效武器、物品或护甲");
+      Model.require(var18.size() <= 35, "精英装备超过背包容量");
+      ListTag var20 = var1.getInventory().save(new ListTag());
+      ListTag var12 = CuriosSupport.save(var1);
+      var3.elites.reserve(var1.getUUID(), var2.team, var5.type, var5.respawnSeconds, this.ticks);
+
+      try {
+         var1.closeContainer();
+         var1.getInventory().clearContent();
+         CuriosSupport.clear(var1);
+
+         for (ItemStack var14 : (java.lang.Iterable<ItemStack>)(var18)) {
+            var1.getInventory().add(var14);
+            Model.require(var14.isEmpty(), "精英装备无法完整放入背包");
+         }
+
+         KitItems.wear(var8, var1);
+         var2.eliteType = var5.type;
+         var1.inventoryMenu.broadcastChanges();
+      } catch (LinkageError | Exception var16) {
+         var3.elites.cancel(var1.getUUID());
+         var2.eliteType = "";
+         var1.getInventory().clearContent();
+         var1.getInventory().load(var20);
+         CuriosSupport.clear(var1);
+         if (var12 != null) {
+            CuriosSupport.load(var1, var12);
+         }
+
+         var1.inventoryMenu.broadcastChanges();
+         throw var16;
+      }
+
+      this.refills.issued(var1);
+      String var22 = var5.type;
+
+      String var21 = switch (var22) {
+         case "antivehicle" -> "voice_herokit_at";
+         case "flametrooper" -> "voice_herokit_flame";
+         case "runner" -> "voice_herokit_runner";
+         case "sentry" -> "voice_herokit_sentry";
+         case "trenchraider" -> "voice_herokit_trench";
+         default -> "";
+      };
+      if (!var21.isEmpty()) {
+         Network.send(var1, Map.of("type", "supportSound", "cue", var21));
+      }
+   }
+
+   private boolean roomControl(ServerPlayer var1, Engine.Match var2) {
+      return RoomPolicy.canManage(var1.hasPermissions(2), var1.getUUID(), var2 == null ? null : var2.owner);
+   }
+
+   private void requireRoomControl(ServerPlayer var1, String var2) {
+      Model.require(this.matches.containsKey(var2) && this.roomControl(var1, this.matches.get(var2)), "仅房主或管理员可以开始、关闭该房间");
+   }
+
+   private void startRoom(String var1) {
+      Engine.Match var2 = this.matches.get(var1);
+      Model.require(var2 != null && !var2.running, "房间不存在或已经开始");
+      this.compat.reset();
+      var2.running = true;
+      var2.elites.startedAt = this.ticks;
+
+      for (ServerPlayer var4 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var5 = this.members.get(var4.getUUID());
+         if (var5 != null && var5.map.equals(var1)) {
+            if (var5.team >= 0) {
+               this.board.apply(var4, var1, var5.team, var2.rules.map.friendlyFire, var2.rules.map.hideEnemyNametags);
             }
-            members.remove(uuid);
-        }
-        match.bots.clear();
-        match.botsSpawned = false;
-    }
 
-    /**
-     * Respawns dead bots, once per second. Movement and melee run every tick in
-     * {@link #tickBotsMovement()} so walking is smooth rather than once-a-second teleports.
-     */
-    private void respawnBots(Match match, ServerLevel level) {
-        if (match.bots.isEmpty()) return;
-        Model.Arena map = match.rules.map;
-        for (java.util.UUID uuid : new ArrayList<>(match.bots)) {
-            Member member = members.get(uuid);
-            if (member == null) continue;
-            Entity entity = findEntity(uuid);
-            ServerPlayer bot = entity instanceof ServerPlayer p ? p : null;
-            if (member.alive) {
-                if (bot == null || !bot.isAlive()) {
-                    member.alive = false;
-                    member.readyAt = ticks + Math.max(1, map.respawnSeconds) * 20L;
-                }
-                continue;
+            this.state(var4, var1, false, "对局开始，可以部署");
+         }
+      }
+   }
+
+   private void join(ServerPlayer var1, String var2) throws IOException {
+      Model.require(Network.supported(var1), "安装战地风云客户端模组后才能加入对局");
+      Engine.Match var3 = this.matches.get(var2);
+      long var4 = this.members.values().stream().filter(var1x -> var1x.map.equals(var2) && !var1x.bot).count();
+      String var6 = RoomPolicy.joinBlocker(this.members.containsKey(var1.getUUID()), var3 != null, var4, var3 == null ? 0 : var3.rules.map.maxPlayers);
+      Model.require(var6.isEmpty(), var6);
+      Model.require(var1.isAlive() && !var1.isPassenger(), "请存活且离开载具后加入");
+      Model.require(!EditorFlight.active(var1), "请先退出快速编辑模式，再加入房间");
+      this.recover(var1);
+      var1.closeContainer();
+      this.backup(var1);
+      this.members.put(var1.getUUID(), new Engine.Member(var2, var1.getScoreboardName(), -1));
+      var1.getInventory().clearContent();
+      var1.setGameMode(GameType.SPECTATOR);
+      Engine.Member var7 = this.members.get(var1.getUUID());
+      Model.Arena var8 = var3.rules.map;
+      if (var8.entryEnabled) {
+         var7.entryStarted = this.ticks;
+         var7.entryUntil = this.ticks + (long)var8.entrySeconds * 20L + 20L;
+         var7.entryToken = UUID.randomUUID().toString();
+         var7.observerAt = this.ticks;
+         this.positionDeployObservers();
+      }
+   }
+
+   private int trainingTeam(ServerPlayer var1, int var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (var3 == null) {
+         return var2;
+      } else {
+         Engine.Match var4 = this.matches.get(var3.map);
+         return var4 != null && var4.rules.map.isTraining() ? 0 : var2;
+      }
+   }
+
+   private void selectTeam(ServerPlayer var1, int var2) {
+      int var3 = this.trainingTeam(var1, var2);
+      Engine.Member var4 = this.member(var1);
+      Engine.Match var5 = this.matches.get(var4.map);
+      Model.require(var5 != null, "房间已关闭");
+      Model.require(this.ticks >= var4.entryUntil, "请等待入局简报结束");
+      Model.require(var3 == 0 || var3 == 1, "阵营无效");
+      Model.require(!var4.alive, "请在部署阶段选择阵营");
+      Model.require(!var5.running || var4.team < 0 || var4.team == var3, "对局开始后不能更换阵营");
+      long var6 = this.members.values().stream().filter(var2x -> var2x != var4 && var2x.map.equals(var4.map) && var2x.team == var3).count();
+      long var8 = this.members.values().stream().filter(var2x -> var2x != var4 && var2x.map.equals(var4.map) && var2x.team == 1 - var3).count();
+      Model.require(var6 <= var8 || var4.team == var3, "该阵营人数较多，请加入另一方");
+      Model.Spawn var10 = Tactics.safestSpawn(this.deploySpawns(var5.rules, var3), this.enemiesOf(var5.rules, var3));
+      Model.require(var10 != null, "该阵营缺少出生点");
+      if (var4.team != var3) {
+         this.removeOwnedBeacon(var1.getUUID());
+         var4.squad = 0;
+      }
+
+      var4.team = var3;
+      var4.observerAt = this.ticks;
+      if (var5.running) {
+         this.board.apply(var1, var4.map, var3, var5.rules.map.friendlyFire, var5.rules.map.hideEnemyNametags);
+      } else {
+         this.board.clearPlayer(var1);
+      }
+
+      String var11 = DeployView.warning(var5.rules.map.extent(var5.rules.map.viewArea(var3))[2], this.viewDistance());
+      if (var11 != null) {
+         this.announce(var1, "部署视角", var11);
+      }
+   }
+
+   private int viewDistance() {
+      try {
+         return this.server.getPlayerList().getViewDistance() * 16;
+      } catch (RuntimeException var2) {
+         return 100;
+      }
+   }
+
+   private void positionDeployObservers() {
+      for (Entry var2 : this.members.entrySet()) {
+         Engine.Member var3 = (Engine.Member)var2.getValue();
+         boolean var4 = var3.entryUntil > this.ticks;
+         if (!var3.bot && !var3.alive && !var3.downed && (var4 || var3.team >= 0) && var3.observerAt >= 0L && this.ticks >= var3.observerAt) {
+            Engine.Match var5 = this.matches.get(var3.map);
+            ServerPlayer var6 = this.server.getPlayerList().getPlayer((UUID)var2.getKey());
+            if (var5 != null && var6 != null) {
+               Model.Arena var7 = var5.rules.map;
+               var var8 = var4 ? var7.boundary : var7.viewArea(var3.team);
+               if (var8.isEmpty()) {
+                  var3.observerAt = -1L;
+               } else {
+                  double var9 = Double.POSITIVE_INFINITY;
+                  double var11 = Double.NEGATIVE_INFINITY;
+                  double var13 = var9;
+                  double var15 = var11;
+
+                  for (Model.Vec var18 : (java.lang.Iterable<Model.Vec>)(var8)) {
+                     var9 = Math.min(var9, var18.x());
+                     var11 = Math.max(var11, var18.x());
+                     var13 = Math.min(var13, var18.z());
+                     var15 = Math.max(var15, var18.z());
+                  }
+
+                  double var29 = var7.spawns.stream().filter(var2x -> var4 || var2x.team == var3.team).mapToDouble(var0 -> var0.y).max().orElse(64.0);
+                  double var19 = var7.customDeployView ? var7.deployViewX : (var9 + var11) / 2.0;
+                  double var21 = var7.customDeployView ? var7.deployViewZ : (var13 + var15) / 2.0;
+                  double var23 = var7.customDeployView ? var7.deployViewY - 1.62 : var29 + 80.0;
+                  float var25 = var7.customDeployView ? var7.deployViewYaw : 0.0F;
+                  float var26 = var7.customDeployView ? var7.deployViewPitch : 90.0F;
+                  if (var4 && var7.customEntryView) {
+                     var19 = var7.entryX;
+                     var23 = var7.entryY - 1.62;
+                     var21 = var7.entryZ;
+                     var25 = var7.entryYaw;
+                     var26 = var7.entryPitch;
+                  }
+
+                  try {
+                     var6.setCamera(var6);
+                     var6.stopRiding();
+                     var6.teleportTo(this.level(var7), var19, var23, var21, var25, var26);
+                     var6.setDeltaMovement(Vec3.ZERO);
+                     var6.fallDistance = 0.0F;
+                     var3.observerAt = -1L;
+                  } catch (RuntimeException var28) {
+                     var3.observerAt = this.ticks + 100L;
+                     BattlefieldOps.LOG.warn("Cannot position deployment observer for {}", var3.map, var28);
+                  }
+               }
             }
-            if (ticks < member.readyAt) continue;
-            if (bot == null) {
-                List<Model.Spawn> spawns = legalSpawns(match.rules, member.team);
-                if (spawns.isEmpty()) continue;
-                spawnBotPlayer(match, level, member.team, member.name, spawns.get(member.deaths % spawns.size()));
-                continue;
+         }
+      }
+   }
+
+   private List<Model.Spawn> legalSpawns(Rules var1, int var2) {
+      Model.Arena var3 = var1.map;
+      return var3.spawns
+         .stream()
+         .filter(var2x -> var2x.team == var2 && (!var1.isStaged() || var2x.sector == var1.stage))
+         .filter(var2x -> var3.inZone(var2, var2x.x, var2x.z))
+         .toList();
+   }
+
+   private List<ItemStack> tacticalStacks(ServerPlayer var1, Model.Kit var2, Model.Arena var3, JsonObject var4, String var5) throws Exception {
+      String var6 = str(var4, var5, "");
+      if (var6.isEmpty()) {
+         return List.of();
+      } else {
+         boolean var7 = var3.isTraining() || var2.tacticalChoices().contains(var6);
+         if (!var7) {
+            return List.of();
+         } else if (this.catalog.isGun(var6)) {
+            var var11 = this.catalog.gunRounds(var1, var6, ammoStacks(var2, var6));
+            applyAmmoType(var2, var6, var11);
+            return var11;
+         } else if (!SuperbAmmo.isGunId(var6)) {
+            return countedStacks(var6, var2.countFor(var6));
+         } else {
+            String var8 = ammoChoice(var2, var6, var4);
+            int var9 = var2.itemCounts != null && var2.itemCounts.containsKey(var8) ? var2.countFor(var8) : var2.countFor(var6);
+            var var10 = SuperbAmmo.gunBundle(var6, var9, var8.isEmpty() ? null : var8);
+            applyAmmoType(var2, var6, var10);
+            return var10;
+         }
+      }
+   }
+
+   private static int ammoStacks(Model.Kit var0, String var1) {
+      Integer var2 = var0.itemCounts == null ? null : var0.itemCounts.get(var1);
+      int ammoStacksResolved = var2 != null ? Math.max(1, Math.min(64, var2)) : ammoStacks(var0);
+      BattlefieldOps.LOG.info("[bfops] ammo for {}: configured={} -> {} rounds", var1, var2, ammoStacksResolved);
+      return ammoStacksResolved;
+   }
+
+   private static void applyAmmoType(Model.Kit var0, String var1, List<ItemStack> var2) {
+      if (var0 != null && var1 != null && !var2.isEmpty()) {
+         ItemStack var3 = (ItemStack)var2.getFirst();
+         if (SuperbAmmo.isGun(var3)) {
+            SuperbAmmo.logOnce(var3, var1);
+            int var4 = var0.countFor(var1);
+            String var5 = var0.gunAmmoType == null ? null : var0.gunAmmoType.get(var1);
+            String var6 = SuperbAmmo.chosen(var3, var5);
+            if (!var6.isEmpty()) {
+               String var7 = SuperbAmmo.slotFor(var3, var6);
+               if (!var7.isEmpty()) {
+                  SuperbAmmo.apply(var3, var7, var4);
+               }
             }
-            List<Model.Spawn> spawns = legalSpawns(match.rules, member.team);
-            if (spawns.isEmpty()) continue;
-            deployBot(bot, member, match.rules, level, spawns.get(member.deaths % spawns.size()));
-        }
-    }
+         }
+      }
+   }
 
-    /** Moves and fights every living bot; runs every tick so walking is smooth. */
-    private void tickBotsMovement() {
-        for (Match match : matches.values()) {
-            if (match.bots.isEmpty()) continue;
-            ServerLevel level = levelOrNull(match.rules.map);
-            if (level == null) continue;
-            for (java.util.UUID uuid : match.bots) {
-                Member member = members.get(uuid);
-                if (member == null || !member.alive || member.downed) continue;
-                Entity entity = findEntity(uuid);
-                if (!(entity instanceof ServerPlayer bot) || !bot.isAlive()) continue;
-                Model.Point target = nearestActivePoint(match, bot);
-                if (target != null) {
-                    double dx = target.x - bot.getX();
-                    double dz = target.z - bot.getZ();
-                    double distance = Math.hypot(dx, dz);
-                    if (distance > 1.5) {
-                        bot.setYRot((float) Math.toDegrees(Math.atan2(-dx, dz)));
-                        bot.setYHeadRot(bot.getYRot());
-                        double speed = 0.20;
-                        bot.move(net.minecraft.world.entity.MoverType.SELF,
-                                new Vec3(dx / distance * speed, 0, dz / distance * speed));
-                    }
-                }
-                if (ticks >= member.botNextAttackAt) {
-                    LivingEntity enemy = nearestEnemy(match, member, bot);
-                    if (enemy != null && bot.distanceToSqr(enemy) <= 3.5 * 3.5) {
-                        enemy.hurt(level.damageSources().playerAttack(bot), 5.0f);
-                        member.botNextAttackAt = ticks + 20;
-                    }
-                }
+   private static List<ItemStack> countedStacks(String var0, int var1) {
+      if (var0 != null && !var0.isEmpty() && var1 > 0) {
+         ItemStack var2 = KitItems.resolve(var0, var1);
+         if (var2.isEmpty()) {
+            return List.of();
+         } else {
+            var var3 = new ArrayList();
+            int var4 = Math.max(1, var2.getMaxStackSize());
+            int var5 = var1;
+
+            while (var5 > 0) {
+               ItemStack var6 = var2.copy();
+               int var7 = Math.min(var5, var4);
+               var6.setCount(var7);
+               var3.add(var6);
+               var5 -= var7;
             }
-        }
-    }
 
-    /** The active capture point closest to a bot, for its next move. */
-    private Model.Point nearestActivePoint(Match match, LivingEntity mob) {
-        Model.Point best = null;
-        double bestDistance = Double.MAX_VALUE;
-        List<Model.Point> points = match.rules.map.points;
-        for (int i = 0; i < points.size(); i++) {
-            if (!match.rules.active(i)) continue;
-            Model.Point point = points.get(i);
-            double distance = mob.distanceToSqr(point.x, point.y, point.z);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = point;
+            return var3;
+         }
+      } else {
+         return List.of();
+      }
+   }
+
+   private static ItemStack issueCounted(ServerPlayer var0, String var1, int var2) {
+      if (var1 != null && !var1.isEmpty() && var2 > 0) {
+         ItemStack var3 = KitItems.resolve(var1, var2);
+         if (var3.isEmpty()) {
+            return var3;
+         } else {
+            int var4 = var2 - var3.getCount();
+            int var5 = Math.max(1, var3.getMaxStackSize());
+
+            while (var4 > 0) {
+               ItemStack var6 = var3.copy();
+               int var7 = Math.min(var4, var5);
+               var6.setCount(var7);
+               giveToBackpack(var0, var6);
+               var4 -= var7;
             }
-        }
-        return best;
-    }
 
-    /** The closest enemy (real player or bot) to a bot, for melee. */
-    private LivingEntity nearestEnemy(Match match, Member bot, LivingEntity mob) {
-        LivingEntity best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            Member member = members.get(player.getUUID());
-            if (member == null || !member.map.equals(bot.map) || member.team == bot.team) continue;
-            if (!member.alive || !player.isAlive()) continue;
-            double distance = mob.distanceToSqr(player);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = player;
+            return var3;
+         }
+      } else {
+         return ItemStack.EMPTY;
+      }
+   }
+
+   private static int topUp(ServerPlayer var0, Item var1, int var2) {
+      return topUp(var0, var1, var2, -1);
+   }
+
+   private static int topUp(ServerPlayer var0, Item var1, int var2, int var3) {
+      if (var2 > 0 && var1 != null) {
+         Inventory var4 = var0.getInventory();
+         int var5 = 0;
+
+         for (int var6 = 0; var6 < var4.getContainerSize() && var2 > 0; var6++) {
+            ItemStack var7 = var4.getItem(var6);
+            if (!var7.isEmpty() && var7.is(var1)) {
+               int var8 = var7.getMaxStackSize() - var7.getCount();
+               if (var8 > 0) {
+                  int var9 = Math.min(var8, var2);
+                  var7.grow(var9);
+                  var2 -= var9;
+                  var5 += var9;
+               }
             }
-        }
-        for (java.util.UUID uuid : match.bots) {
-            if (uuid.equals(mob.getUUID())) continue;
-            Member other = members.get(uuid);
-            if (other == null || other.team == bot.team) continue;
-            Entity entity = findEntity(uuid);
-            if (entity instanceof LivingEntity otherMob && otherMob.isAlive()) {
-                double distance = mob.distanceToSqr(otherMob);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    best = otherMob;
-                }
+         }
+
+         boolean var10 = true;
+
+         while (var2 > 0) {
+            int var11 = Math.max(1, var1.getDefaultMaxStackSize());
+            int var12 = Math.min(var2, var11);
+            ItemStack var13 = new ItemStack(var1, var12);
+            if (var10) {
+               giveToSlot(var0, var13, var3);
+               var10 = false;
+            } else {
+               giveToBackpack(var0, var13);
             }
-        }
-        return best;
-    }
 
-    // ------------------------------------------------------------------ tick
+            var2 -= var12;
+            var5 += var12;
+         }
 
-    /**
-     * Advances every bake in flight by one tick's budget.
-     *
-     * <p>Called from {@link #tick()} before the once-a-second gate: a bake is chunk-bound work that is
-     * already capped per call, and slowing it to once a second would make a large map take minutes to
-     * appear.
-     *
-     * @return true when at least one bake completed this tick
-     */
-    private boolean stepTerrainBakes() {
-        if (bakes.isEmpty()) return false;
-        boolean any = false;
-        for (var entry : new ArrayList<>(bakes.entrySet())) {
-            String id = entry.getKey();
-            TerrainBake bake = entry.getValue();
-            Model.Arena map = maps.get(id);
-            if (map == null) {
-                bakes.remove(id);
-                terrainWaiters.remove(id);
-                continue;
+         return var5;
+      } else {
+         return 0;
+      }
+   }
+
+   private static void giveToSlot(ServerPlayer var0, ItemStack var1, int var2) {
+      if (!var1.isEmpty()) {
+         Inventory var3 = var0.getInventory();
+         if (var2 >= 0 && var2 < 36 && var3.getItem(var2).isEmpty()) {
+            var3.setItem(var2, var1);
+         } else if (var2 >= 0 && var2 < 9 && var3.getItem(var2).isEmpty()) {
+            var3.setItem(var2, var1);
+         } else {
+            giveToBackpack(var0, var1);
+         }
+      }
+   }
+
+   private static void giveToBackpack(ServerPlayer var0, ItemStack var1) {
+      if (!var1.isEmpty()) {
+         Inventory var2 = var0.getInventory();
+
+         for (int var3 = 9; var3 < 36; var3++) {
+            if (var2.getItem(var3).isEmpty()) {
+               var2.setItem(var3, var1);
+               return;
             }
-            // Resolved without Model.require: a missing dimension is a reason to abandon this bake, not to
-            // throw out of the server tick.
-            ServerLevel level = server.getLevel(ResourceKey.create(Registries.DIMENSION,
-                    ResourceLocation.parse(map.dimension)));
-            boolean done = level != null && bake.step(level);
-            if (bake.abandoned()) {
-                // Give up cleanly: the map is too large or the world is unavailable. Waiter is told so the
-                // client stops showing "preparing" forever.
-                bakes.remove(id);
-                for (ServerPlayer player : takeWaiters(id)) {
-                    Network.send(player, Map.of("type", "terrain", "map", id, "state", "FAILED"));
-                }
-                continue;
-            }
-            if (!done) continue;
-            bakes.remove(id);
-            TerrainMap result = bake.result();
-            terrainMaps.put(id, result);
-            TerrainBake.store(folder, result);
-            any = true;
-            for (ServerPlayer player : takeWaiters(id)) sendTerrain(player, id, result);
-        }
-        return any;
-    }
+         }
 
-    private Set<ServerPlayer> takeWaiters(String id) {
-        Set<java.util.UUID> waiting = terrainWaiters.remove(id);
-        if (waiting == null || waiting.isEmpty()) return Set.of();
-        Set<ServerPlayer> out = new java.util.LinkedHashSet<>();
-        for (java.util.UUID uuid : waiting) {
-            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-            if (player != null) out.add(player);
-        }
-        return out;
-    }
+         if (!var2.add(var1)) {
+            var0.drop(var1, false);
+         }
+      }
+   }
 
-    private static void sendTerrain(ServerPlayer player, String id, TerrainMap map) {
-        try {
-            sendTerrainUnsafe(player, id, map);
-        } catch (RuntimeException ex) {
-            // An oversized or rejected payload for one player must not stop the others from receiving theirs.
-            BattlefieldOps.LOG.warn("Cannot send terrain for " + id + " to " + player.getName().getString(), ex);
-        }
-    }
+   private static String ammoChoice(Model.Kit var0, String var1, JsonObject var2) {
+      var var3 = var0 == null ? List.of() : var0.ammoWhitelist(var1);
+      if (var3.isEmpty()) {
+         var var4 = SuperbAmmo.gunBundle(var1, 0);
+         var3 = var4.isEmpty() ? List.of() : SuperbAmmo.ammoIds((ItemStack)var4.getFirst());
+      }
 
-    private static void sendTerrainUnsafe(ServerPlayer player, String id, TerrainMap map) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("type", "terrain");
-        out.put("map", id);
-        out.put("state", "READY");
-        out.put("signature", map.signature);
-        out.put("data", map.encode());
-        Network.send(player, out);
-    }
+      String var6 = str(var2, "ammo_" + var1, "");
+      if (var6.isEmpty() || !var3.isEmpty() && !var3.contains(var6)) {
+         String var5 = var0 != null && var0.gunAmmoType != null ? var0.gunAmmoType.getOrDefault(var1, "") : "";
+         if (var5.isEmpty() || !var3.isEmpty() && !var3.contains(var5)) {
+            return var3.isEmpty() ? "" : (String)var3.getFirst();
+         } else {
+            return var5;
+         }
+      } else {
+         return var6;
+      }
+   }
 
-    /**
-     * Tells a player's client that they earned something, for the floating award feed.
-     *
-     * <p>Sent from the server because the server is what awards the score: letting the client decide would put a
-     * number on screen that the scoreboard might not agree with. The client only renders what it is told.
-     */
-    private static void award(ServerPlayer player, String label, int points) {
-        award(player, label, points, "", "kill");
-    }
+   private static int ammoStacks(Model.Kit var0) {
+      // The map's number is authoritative for deployment: resupply now tops up to whatever was issued, so a
+      // large default no longer turns into a full backpack.
+      return var0.ammoStacks > 0 ? var0.ammoStacks : 3;
+   }
 
-    /**
-     * @param detail what the award is about (a victim's name, usually); shown after the text
-     * @param icon   glyph kind: {@code kill}, {@code headshot}, {@code assist}, {@code revenge},
-     *               {@code mark} or {@code capture}
-     */
-    private static void award(ServerPlayer player, String label, int points, String detail, String icon) {
-        if (player == null || (points <= 0 && (detail == null || detail.isEmpty()))) return;
-        try {
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("type", "bonus");
-            out.put("label", label);
-            out.put("points", points);
-            out.put("detail", detail == null ? "" : detail);
-            out.put("icon", icon == null ? "kill" : icon);
-            Network.send(player, out);
-        } catch (RuntimeException ex) {
-            // A cosmetic feed must never be able to fail the scoring that triggered it.
-            BattlefieldOps.LOG.debug("Cannot send bonus feed entry", ex);
-        }
-    }
+   private List<Model.Spawn> deploySpawns(Rules var1, int var2) {
+      if (var1.map.isTraining()) {
+         var var3 = Deploy.sites(var1.map, var2, var1.stage, var1.isStaged(), Deploy.owners(var1));
+         if (var3.isEmpty()) {
+            return List.of();
+         } else {
+            Deploy.Site var4 = (Deploy.Site)var3.get(0);
+            return List.of(var4.asSpawn(var2));
+         }
+      } else {
+         return Deploy.sites(var1.map, var2, var1.stage, var1.isStaged(), Deploy.owners(var1)).stream().map(var1x -> var1x.asSpawn(var2)).toList();
+      }
+   }
 
-    /**
-     * Tells an attacker their shot connected, for the hit marker.
-     *
-     * <p>Only when the victim is an enemy in the same match: a hit marker on a teammate would be actively
-     * misleading, and one on a mob would fire constantly in a mode about players.
-     */
-    public void hitNotice(ServerPlayer attacker, ServerPlayer victim, float damage, double hitY, boolean nativeMarker) {
-        if (attacker == null || victim == null || damage <= 0) return;
-        Member attackerMember = members.get(attacker.getUUID());
-        Member victimMember = members.get(victim.getUUID());
-        if (attackerMember == null || victimMember == null) return;
-        if (!attackerMember.alive || !attackerMember.map.equals(victimMember.map)) return;
-        if (attackerMember.team == victimMember.team) return;
-        Match match = matches.get(attackerMember.map);
-        if (match != null) {
-            long now = System.currentTimeMillis();
-            long window = match.rules.map.assistSeconds * 1000L;
-            UUID victimId = victim.getUUID();
-            match.hits.put(victimId, Awards.record(match.hits.get(victimId),
-                    new Awards.Hit(attacker.getUUID(), damage, now, hitY)));
-            // Drop stale records so the ledger cannot grow across a whole match.
-            match.hits.replaceAll((id, list) -> Awards.prune(list, now, window));
-        }
-        try {
-            Network.send(attacker, Map.of("type", "hit", "damage", Math.round(damage), "nativeMarker", nativeMarker));
-        } catch (RuntimeException ex) {
-            BattlefieldOps.LOG.debug("Cannot send hit marker", ex);
-        }
-    }
+   private void refreshMarks(Engine.Match var1) {
+      if (var1 != null) {
+         long var2 = System.currentTimeMillis();
+         var1.marks.removeIf(var2x -> var2x == null || !var2x.active(var2));
 
-    /**
-     * Marks the enemy the player is looking at, for their team.
-     *
-     * <p>Validated entirely server-side: the client sends only the intent to mark, never a position or a
-     * target. Accepting a client position would let anyone place marks on enemies they cannot see, which is
-     * the same wall-hack the line-of-sight rule exists to prevent.
-     *
-     * <p>The target must be alive, an enemy, within spotting range, inside a narrow cone around the
-     * crosshair, and have an unobstructed line — so the key marks what the player is actually aiming at
-     * rather than whatever is closest.
-     */
-    private void mark(ServerPlayer player, JsonObject request) throws Exception {
-        Member member = member(player);
-        Match match = matches.get(member.map);
-        Model.require(match != null && match.running, "对局尚未开始");
-        Model.require(member.alive && player.isAlive(), "阵亡时无法标记");
-        Model.require(member.team >= 0, "请先选择阵营");
+         while (var1.marks.size() > 32) {
+            var1.marks.removeFirst();
+         }
+      }
+   }
 
-        double halfAngle = Math.toRadians(Spotting.MARK_CONE_DEGREES);
-        double heading = Math.toRadians(player.getYRot());
-        ServerPlayer best = null;
-        double bestDistance = Double.MAX_VALUE;
-        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            Member target = members.get(other.getUUID());
-            if (target == null || !target.alive || !other.isAlive()) continue;
-            if (target.team == member.team || target.team < 0) continue;
-            if (!target.map.equals(member.map)) continue;
-            double dx = other.getX() - player.getX();
-            double dz = other.getZ() - player.getZ();
-            double distance = Math.hypot(dx, dz);
-            if (distance > Tactics.ENEMY_GLOW_RANGE) continue;
-            if (!Spotting.inCone(heading, halfAngle, dx, dz)) continue;
-            if (!player.hasLineOfSight(other)) continue;
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = other;
-            }
-        }
-        Model.require(best != null, "准星前方 " + Spotting.MARK_CONE_DEGREES
-                + "° 内没有可见敌军（需要视线无遮挡且在 "
-                + (int) Tactics.ENEMY_GLOW_RANGE + " 格内）");
-        match.marks.add(new Spotting.Mark(member.team, best.getX(), best.getZ(),
-                System.currentTimeMillis() + match.rules.map.markSeconds * 1000L));
-        while (match.marks.size() > Spotting.MAX_MARKS * 2) match.marks.removeFirst();
-        // A successful mark is worth score, and the feed says so: that is the whole feedback the player needs,
-        // instead of a countdown they have to watch.
-        if (match.rules.map.markScore > 0) {
-            member.score += match.rules.map.markScore;
-            member.credits += match.rules.map.markScore;
-            award(player, "已标记", match.rules.map.markScore,
-                    best.getName().getString(), "mark");
-        } else {
-            award(player, "已标记", 0, best.getName().getString(), "mark");
-        }
-        announce(player, "已标记", best.getName().getString() + " · " + (int) bestDistance + " 格");
-        // Everyone who can see the mark needs it without waiting for their next poll.
-        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            Member viewerMember = members.get(other.getUUID());
-            if (viewerMember != null && viewerMember.team == member.team && viewerMember.map.equals(member.map)) {
-                state(other, member.map, false, "");
-            }
-        }
-    }
+   private static String whereIs(Engine.Match var0) {
+      return var0 != null && var0.rules != null && var0.rules.map != null ? var0.rules.map.id : "";
+   }
 
-    /**
-     * Delivers a map's baked terrain, baking it first if necessary.
-     *
-     * <p>Not admin-gated: every player looking at the deployment map benefits, and the data is static
-     * terrain they can already walk around in. It is, however, rate-limited by construction — a client
-     * that asks repeatedly for a map that is already baked gets a map lookup, not a bake.
-     *
-     * <p>The reply is always either READY with the data or BAKING with progress, so the client can show an
-     * honest "preparing" line instead of a blank canvas.
-     */
-    private void terrain(ServerPlayer player, JsonObject request) {
-        String id = str(request, "map", "");
-        Model.Arena map = maps.get(id);
-        // The request always names its map; the single-map fallback only covers a client that opened a
-        // screen before the selection round-tripped. With several maps and no id there is no safe guess.
-        if (map == null && maps.size() == 1) map = maps.values().iterator().next();
-        Model.require(map != null, "地图不存在");
+   private static VehicleArmament armamentFor(Model.Arena var0, Entity var1) {
+      if (var0 != null && var1 != null) {
+         String var2 = BuiltInRegistries.ENTITY_TYPE.getKey(var1.getType()).toString();
+         return var0.armament(var2);
+      } else {
+         return new VehicleArmament();
+      }
+   }
 
-        double[] box = TerrainBake.bounds(map);
-        int[] dims = TerrainMap.dimensions(Math.max(1, box[2] - box[0]), Math.max(1, box[3] - box[1]));
-        String signature = TerrainMap.signature(map, dims[0], dims[1]);
+   private static String padKey(String var0, String var1) {
+      return var0 + "|" + var1;
+   }
 
-        TerrainMap ready = terrainMaps.get(map.id);
-        if (ready != null && ready.signature.equals(signature) && ready.valid()) {
-            sendTerrain(player, map.id, ready);
-            return;
-        }
-        if (ready != null) terrainMaps.remove(map.id);
+   private long padSecondsLeft(String var1, String var2) {
+      Long var3 = this.padReadyAt.get(padKey(var1, var2));
+      if (var3 != null && var3 > 0L) {
+         long var4 = var3 - this.ticks;
+         return var4 <= 0L ? 0L : (var4 + 19L) / 20L;
+      } else {
+         return 0L;
+      }
+   }
 
-        TerrainMap cached = TerrainBake.load(folder, map.id, signature);
-        if (cached != null && cached.valid()) {
-            terrainMaps.put(map.id, cached);
-            sendTerrain(player, map.id, cached);
-            return;
-        }
+   private List<Map<String, Object>> padBlips(String var1) {
+      Engine.Match var2 = this.matches.get(var1);
+      if (var2 == null) {
+         return List.of();
+      } else {
+         var var3 = new ArrayList();
 
-        TerrainBake bake = bakes.get(map.id);
-        if (bake == null || !bake.signature().equals(signature)) {
-            bakes.put(map.id, new TerrainBake(map));
-            terrainWaiters.remove(map.id);
-        }
-        terrainWaiters.computeIfAbsent(map.id, k -> new java.util.LinkedHashSet<>())
-                .add(player.getUUID());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("type", "terrain");
-        out.put("map", map.id);
-        out.put("state", "BAKING");
-        out.put("progress", bakes.get(map.id).progress());
-        Network.send(player, out);
-    }
+         for (VehicleSupply.Supply var5 : var2.rules.map.supplyPoints()) {
+            LinkedHashMap var6 = new LinkedHashMap();
+            var6.put("id", var5.id());
+            var6.put("x", var5.x());
+            var6.put("y", var5.y());
+            var6.put("z", var5.z());
+            var6.put("readyIn", this.padSecondsLeft(var1, var5.id()));
+            var3.add(var6);
+         }
 
-    final CosmeticKills cosmeticKills = new CosmeticKills();
+         return var3;
+      }
+   }
 
-    public void tick() {
-        cosmeticKills.tick();
-        ticks++;
-        try {
-            tickDowned();
-        } catch (RuntimeException | LinkageError ex) {
-            // Runs inside the server tick; a failure here must not take the loop down.
-            BattlefieldOps.LOG.error("Downed-state tick failed", ex);
-        }
-        // Terrain bakes advance every tick, not once a second: they are chunk-bound and bounded per tick,
-        // so running them on the slow path would stretch a few seconds of work into minutes.
-        //
-        // Guarded because this runs inside the server tick: an exception here does not fail a request, it
-        // takes down the whole server loop. A map whose dimension is not loaded used to throw from level()
-        // on every tick for as long as a bake was in flight, which crashed the game the moment a player held
-        // the map key.
-        try {
-            stepTerrainBakes();
-        } catch (RuntimeException | LinkageError ex) {
-            BattlefieldOps.LOG.error("Terrain bake step failed", ex);
-            bakes.clear();
-        }
-        try {
-            tickBotsMovement();
-        } catch (RuntimeException | LinkageError ex) {
-            // Bot movement is cosmetic; a failure must not take the server loop down.
-            BattlefieldOps.LOG.error("Bot movement tick failed", ex);
-        }
-        if (ticks % 20 != 0) return;
-        for (Map.Entry<String, Match> entry : new ArrayList<>(matches.entrySet())) {
-            String id = entry.getKey();
-            Match match = entry.getValue();
-            Rules rules = match.rules;
-            Model.Arena map = rules.map;
+   int refillCooldownTicks(String var1, SupportRules.Kind var2) {
+      Engine.Match var3 = this.matches.get(var1);
+      return var3 != null && var3.rules.map != null ? Math.max(0, var3.rules.map.refillSeconds(var2)) * 20 : var2.cooldown;
+   }
+
+   int refillPeriodTicks(String var1) {
+      Engine.Match var2 = this.matches.get(var1);
+      return var2 != null && var2.rules.map != null ? Math.max(0, var2.rules.map.ammoBoxRefillSeconds) * 20 : 0;
+   }
+
+   private boolean resupplyPlayer(ServerPlayer var1, VehicleSupply.Supply var2) {
+      if (var1 != null && var2 != null) {
+         boolean var3 = false;
+         if (var2.health() && var1.getHealth() < var1.getMaxHealth()) {
+            var1.setHealth(var1.getMaxHealth());
+            var1.getFoodData().setFoodLevel(20);
+            var3 = true;
+         }
+
+         if (var2.ammo()) {
             try {
-                refreshMarks(match);
-            } catch (RuntimeException | LinkageError ex) {
-                // Runs inside the server tick; a failure here must not take the loop down with it.
-                BattlefieldOps.LOG.error("Cannot refresh enemy spotting for " + id, ex);
+               var3 |= this.supportAmmo(var1) > 0;
+            } catch (ReflectiveOperationException var5) {
+               BattlefieldOps.LOG.debug("Support ammunition bridge unavailable", var5);
             }
-            List<ServerPlayer> players = server.getPlayerList().getPlayers().stream()
-                    .filter(p -> {
-                        Member m = members.get(p.getUUID());
-                        return m != null && m.map.equals(id);
-                    })
-                    .toList();
-            if (!match.running) {
-                for (ServerPlayer p : players) state(p, id, false, "");
-                continue;
-            }
-            // Bot mode: spawn the AI soldiers once the level is available, then advance them. The
-            // level lookup is non-throwing because a match whose dimension is not loaded has nothing
-            // to tick and simply retries next second.
-            ServerLevel botLevel = levelOrNull(map);
-            if (map.botMode) {
-                if (!match.botsSpawned && botLevel != null) {
-                    match.botsSpawned = true;
-                    spawnBots(match, botLevel);
-                }
-                if (botLevel != null) respawnBots(match, botLevel);
-            }
-            if (players.isEmpty() && match.bots.isEmpty()) continue;
+         }
 
-            int[][] presence = new int[map.points.size()][2];
-            Map<Integer, List<ServerPlayer>> occupancy = new HashMap<>();
-            for (ServerPlayer player : players) {
-                Member member = members.get(player.getUUID());
-                if (!member.alive || !player.isAlive() || member.team < 0) continue;
-                boolean sameDimension = player.level().dimension().location().toString().equals(map.dimension);
-                boolean beyond = !sameDimension || RoomPolicy.beyond(map, player.getX(), player.getY(), player.getZ());
-                if (beyond) {
-                    exitAtCurrentPosition(player);
-                    state(player, id, false, "已离开战区，退出房间并恢复背包（不计阵亡）");
-                    continue;
-                }
-                boolean insideMap = Model.contains(map.boundary, player.getX(), player.getZ())
-                        && player.getY() >= map.minY && player.getY() <= map.maxY;
-                boolean insideStage = !rules.isBreakthrough()
-                        || map.inSector(rules.stage, player.getX(), player.getZ());
-                // The activity zone is a hard boundary on where a team may be, so it counts as
-                // "outside the battle area" in exactly the same way the map edge does. It shares the
-                // grace period rather than exiting instantly: a player who clips a zone corner while
-                // running should get the same warning-and-return as one who clips the map edge, and
-                // being killed off the match for it would be a harsher rule than the map edge itself.
-                boolean insideZone = map.inZone(member.team, player.getX(), player.getZ());
-                boolean inside = insideMap && insideStage && insideZone;
-                if (!inside) {
-                    member.outside++;
-                    int remaining = Math.max(0, map.outsideSeconds - member.outside);
-                    // Say *which* boundary was crossed. "离开战区" for a zone violation would send the
-                    // player looking at the map edge, which is not where their problem is.
-                    boundaryWarning(player, remaining,
-                            insideMap && insideStage ? "已离开本方活动区域 " : "已离开战区 ");
-                    if (member.outside >= map.outsideSeconds) {
-                        exitAtCurrentPosition(player);
-                        state(player, id, false, "越界宽限结束，已退出房间（不计阵亡）");
-                    }
-                    continue;
-                }
-                member.outside = 0;
-                member.warnedSecond = -1;
-                if (player.isSpectator()) continue;
-                for (int i = 0; i < map.points.size(); i++) {
-                    if (!rules.active(i)) continue;
-                    Model.Point point = map.points.get(i);
-                    if (ObjectiveZone.contains(point,player.getX(),player.getY(),player.getZ())) {
-                        presence[i][member.team]++;
-                        occupancy.computeIfAbsent(i, n -> new ArrayList<>()).add(player);
-                    }
-                }            }
+         return var3;
+      } else {
+         return false;
+      }
+   }
 
-            // Bots contribute to capture presence too; they earn no personal capture score (no client).
-            for (java.util.UUID uuid : match.bots) {
-                Member botMember = members.get(uuid);
-                if (botMember == null || !botMember.alive) continue;
-                Entity botEntity = findEntity(uuid);
-                if (!(botEntity instanceof LivingEntity botMob) || !botMob.isAlive()) continue;
-                for (int i = 0; i < map.points.size(); i++) {
-                    if (!rules.active(i)) continue;
-                    Model.Point point = map.points.get(i);
-                    if (ObjectiveZone.contains(point, botMob.getX(), botMob.getY(), botMob.getZ())) {
-                        presence[i][botMember.team]++;
-                        break;
-                    }
-                }
+   private void updateSupply(Model.Arena var1, List<ServerPlayer> var2) {
+      if (!var1.supplyPoints().isEmpty()) {
+         Engine.Match var3 = this.matches.get(var1.id);
+         int var4 = var3 == null ? 0 : var3.rules.stage;
+         boolean var5 = var3 != null && var3.rules.isStaged();
+
+         for (ServerPlayer var7 : var2) {
+            Engine.Member var8 = this.members.get(var7.getUUID());
+            if (var8 != null && var8.team >= 0 && var8.alive && var7.isAlive()) {
+               VehicleSupply.Supply var9 = var1.supplyAt(var8.team, var4, var5, var7.getX(), var7.getY(), var7.getZ());
+               if (var9 != null) {
+                  if (var1.supplyCooldownSeconds > 0) {
+                     String var10 = padKey(var1.id, var9.id());
+                     Long var11 = this.padReadyAt.get(var10);
+                     if (var11 != null && this.ticks < var11) {
+                        continue;
+                     }
+                  }
+
+                  Entity var12 = var7.getVehicle();
+                  if (var12 != null && this.vehicles.contains(var12.getUUID())) {
+                     if (VehicleEquip.resupply(var12, var9, armamentFor(var1, var12))) {
+                        var7.displayClientMessage(Component.literal("§b补给点 §f已补充 " + var9.id()), true);
+                        if (var1.supplyCooldownSeconds > 0) {
+                           this.padReadyAt.put(padKey(var1.id, var9.id()), this.ticks + (long)var1.supplyCooldownSeconds * 20L);
+                        }
+                     }
+                  } else if (this.resupplyPlayer(var7, var9)) {
+                     if (var1.supplyCooldownSeconds > 0) {
+                        this.padReadyAt.put(padKey(var1.id, var9.id()), this.ticks + (long)var1.supplyCooldownSeconds * 20L);
+                     }
+
+                     var7.displayClientMessage(Component.literal("§b补给点 §f已恢复生命 " + var9.id()), true);
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   private void reapEmptyVehicles(Engine.Match var1) {
+      if (!var1.vehicles.isEmpty()) {
+         for (UUID var3 : new ArrayList<>(var1.vehicles)) {
+            Entity var4 = this.findEntity(var3);
+            if (var4 == null || var4.isRemoved()) {
+               var1.vehicles.remove(var3);
+               var1.vehicleTeams.remove(var3);
+               this.vehicles.remove(var3);
+            } else if (var4.getPassengers().isEmpty()) {
+               int var5 = var1.vehicleTeams.getOrDefault(var3, -1);
+               if (var5 >= 0) {
+                  double var6 = Double.MAX_VALUE;
+
+                  for (ServerPlayer var9 : this.server.getPlayerList().getPlayers()) {
+                     Engine.Member var10 = this.members.get(var9.getUUID());
+                     if (var10 != null && var10.team == var5 && var10.alive) {
+                        var6 = Math.min(var6, Math.sqrt(var9.distanceToSqr(var4)));
+                     }
+                  }
+
+                  if (VehicleDeploy.orphaned(var4.getPassengers().size(), var6, 64.0)) {
+                     var4.discard();
+                     var1.vehicles.remove(var3);
+                     var1.vehicleTeams.remove(var3);
+                     this.vehicles.remove(var3);
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   private List<Tactics.At> enemiesOf(Rules var1, int var2) {
+      var var3 = new ArrayList();
+
+      for (ServerPlayer var5 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var6 = this.members.get(var5.getUUID());
+         if (var6 != null && var6.team != var2 && var6.alive && var6.map.equals(var1.map.id)) {
+            var3.add(new Tactics.At(var5.getX(), var5.getY(), var5.getZ()));
+         }
+      }
+
+      return var3;
+   }
+
+   private void backup(ServerPlayer var1) throws IOException {
+      CompoundTag var2 = new CompoundTag();
+      var2.put("inventory", var1.getInventory().save(new ListTag()));
+      ListTag var3 = CuriosSupport.save(var1);
+      if (var3 != null) {
+         var2.put("curios", var3);
+      }
+
+      var2.putString("previousTeam", var1.getTeam() != null && !Board.owned(var1.getTeam().getName()) ? var1.getTeam().getName() : "");
+      var2.putString("dimension", var1.level().dimension().location().toString());
+      var2.putDouble("x", var1.getX());
+      var2.putDouble("y", var1.getY());
+      var2.putDouble("z", var1.getZ());
+      var2.putFloat("yaw", var1.getYRot());
+      var2.putFloat("pitch", var1.getXRot());
+      var2.putInt("mode", var1.gameMode.getGameModeForPlayer().getId());
+      var2.putFloat("health", var1.getHealth());
+      var2.putInt("food", var1.getFoodData().getFoodLevel());
+      var2.putFloat("saturation", var1.getFoodData().getSaturationLevel());
+      var2.putFloat("foodExhaustion", var1.getFoodData().getExhaustionLevel());
+      Path var4 = this.folder.resolve("players").resolve(var1.getUUID() + ".nbt");
+      Model.require(!Files.exists(var4), "尚有未恢复的背包备份，请先联系管理员处理");
+      Path var5 = var4.resolveSibling(var4.getFileName() + ".tmp");
+      NbtIo.writeCompressed(var2, var5);
+      Files.move(var5, var4);
+   }
+
+   public void recover(ServerPlayer var1) {
+      if (!this.members.containsKey(var1.getUUID())) {
+         this.board.clearPlayer(var1);
+         Path var2 = this.folder.resolve("players").resolve(var1.getUUID() + ".nbt");
+         if (Files.exists(var2)) {
+            try {
+               CompoundTag var3 = NbtIo.readCompressed(var2, NbtAccounter.unlimitedHeap());
+               ServerLevel var4 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var3.getString("dimension"))));
+               Model.require(var4 != null, "原维度不存在，备份已保留等待恢复");
+               var1.closeContainer();
+               var1.stopRiding();
+               var1.getInventory().clearContent();
+               var1.getInventory().load(var3.getList("inventory", 10));
+               CuriosSupport.clear(var1);
+               if (var3.contains("curios")) {
+                  CuriosSupport.load(var1, var3.getList("curios", 10));
+               }
+
+               var1.setGameMode(GameType.byId(var3.getInt("mode")));
+               var1.teleportTo(var4, var3.getDouble("x"), var3.getDouble("y"), var3.getDouble("z"), var3.getFloat("yaw"), var3.getFloat("pitch"));
+               var1.setHealth(Math.max(1.0F, Math.min(var1.getMaxHealth(), var3.getFloat("health"))));
+               var1.getFoodData().setFoodLevel(var3.getInt("food"));
+               var1.getFoodData().setSaturation(var3.getFloat("saturation"));
+               if (var3.contains("foodExhaustion")) {
+                  var1.getFoodData().setExhaustion(var3.getFloat("foodExhaustion"));
+               }
+
+               var1.inventoryMenu.broadcastChanges();
+               this.board.restoreTeam(var1, var3.getString("previousTeam"));
+               Files.delete(var2);
+            } catch (Exception var5) {
+               BattlefieldOps.LOG.error("Cannot restore player {}", var1.getUUID(), var5);
+               var1.sendSystemMessage(Component.literal("战地背包恢复失败，备份已保留：" + var5.getMessage()));
+            }
+         }
+      }
+   }
+
+   public void leave(ServerPlayer var1) {
+      this.refills.leave(var1.getUUID());
+      Engine.Member var2 = this.members.remove(var1.getUUID());
+      if (var2 != null) {
+         this.career.poll(var1, var2);
+         this.career.leave(var1.getUUID(), var2);
+         TaczProneBridge.clear(var1);
+      }
+
+      if (var2 != null) {
+         try {
+            this.releaseElite(var1.getUUID(), var2);
+         } catch (LinkageError | RuntimeException var9) {
+            BattlefieldOps.LOG.error("Cannot release departing elite", var9);
+         }
+      }
+
+      try {
+         this.removeOwnedBeacon(var1.getUUID());
+      } catch (LinkageError | RuntimeException var8) {
+         BattlefieldOps.LOG.error("Cannot remove player's beacon", var8);
+      }
+
+      try {
+         this.support.leave(var1.getUUID());
+         this.finalHonours.leave(var1.getUUID());
+         this.atmosphere.leave(var1.getUUID());
+      } catch (LinkageError | RuntimeException var7) {
+         BattlefieldOps.LOG.error("Cannot clear player's support devices", var7);
+      }
+
+      if (var2 != null) {
+         try {
+            downPose(var1, false);
+            this.clearReviver(var1.getUUID());
+            var1.stopRiding();
+         } catch (LinkageError | RuntimeException var6) {
+            BattlefieldOps.LOG.error("Cannot reset departing player pose", var6);
+         }
+
+         try {
+            this.clearGlow(var1, var2);
+         } catch (LinkageError | RuntimeException var5) {
+            BattlefieldOps.LOG.error("Cannot clear departing player team", var5);
+         }
+      }
+
+      try {
+         this.board.clearPlayer(var1);
+      } catch (LinkageError | RuntimeException var4) {
+         BattlefieldOps.LOG.error("Cannot clear departing scoreboard team", var4);
+      }
+
+      this.recover(var1);
+      if (var2 != null) {
+         Engine.Match var3 = this.matches.get(var2.map);
+         if (var3 != null) {
+            this.sidebar(var3);
+         }
+      }
+
+      this.requests.remove(var1.getUUID());
+      this.polls.remove(var1.getUUID());
+   }
+
+   public void disconnected(ServerPlayer var1) {
+      this.leave(var1);
+
+      for (String var3 : new ArrayList<>(this.matches.keySet())) {
+         Engine.Match var4 = this.matches.get(var3);
+         if (var4 != null && var1.getUUID().equals(var4.owner)) {
+            ServerPlayer var5 = this.server.getPlayerList().getPlayers().stream().filter(var1x -> !var1x.getUUID().equals(var1.getUUID())).filter(var2 -> {
+               Engine.Member var3x = this.members.get(var2.getUUID());
+               return var3x != null && !var3x.bot && var3x.map.equals(var3);
+            }).findFirst().orElse(null);
+            if (var5 == null) {
+               this.finish(var3, "房主离线，空房间已关闭");
+            } else {
+               var4.owner = var5.getUUID();
+               var4.ownerName = var5.getScoreboardName();
+               this.state(var5, var3, false, "原房主离线，你已成为房主");
+            }
+         }
+      }
+   }
+
+   private void exitAtCurrentPosition(ServerPlayer var1) {
+      ServerLevel var2 = var1.serverLevel();
+      double var3 = var1.getX();
+      double var5 = var1.getY();
+      double var7 = var1.getZ();
+      float var9 = var1.getYRot();
+      float var10 = var1.getXRot();
+      this.leave(var1);
+      var1.teleportTo(var2, var3, var5, var7, var9, var10);
+      var1.fallDistance = 0.0F;
+   }
+
+   private void teleport(ServerPlayer var1, ServerLevel var2, Model.Spawn var3) {
+      var1.teleportTo(var2, var3.x, var3.y, var3.z, var3.yaw, 0.0F);
+      var1.setDeltaMovement(Vec3.ZERO);
+      var1.fallDistance = 0.0F;
+   }
+
+   static Map<String, String> selections(JsonObject var0, String var1) {
+      LinkedHashMap var2 = new LinkedHashMap();
+      if (!var0.has(var1)) {
+         return var2;
+      } else {
+         for (Entry var4 : var0.getAsJsonObject(var1).entrySet()) {
+            Model.require(var2.size() < 32 && ((String)var4.getKey()).length() < 128, "改装参数过多或过长");
+            String var5 = ((JsonElement)var4.getValue()).getAsString();
+            Model.require(var5.length() < 160, "配件 ID 过长");
+            var2.put((String)var4.getKey(), var5);
+         }
+
+         return var2;
+      }
+   }
+
+   private void fittings(ServerPlayer var1, JsonObject var2) throws Exception {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      String var4 = str(var2, "id", "");
+      String var5 = str(var2, "kind", "");
+      LinkedHashMap var7 = new LinkedHashMap();
+      int var8 = this.progress.level(var1.getUUID());
+      if (var3 != null && !str(var2, "map", "").isBlank()) {
+         Engine.Match var9 = this.matches.get(var3.map);
+         Model.require(RoomPolicy.sameRoom(var3.map, str(var2, "map", "")), "房间已改变，请重新打开配装");
+         Model.require(var9 != null, "请先进入房间");
+         Model.Arena var10 = var9.rules.map;
+         List var18;
+         if (var5.equals("gun")) {
+            String var11 = str(var2, "kit", var3.kit);
+            Model.Kit var12 = var10.kits
+               .stream()
+               .filter(var1x -> var1x.id.equals(var11))
+               .findFirst()
+               .orElseThrow(() -> new IllegalArgumentException("请选择当前地图兵种"));
+            Model.require(
+               var10.isTraining() && this.catalog.isGun(var4) || var12.options(true).contains(var4) || var12.options(false).contains(var4), "武器未获本图此兵种授权"
+            );
+            var18 = this.catalog.gunFittings.getOrDefault(var4, List.of());
+
+            for (Fittings.Group var14 : (java.lang.Iterable<Fittings.Group>)(var18)) {
+               for (Fittings.Option var16 : var14.options()) {
+                  String var17 = InfantryAttachments.blocker(var12, var4, var16.id(), var8);
+                  if (!var17.isEmpty()) {
+                     var7.put(var16.id(), var17);
+                  }
+               }
+            }
+         } else {
+            Model.require(var5.equals("vehicle") && var10.vehicles.contains(var4), "载具未获本图授权");
+            var18 = this.catalog.vehicleFittings.getOrDefault(var4, List.of());
+         }
+
+         Network.send(
+            var1,
+            Map.of(
+               "type", "fittings", "id", var4, "kind", var5, "groups", var18, "locks", var7, "level", var8, "kit", str(var2, "kit", var3.kit), "map", var3.map
+            )
+         );
+      } else {
+         Model.require(var5.equals("gun") && this.catalog.isGun(var4) || var5.equals("vehicle") && this.catalog.isVehicle(var4), "装备未安装");
+         var var6 = (var5.equals("gun") ? this.catalog.gunFittings : this.catalog.vehicleFittings).getOrDefault(var4, List.of());
+         Network.send(var1, Map.of("type", "fittings", "id", var4, "kind", var5, "groups", var6, "locks", var7, "level", var8, "kit", "", "map", ""));
+      }
+   }
+
+   private void rearm(ServerPlayer var1, JsonObject var2) throws Exception {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      Model.require(var3 != null, "请先部署");
+      Engine.Match var4 = this.matches.get(var3.map);
+      Model.require(var4 != null && var4.rules.map != null, "对局未开始");
+      Model.Arena var5 = var4.rules.map;
+      Model.require(var5.isTraining(), "只有靶场可以随时切换装备");
+      Model.Kit var6 = var5.kits
+         .stream()
+         .filter(var2x -> var2x.id.equals(str(var2, "kit", var3.kit)))
+         .findFirst()
+         .orElseThrow(() -> new IllegalArgumentException("请选择当前地图兵种"));
+      String var7 = str(var2, "primary", "");
+      String var8 = str(var2, "secondary", "");
+      String var9 = this.catalog.guns.contains(var7) ? var7 : var6.select(true, var7, var3.team);
+      String var10 = this.catalog.guns.contains(var8) ? var8 : var6.select(false, var8, var3.team);
+      int var9Rounds = ammoStacks(var6, var9);
+      var var11 = this.catalog.gunRounds(var1, var9, var9Rounds);
+      applyAmmoType(var6, var9, var11);
+      int var10Rounds = ammoStacks(var6, var10);
+      var var12 = this.catalog.gunRounds(var1, var10, var10Rounds);
+      applyAmmoType(var6, var10, var12);
+      var3.issuedAmmo.put(var9, var9Rounds);
+      var3.issuedAmmo.put(var10, var10Rounds);
+      ItemStack var13 = var11.isEmpty() ? ItemStack.EMPTY : (ItemStack)var11.getFirst();
+      ItemStack var14 = var12.isEmpty() ? ItemStack.EMPTY : (ItemStack)var12.getFirst();
+      String var15 = str(var2, "melee", "");
+      ItemStack var16 = ItemStack.EMPTY;
+      if (!var15.isEmpty()) {
+         if (this.catalog.isGun(var15)) {
+            var var17 = this.catalog.gun(var1, var15, 0);
+            if (!var17.isEmpty()) {
+               var16 = (ItemStack)var17.getFirst();
+            }
+         } else {
+            var16 = KitItems.resolve(var15, 1);
+         }
+      }
+
+      String var35 = str(var2, "throwable", "");
+      ItemStack var18 = ItemStack.EMPTY;
+      if (!var35.isEmpty()) {
+         var18 = issueCounted(var1, var35, var6.countFor(var35));
+      }
+
+      var var19 = new ArrayList();
+      var var20 = var11.size() <= 1 ? List.of() : var11.subList(1, var11.size());
+      var var21 = var12.size() <= 1 ? List.of() : var12.subList(1, var12.size());
+      var var22 = this.tacticalStacks(var1, var6, var5, var2, "tactical1");
+      var var23 = this.tacticalStacks(var1, var6, var5, var2, "tactical2");
+      ItemStack var24 = var22.isEmpty() ? ItemStack.EMPTY : (ItemStack)var22.getFirst();
+      ItemStack var25 = var23.isEmpty() ? ItemStack.EMPTY : (ItemStack)var23.getFirst();
+      if (var22.size() > 1) {
+         var19.addAll(var22.subList(1, var22.size()));
+      }
+
+      if (var23.size() > 1) {
+         var19.addAll(var23.subList(1, var23.size()));
+      }
+
+      LinkedHashMap var26 = new LinkedHashMap();
+
+      for (KitGear.Entry var28 : var6.gear().deduplicatedItems()) {
+         var26.put(var28.id, var28);
+      }
+
+      for (String var41 : var6.issueOrder()) {
+         if (var41.equals("main_ammo")) {
+            var19.addAll(var20);
+         } else if (var41.equals("side_ammo")) {
+            var19.addAll(var21);
+         }
+      }
+
+      if (var2.has("trainingItems")) {
+         for (JsonElement var42 : var2.getAsJsonArray("trainingItems")) {
+            if (var19.size() >= 24) {
+               break;
             }
 
-            updateGlow(players);
-            updateSupply(map, players);
-            reapEmptyVehicles(match);
-            int previousStage = rules.stage;
-            for (Rules.Capture capture : rules.tick(presence)) {
-                if (capture.team() < 0) continue; // neutralised: no personal score
-                for (ServerPlayer player : occupancy.getOrDefault(capture.point(), List.of())) {
-                    Member member = members.get(player.getUUID());
-                    if (member.team != capture.team()) continue;
-                    member.captures++;
-                    member.score += map.captureScore;
-                    member.credits += map.captureScore;
-                    award(player, "占领", map.captureScore, "", "capture");
-                }
+            ItemStack var29 = KitItems.resolve(var42.getAsString(), 1);
+            if (!var29.isEmpty()) {
+               var19.add(var29);
             }
+         }
+      }
 
-            if (rules.winner != -2) {
-                finish(id, rules.result());
-                continue;
+      var1.closeContainer();
+      var1.getInventory().clearContent();
+      var1.getInventory().setItem(0, var13);
+      var1.getInventory().setItem(1, var14);
+      var1.getInventory().setItem(2, var16);
+      int var38 = 3;
+      if (!var18.isEmpty()) {
+         var3.issuedSlots.put(str(var2, "throwable", ""), var38);
+         var1.getInventory().setItem(var38++, var18);
+      }
+
+      if (!var24.isEmpty()) {
+         var3.issuedSlots.put(str(var2, "tactical1", ""), var38);
+         var1.getInventory().setItem(var38++, var24);
+      }
+
+      if (!var25.isEmpty()) {
+         var3.issuedSlots.put(str(var2, "tactical2", ""), var38);
+         var1.getInventory().setItem(var38++, var25);
+      }
+
+      var1.getInventory().setItem(var38++, new ItemStack(Items.COOKED_BEEF, 16));
+      if (var5.isTraining() && SupportItems.DEPLOY_TERMINAL.get() != null) {
+         var1.getInventory().setItem(var38++, new ItemStack((ItemLike)SupportItems.DEPLOY_TERMINAL.get()));
+      }
+
+      for (ItemStack var45 : (java.lang.Iterable<ItemStack>)(var19)) {
+         giveToBackpack(var1, var45);
+      }
+
+      CuriosSupport.clear(var1);
+      KitItems.wear(var6, var1);
+      var3.kit = var6.id;
+      var3.lastKit = var6.id;
+      var3.lastPrimary = var9;
+      var3.lastMelee = str(var2, "melee", "");
+      var3.lastSecondary = var10;
+      var3.tactical1 = var24.isEmpty() ? "" : str(var2, "tactical1", "");
+      var3.throwable = var18.isEmpty() ? "" : str(var2, "throwable", "");
+      var3.issuedTemplates.clear();
+      var var44 = var3.issuedTemplates;
+      if (!var35.isEmpty() && !var18.isEmpty()) {
+         var44.put(var35, var18.copyWithCount(1));
+      }
+
+      if (!var24.isEmpty()) {
+         String var46 = str(var2, "tactical1", "");
+         if (!var46.isEmpty()) {
+            var44.put(var46, var24.copyWithCount(1));
+         }
+      }
+
+      if (!var25.isEmpty()) {
+         String var47 = str(var2, "tactical2", "");
+         if (!var47.isEmpty()) {
+            var44.put(var47, var25.copyWithCount(1));
+         }
+      }
+
+      var3.ammoTemplates.clear();
+
+      for (String var32 : new String[]{var9, var10, var3.tactical1, var3.tactical2}) {
+         if (var32 != null && !var32.isEmpty() && this.catalog.isGun(var32)) {
+            try {
+               var var33 = this.catalog.gun(var1, var32, 1);
+               if (var33.size() > 1) {
+                  var3.ammoTemplates.put(var32, ((ItemStack)var33.get(1)).copyWithCount(1));
+               }
+            } catch (RuntimeException | ReflectiveOperationException var34) {
             }
+         }
+      }
 
-            if (previousStage != rules.stage) {
-                for (ServerPlayer player : players) {
-                    Member member = members.get(player.getUUID());
-                    if (member == null || member.team < 0) continue;
-                    member.alive = false;
-                    member.downed = false;
-                    member.reviveProgress = 0;
-                    member.reviving = null;
-                    clearReviver(player.getUUID());
-                    downPose(player, false);
-                    member.readyAt = ticks + 40;
-                    player.stopRiding();
-                    player.getInventory().clearContent();
-                    player.setGameMode(GameType.SPECTATOR);
-                    int stage = rules.stage;
-                    Model.Spawn spawn = map.spawns.stream()
-                            .filter(s -> s.team == member.team && s.sector == stage)
-                            .findFirst()
-                            .orElseThrow(() -> new IllegalStateException("阶段 " + stage + " 缺少出生点"));
-                    teleport(player, level(map), spawn);
-                    state(player, id, true, "突破成功，进入阶段 " + rules.stage + "，请重新部署");
-                }
+      var3.gunAmmo.clear();
+
+      for (String var52 : new String[]{var9, var10, var3.tactical1, var3.tactical2}) {
+         if (var52 != null && !var52.isEmpty() && SuperbAmmo.isGunId(var52)) {
+            String var53 = ammoChoice(var6, var52, var2);
+            if (!var53.isEmpty()) {
+               var3.gunAmmo.put(var52, var53);
             }
+         }
+      }
 
-            ServerLevel level = level(map);
-            for (int i = 0; i < map.points.size(); i++) {
-                if (!rules.active(i)) continue;
-                Model.Point point = map.points.get(i);
-                Rules.Flag flag = rules.flags.get(i);
-                Vector3f color = new Vector3f(flag.owner == 0 ? 0.2f : 1f, flag.owner < 0 ? 0.9f : 0.3f,
-                        flag.owner == 0 ? 1f : 0.2f);
-                DustParticleOptions particle = new DustParticleOptions(color, 1.3f);
-                for (int n = 0; n < 12; n++) {
-                    double angle = n * Math.PI / 6;
-                    level.sendParticles(particle, point.x + Math.cos(angle) * point.radius, point.y + 0.2,
-                            point.z + Math.sin(angle) * point.radius, 1, 0, 0, 0, 0);
-                }
-            }
+      var3.tactical2 = var25.isEmpty() ? "" : str(var2, "tactical2", "");
+   }
 
-            sidebar(match);
-            for (ServerPlayer player : players) state(player, id, false, "");
+   private void changeSquad(ServerPlayer var1, int var2) {
+      Engine.Member var3 = this.member(var1);
+      Model.require(var3.team >= 0, "请先选择阵营");
+      Model.require(!var3.alive, "请在待部署时切换小队");
+      if (var2 != var3.squad) {
+         long var4 = this.members
+            .values()
+            .stream()
+            .filter(var2x -> var2x != var3 && SquadRules.same(var3.map, var3.team, var2, var2x.map, var2x.team, var2x.squad))
+            .count();
+         Model.require(var2 == 0 || SquadRules.canJoin(var2, (int)var4), "小队已满或编号无效");
+         this.removeOwnedBeacon(var1.getUUID());
+         var3.squad = var2;
+      }
+   }
+
+   private void removeOwnedBeacon(UUID var1) {
+      for (Engine.Beacon var3 : new ArrayList<>(this.beacons.values())) {
+         if (var3.owner.equals(var1)) {
+            this.removeBeacon(var3);
+         }
+      }
+   }
+
+   private void removeBeacon(Engine.Beacon var1) {
+      Entity var2 = this.findEntity(var1.entity);
+      if (var2 != null) {
+         var2.discard();
+      }
+
+      this.beacons.remove(var1.entity);
+      this.beaconUses.remove(var1.entity);
+      this.beaconHealth.remove(var1.entity);
+   }
+
+   void restoreBeacon(UUID var1) {
+      Engine.Beacon var2 = this.beacons.get(var1);
+      if (var2 != null) {
+         Engine.Member var3 = this.members.get(var2.owner);
+         Engine.Match var4 = this.matches.get(var2.map);
+         if (this.supportActive(var3)
+            && var4 != null
+            && this.ticks < var2.expires
+            && SquadRules.same(var2.map, var2.team, var2.squad, var3.map, var3.team, var3.squad)) {
+            DeployBeacon var5 = new DeployBeacon(this.level(var4.rules.map), (double)var2.at.getX() + 0.5, (double)var2.at.getY(), (double)var2.at.getZ() + 0.5);
+            var5.setUUID(var1);
+            var5.setHealth(this.beaconHealth.getOrDefault(var1, 10.0F));
+            var5.setNoGravity(true);
+            var5.setInvisible(true);
+            var5.setCustomNameVisible(false);
+            var5.setCustomName(Component.literal(SquadRules.label(var2.squad) + " · 信标 " + this.beaconUses.getOrDefault(var1, 6) + " 次"));
+            var5.setItemSlot(EquipmentSlot.HEAD, ConquestEquipment.stack(SupportRules.Kind.RADIO_BEACON.key(), 1));
+            var5.addTag("bfops_beacon");
+            this.level(var4.rules.map).addFreshEntity(var5);
+         }
+      }
+   }
+
+   Model.Arena supportMap(Engine.Member var1) {
+      Engine.Match var2 = var1 == null ? null : this.matches.get(var1.map);
+      return var2 == null ? null : var2.rules.map;
+   }
+
+   void supportRefresh(ServerPlayer var1) {
+      Engine.Member var2 = this.members.get(var1.getUUID());
+      if (var2 != null) {
+         this.state(var1, var2.map, false, "");
+      }
+   }
+
+   boolean supportActive(Engine.Member var1) {
+      return var1 != null && var1.team >= 0 && this.matches.containsKey(var1.map) && this.matches.get(var1.map).running;
+   }
+
+   boolean supportPosition(Engine.Member var1, Vec3 var2) {
+      return this.supportActive(var1) && this.legalDynamic(this.matches.get(var1.map), var1.team, var2.x, var2.y, var2.z);
+   }
+
+   void supportPlaceBeacon(ServerPlayer var1) {
+      this.placeBeacon(var1);
+   }
+
+ 
+  /** TaCZ registers one ammunition item and distinguishes types by the AmmoId in its custom data. */
+  private static String ammoIdOf(ItemStack stack) {
+    if (stack == null || stack.isEmpty()) return null;
+    var data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+    if (data == null) return null;
+    var tag = data.copyTag();
+    return tag.contains("AmmoId") ? tag.getString("AmmoId") : null;
+  }
+
+  /** How many rounds of this exact ammunition the player is carrying. */
+  private static int countAmmo(ServerPlayer player, ItemStack template) {
+    int total = 0;
+    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+      ItemStack stack = player.getInventory().getItem(slot);
+      if (sameAmmo(stack, template)) total += stack.getCount();
+    }
+    return total;
+  }
+
+  /** Same ammunition: same item and, when TaCZ tags it, the same AmmoId. Stack size etc. are ignored. */
+  private static boolean sameAmmo(ItemStack a, ItemStack b) {
+    if (a == null || b == null || a.isEmpty() || b.isEmpty()) return false;
+    if (!a.is(b.getItem())) return false;
+    String left = ammoIdOf(a), right = ammoIdOf(b);
+    if (left == null || right == null) return ItemStack.isSameItemSameComponents(a, b);
+    return left.equals(right);
+  }
+
+  /** Set while an ammunition bag tops up, so only gun ammunition is handed out. */
+  private boolean bagGunsOnly;
+
+  /** Ammunition bag variant: main and secondary weapons only, no throwables, no gadgets. */
+  /** True when this gun is the player's primary or secondary, as opposed to a tactical-slot launcher. */
+  private static boolean isMainOrSecondary(Engine.Member member, Model.Kit kit, String gunId) {
+    if (gunId == null || gunId.isEmpty()) return false;
+    if (gunId.equals(member.lastPrimary) || gunId.equals(member.lastSecondary)) return true;
+    if (kit == null) return false;
+    return gunId.equals(kit.primary) || gunId.equals(kit.secondary);
+  }
+
+  /**
+   * One unit of ammunition: a single magazine-sized stack for the first gun that is short, otherwise a
+   * single round of the first throwable or tactical item that is short. The box calls this once per
+   * configured interval so "one item every N seconds" really means one item.
+   */
+  /** True when there is anything at all for a supply point to hand this player. */
+  boolean supportNeeded(ServerPlayer player) throws ReflectiveOperationException {
+    Engine.Member member = this.members.get(player.getUUID());
+    if (member == null || !this.supportActive(member) || !member.alive || member.downed) return false;
+    Model.Kit kit = this.matches.get(member.map).rules.map.kits.stream()
+        .filter(k -> k.id.equals(member.kit)).findFirst().orElse(null);
+    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+      ItemStack gun = player.getInventory().getItem(slot);
+      String gunId = gunIdOf(gun);
+      if (gunId.isEmpty() || !this.catalog.isGun(gunId)) continue;
+      List<ItemStack> bundle;
+      try {
+        bundle = this.catalog.gun(player, gunId, 1);
+      } catch (RuntimeException missing) {
+        continue;
+      }
+      if (bundle.size() < 2) continue;
+      Integer recorded = member.issuedAmmo == null ? null : member.issuedAmmo.get(gunId);
+      int want = Math.max(1, recorded != null ? recorded : ammoStacks(kit, gunId));
+      if (countAmmo(player, bundle.get(1)) < want) return true;
+    }
+    for (String id : new String[]{member.throwable, member.tactical1, member.tactical2}) {
+      if (id == null || id.isEmpty()) continue;
+      if (this.catalog.isGun(id) || SuperbAmmo.isGunId(id)) continue;
+      if (ConquestEquipment.kind(id) != null || SupportItems.isSupportId(id)) continue;
+      int want = kit == null ? 1 : kit.countFor(id);
+      int have = 0;
+      for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (!stack.isEmpty() && net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(id)) have += stack.getCount();
+      }
+      if (have < want) return true;
+    }
+    return false;
+  }
+
+  int supportAmmoUnit(ServerPlayer player) throws ReflectiveOperationException {
+    Engine.Member member = this.members.get(player.getUUID());
+    if (!this.supportActive(member) || !member.alive || member.downed) return 0;
+    Model.Kit kit = this.matches.get(member.map).rules.map.kits.stream()
+        .filter(k -> k.id.equals(member.kit)).findFirst().orElse(null);
+    if (kit == null) return 0;
+
+    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+      ItemStack gun = player.getInventory().getItem(slot);
+      if (gun.isEmpty() || !this.catalog.isGun(gunIdOf(gun))) continue;
+      String gunId = gunIdOf(gun);
+      List<ItemStack> bundle;
+      try {
+        bundle = this.catalog.gun(player, gunId, 1);
+      } catch (RuntimeException missing) {
+        continue;
+      }
+      if (bundle.size() < 2) continue;
+      ItemStack template = bundle.get(1);
+      Integer recorded = member.issuedAmmo == null ? null : member.issuedAmmo.get(gunId);
+      int want = Math.max(1, recorded != null ? recorded : ammoStacks(kit, gunId));
+      int have = countAmmo(player, template);
+      if (have >= want) continue;
+      int give = Math.min(want - have, Math.max(1, template.getMaxStackSize()));
+      ItemStack stack = template.copyWithCount(give);
+      giveToBackpack(player, stack);
+      int added = give - stack.getCount();
+      if (added > 0) {
+        BattlefieldOps.LOG.info("[bfops] box unit: {} +{} (want={} have={})", gunId, added, want, have);
+        return added;
+      }
+    }
+
+    for (String id : new String[]{member.throwable, member.tactical1, member.tactical2}) {
+      if (id == null || id.isEmpty() || this.catalog.isGun(id) || SuperbAmmo.isGunId(id)) continue;
+      if (ConquestEquipment.kind(id) != null || SupportItems.isSupportId(id)) continue;
+      int want = kit.countFor(id);
+      int have = 0;
+      for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (!stack.isEmpty() && net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(id)) have += stack.getCount();
+      }
+      if (have >= want) continue;
+      ItemStack one = KitItems.resolve(id, 1);
+      if (one.isEmpty()) continue;
+      giveToBackpack(player, one);
+      if (one.isEmpty()) {
+        BattlefieldOps.LOG.info("[bfops] box unit: {} +1", id);
+        return 1;
+      }
+    }
+    return 0;
+  }
+
+  private static String gunIdOf(ItemStack stack) {
+    try {
+      Class<?> gun = Class.forName("com.tacz.guns.api.item.IGun");
+      if (!gun.isInstance(stack.getItem())) return "";
+      return String.valueOf(gun.getMethod("getGunId", ItemStack.class).invoke(stack.getItem(), stack));
+    } catch (ReflectiveOperationException | RuntimeException unreadable) {
+      return "";
+    }
+  }
+
+  int supportAmmoBag(ServerPlayer player) throws ReflectiveOperationException {
+    this.bagGunsOnly = true;
+    try {
+      int added = supportAmmo(player);
+      BattlefieldOps.LOG.info("[bfops] ammo bag for {} -> {} units", player.getScoreboardName(), added);
+      return added;
+    } finally {
+      this.bagGunsOnly = false;
+    }
+  }
+
+  /**
+   * Ammunition belongs in the hotbar or the backpack, never in the three right-hand slots (6-8) that the
+   * HUD uses for gadgets: anything that landed there is moved into the backpack.
+   */
+  private static void relocateColumnAmmo(ServerPlayer player) {
+    var inventory = player.getInventory();
+    for (int slot = 0; slot <= 8; slot++) {
+      ItemStack stack = inventory.getItem(slot);
+      if (stack.isEmpty() || !looksLikeAmmo(stack)) continue;
+      ItemStack moving = stack.copy();
+      inventory.setItem(slot, ItemStack.EMPTY);
+      // Only the backpack rows: add() would put it straight back into the hotbar.
+      for (int target = 9; target < inventory.getContainerSize() && !moving.isEmpty(); target++) {
+        ItemStack existing = inventory.getItem(target);
+        if (!existing.isEmpty() && sameAmmo(existing, moving)) {
+          int room = existing.getMaxStackSize() - existing.getCount();
+          if (room > 0) {
+            int moved = Math.min(room, moving.getCount());
+            existing.grow(moved);
+            moving.shrink(moved);
+          }
         }
-    }
-
-    // ------------------------------------------------------------------ presentation
-
-    /** Big centred title used for boundary warnings; colour shifts red as the timer runs out. */
-    private void boundaryWarning(ServerPlayer player, int remaining) {
-        boundaryWarning(player, remaining, "已离开战区 ");
-    }
-
-    /**
-     * Boundary warning with a caller-chosen reason.
-     *
-     * @param reason what the player left, so the message points at the boundary they actually crossed
-     */
-    private void boundaryWarning(ServerPlayer player, int remaining, String reason) {
-        player.connection.send(new ClientboundSetTitlesAnimationPacket(0, 22, 4));
-        player.connection.send(new ClientboundSetTitleTextPacket(
-                Component.literal("请回到战斗区域").withStyle(net.minecraft.ChatFormatting.RED)));
-        String color = remaining <= 1 ? "§c" : remaining <= 3 ? "§6" : remaining <= 5 ? "§e" : "§b";
-        player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(
-                "你将在 " + color + remaining + "§r 秒后退出房间（不计阵亡）")));
-        player.displayClientMessage(Component.literal("§c返回战区 §f" + remaining + "§c 秒 · " + reason.trim()), true);
-    }
-
-    /** Short feedback used for deployment and spawn reassignment. */
-    private void announce(ServerPlayer player, String title, String subtitle) {
-        player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 20, 10));
-        player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(title)));
-        if (!subtitle.isEmpty()) {
-            player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(subtitle)));
+      }
+      for (int target = 9; target < inventory.getContainerSize() && !moving.isEmpty(); target++) {
+        if (inventory.getItem(target).isEmpty()) {
+          inventory.setItem(target, moving.copy());
+          moving.setCount(0);
         }
+      }
+      if (!moving.isEmpty()) player.drop(moving, false);
     }
+  }
 
-    /**
-     * Teammates glow through walls so a squad can regroup; enemies glow only when close and in
-     * line of sight, which keeps the highlight informational instead of a wall hack.
-     *
-     * <p>Vanilla glowing is a single shared entity flag — every client sees the same thing — so the
-     * decision must be global per entity, not per viewer. A player therefore glows when *any*
-     * teammate is near (squad marker), or when *any* enemy nearby has line of sight (spotted). This
-     * is the only honest reading of the flag; a per-viewer outline would need a custom renderer and
-     * a client-side mod.
-     *
-     * <p>Flags are only written on change, because a per-tick flag write is a per-tick entity data
-     * packet for every player.
-     */
-    private void updateGlow(List<ServerPlayer> players) {
-        for (ServerPlayer player : players) {
-            Member member = members.get(player.getUUID());
-            if (member != null && member.glowing) clearGlow(player, member);
-        }
+  /** Ammunition is tagged by TaCZ / Superb Warfare with an AmmoId in its custom data. */
+  private static boolean looksLikeAmmo(ItemStack stack) {
+    if (stack == null || stack.isEmpty()) return false;
+    String full = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+    // Class gear is never ammunition, whatever its name says: ammo_bag and ammo_box used to be moved into
+    // the backpack mid-use, which left the consumed stack untouched and duplicated the item.
+    if (SupportItems.isSupportId(full) || ConquestEquipment.kind(full) != null) return false;
+    if (ammoIdOf(stack) != null) return true;
+    String path = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+    if (path.endsWith("_bag") || path.endsWith("_box") || path.startsWith("ammo_")) return false;
+    return path.contains("ammo") || path.contains("rocket") || path.contains("magazine");
+  }
+
+  /**
+   * Hard cap: whatever the counters thought, the player never carries more than the configured amount of
+   * one ammunition type. Excess is removed from the backpack first, then from the hotbar.
+   */
+  private static void capAmmo(ServerPlayer player, ItemStack template, int want) {
+    var inventory = player.getInventory();
+    int total = countAmmo(player, template);
+    for (int slot = inventory.getContainerSize() - 1; slot >= 0 && total > want; slot--) {
+      ItemStack stack = inventory.getItem(slot);
+      if (!sameAmmo(stack, template)) continue;
+      int excess = Math.min(stack.getCount(), total - want);
+      stack.shrink(excess);
+      total -= excess;
+      if (stack.isEmpty()) inventory.setItem(slot, ItemStack.EMPTY);
     }
+  }
 
-    private void clearGlow(ServerPlayer player, Member member) {
-        if (member != null && member.glowing) player.setGlowingTag(false);
-        if (member != null) member.glowing = false;
-    }
+  /** The map's configured amount for this gun, or 0 when it is not configured at all. */
+  private static int kitCount(Model.Kit kit, String gunId) {
+    if (kit == null || kit.itemCounts == null) return 0;
+    Integer configured = kit.itemCounts.get(gunId);
+    return configured == null ? 0 : Math.max(0, configured);
+  }
 
-    private static Tactics.At at(ServerPlayer player) {
-        return new Tactics.At(player.getX(), player.getY(), player.getZ());
-    }
 
-    /**
-     * Side bar shared by every viewer: tickets, stage, objective ownership and the top fraggers.
-     * Rows are pre-rendered once and then written with {@link Board#sidebar}, because a vanilla side
-     * bar can only show one score per holder and all viewers see the same text.
-     *
-     * <p>Skipped when more than one match is running: the side bar is a single server-wide display
-     * slot, so two matches would overwrite each other every second. In that case the per-player HUD
-     * carries the information instead.
-     */
-    private void sidebar(Match match) {
-        board.hideSidebar();
-        sidebarShown = false;
-    }
+  int supportAmmo(ServerPlayer var1) throws ReflectiveOperationException {
+    BattlefieldOps.LOG.info("[bfops] supportAmmo start for {}", var1.getScoreboardName());
+      Engine.Member var2 = this.members.get(var1.getUUID());
+    // Elite kits carry ordinary guns too, so they get ammunition as well; the old elite check made the
+    // ammo bag silently do nothing on those classes.
+    if (this.supportActive(var2) && var2.alive && !var2.downed) {
+         Model.Kit var3 = this.matches.get(var2.map).rules.map.kits.stream().filter(var1x -> var1x.id.equals(var2.kit)).findFirst().orElse(null);
+    BattlefieldOps.LOG.info("[bfops] supportAmmo kit={} throwable={} t1={} t2={}", var3 == null ? "null" : var3.id, var2.throwable, var2.tactical1, var2.tactical2);
+    java.util.Set<String> countedGuns = new java.util.HashSet<>();
+         int var4 = 0;
+         LinkedHashMap var5 = new LinkedHashMap();
+         LinkedHashMap var6 = new LinkedHashMap();
 
-    private void finish(String id, String reason) {
-        Match match = matches.remove(id);
-        if (match == null) return;
-        results.put(id, reason);
-        boolean drawn = reason.contains("平局");
-        int winner = drawn ? -1 : reason.contains("蓝方") ? 0 : reason.contains("红方") ? 1 : -1;
+         Class var7;
+         try {
+            var7 = Class.forName("com.tacz.guns.api.item.IGun");
+         } catch (ClassNotFoundException var22) {
+            return 0;
+         }
 
-        // Snapshot the scoreboard before anyone leaves, so the result screen can list every player.
-        List<Member> ranked = members.values().stream()
-                .filter(m -> m.map.equals(id) && !m.bot)
-                .sorted(Comparator.comparingInt((Member m) -> m.score).reversed())
-                .toList();
-
+      for (int var8 = 0; var8 < var1.getInventory().getContainerSize(); var8++) {
+        ItemStack var9 = var1.getInventory().getItem(var8);
+        if (var9.isEmpty() || !var7.isInstance(var9.getItem())) continue;
+        String gunId;
         try {
-            for (ServerPlayer player : new ArrayList<>(server.getPlayerList().getPlayers())) {
-                Member member = members.get(player.getUUID());
-                if (member == null || !member.map.equals(id)) continue;
-                if (!match.running || member.team < 0) {
-                    leave(player);
-                    state(player, id, false, reason);
-                    continue;
-                }
-                clearGlow(player, member);
-                // Everyone gets the verdict as a title, then the exact same summary in chat so it can
-                // still be read after the title fades.
-                player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 70, 20));
-                player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(resultTitle(reason))));
-                player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(resultSubtitle(member, winner))));
-                player.sendSystemMessage(Component.literal("§e=== " + reason + " ==="));
-                player.sendSystemMessage(Component.literal("§7个人：击杀 §f" + member.kills + "§7 阵亡 §f"
-                        + member.deaths + "§7 占点 §f" + member.captures + "§7 得分 §f" + member.score));
-                for (int i = 0; i < ranked.size() && i < 10; i++) {
-                    Member entry = ranked.get(i);
-                    String prefix = entry.team == 0 ? "§9" : entry.team == 1 ? "§c" : "§7";
-                    player.sendSystemMessage(Component.literal("§7#" + (i + 1) + " " + prefix + entry.name
-                            + " §7" + entry.kills + "/" + entry.deaths + " §f" + entry.score));
-                }
-                Map<String,Object> summary=new LinkedHashMap<>();
-                summary.put("type","result");summary.put("mapName",match.rules.map.name);
-                summary.put("reason",reason);summary.put("outcome",match.rules.winner==-2?"对局结束":winner<0?"平局":winner==member.team?"胜利":"失败");
-                summary.put("kills",member.kills);summary.put("deaths",member.deaths);
-                summary.put("captures",member.captures);summary.put("score",member.score);
-                leave(player);
-                state(player, id, false, reason);
-                Network.send(player,summary);
+          gunId = var7.getMethod("getGunId", ItemStack.class).invoke(var9.getItem(), var9).toString();
+        } catch (ReflectiveOperationException unreadable) {
+          continue;
+        }
+        if (this.bagGunsOnly && !isMainOrSecondary(var2, var3, gunId)) {
+          // The bag feeds the primary and secondary only; launchers in the tactical category are left alone.
+          continue;
+        }
+        BattlefieldOps.LOG.info("[bfops] resupply sees gun {} (catalog={})", gunId, this.catalog.guns.contains(gunId));
+        List<ItemStack> bundle;
+        try {
+          bundle = this.catalog.gun(var1, gunId, 1);
+        } catch (RuntimeException notIndexed) {
+          BattlefieldOps.LOG.info("[bfops] resupply cannot build {}: {}", gunId, notIndexed.getMessage());
+          continue;
+        }
+        if (bundle.size() > 1) {
+          countedGuns.add(gunId);
+          String templateKey = bundle.get(1).getComponents().toString();
+          var5.putIfAbsent(templateKey, bundle.get(1));
+          // Target for an ammunition item that came straight from the inventory scan, not from the cached
+          // deploy-time map: without this the loop below has a template but no wanted amount.
+          // Shared ammunition: two guns drawing on one stock must not double the reserve, so the larger
+          // requirement wins instead of the sum (which turned 180 into 360).
+          // Top up to what this player actually deployed with, not to the map's default: a weapon issued with
+          // 2 rounds must come back with 2, not with 64 or 180.
+          Integer recorded = var2.issuedAmmo == null ? null : var2.issuedAmmo.get(gunId);
+          // No record (deployed before this field existed): fall back to the same number deployment uses,
+          // i.e. the map's configured carry amount. It must not drift with whatever the player happens to hold.
+          int issued = recorded != null ? recorded : ammoStacks(var3, gunId);
+var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Integer)b));
+        } else {
+          BattlefieldOps.LOG.info("[bfops] resupply {} built no ammunition", gunId);
+        }
+      }
+
+    if (var3 != null && !this.bagGunsOnly) {
+            LinkedHashSet var23 = new LinkedHashSet();
+            if (!var2.throwable.isEmpty()) {
+               var23.add(var2.throwable);
             }
-        } finally {
-            // A stale [蓝方]/[红方] tag after the match is worse than a lost result line: clear the
-            // scoreboard teams unconditionally, even if a result send threw partway through the loop.
-            board.clearMap(id);
-            board.hideSidebar();
-            removeBots(match);
-        }
-        for (UUID uuid : match.vehicles) {
-            Entity entity = findEntity(uuid);
-            if (entity != null) entity.discard();
-            vehicles.remove(uuid);
-        }
-    }
 
-    private static String resultTitle(String reason) {
-        if (reason.contains("平局")) return "§7平局";
-        if (reason.contains("蓝方")) return "§9蓝方胜利";
-        if (reason.contains("红方")) return "§c红方胜利";
-        return reason;
-    }
+            if (!var2.tactical1.isEmpty()) {
+               var23.add(var2.tactical1);
+            }
 
-    private static String resultSubtitle(Member member, int winner) {
-        String outcome = winner < 0 ? "§7平局" : winner == member.team ? "§a胜利" : "§c失败";
-        return outcome + " §7击杀 " + member.kills + " 阵亡 " + member.deaths
-                + " 占点 " + member.captures + " §f得分 " + member.score;
-    }
+            if (!var2.tactical2.isEmpty()) {
+               var23.add(var2.tactical2);
+               // Everything else actually issued at deploy: a C4 in slot 5 or a med bag in slot 4 counts too.
+               if (var2.issuedTemplates != null) {
+                 for (String issuedId : var2.issuedTemplates.keySet()) {
+                   if (issuedId == null || issuedId.isEmpty()) continue;
+                   if (this.catalog.isGun(issuedId) || SuperbAmmo.isGunId(issuedId)) continue;
+                   if (ConquestEquipment.kind(issuedId) != null || SupportItems.isSupportId(issuedId)) continue;
+                   var23.add(issuedId);
+                 }
+               }
+            }
 
-    public void shutdown() {
-        for (String id : new ArrayList<>(matches.keySet())) finish(id, "服务器关闭，对局结束");
-        board.clearAll();
-    }
+            Iterator var27 = var23.iterator();
 
-    // ------------------------------------------------------------------ state
+            label339:
+            while (true) {
+               String var31;
+               ResourceLocation var35;
+               do {
+                  if (!var27.hasNext()) {
+                     break label339;
+                  }
 
-    public void state(ServerPlayer player, String selected, boolean open, String message) {
-        if (!Network.supported(player)) {
-            if (open) player.sendSystemMessage(Component.literal("你可以正常游玩服务器；安装战地风云客户端模组后才能加入地图对局。"));
+                  var31 = (String)var27.next();
+                  if (LrtEquipment.explicit(var31)) {
+                     break;
+                  }
+
+                  var35 = ResourceLocation.tryParse(var31);
+               } while (var35 == null || !BuiltInRegistries.ITEM.containsKey(var35));
+
+               if (!var31.isEmpty() && !this.catalog.isGun(var31) && !SuperbAmmo.isGunId(var31) && ConquestEquipment.kind(var31) == null && !SupportItems.isSupportId(var31)) {
+                  int var36 = var3.countFor(var31);
+                  ItemStack var12 = var2.issuedTemplates == null ? ItemStack.EMPTY : var2.issuedTemplates.get(var31);
+                  ItemStack var13 = !var12.isEmpty() ? var12 : KitItems.resolve(var31, 1);
+                  int var14 = 0;
+
+                  for (int var15 = 0; var15 < var1.getInventory().getContainerSize(); var15++) {
+                     ItemStack var16 = var1.getInventory().getItem(var15);
+                     if (!var16.isEmpty() && !var13.isEmpty() && ItemStack.isSameItemSameComponents(var16, var13)) {
+                        var14 += var16.getCount();
+                     }
+                  }
+
+                  int var47 = var36 - var14;
+                  if (var47 > 0) {
+                     if (!var12.isEmpty()) {
+                        int var52 = var47;
+
+                        for (int var56 = 0; var56 < var1.getInventory().getContainerSize() && var52 > 0; var56++) {
+                           ItemStack var59 = var1.getInventory().getItem(var56);
+                           if (!var59.isEmpty() && ItemStack.isSameItemSameComponents(var59, var12)) {
+                              int var63 = var59.getMaxStackSize() - var59.getCount();
+                              if (var63 > 0) {
+                                 int var20 = Math.min(var63, var52);
+                                 var59.grow(var20);
+                                 var52 -= var20;
+                                 var4 += var20;
+                              }
+                           }
+                        }
+
+                        int var57 = var2.issuedSlots == null ? -1 : var2.issuedSlots.getOrDefault(var31, -1);
+                        boolean var60 = true;
+
+                        while (var52 > 0) {
+                           int var64 = Math.min(var52, Math.max(1, var12.getMaxStackSize()));
+                           ItemStack var67 = var12.copyWithCount(var64);
+                           if (var60) {
+                              giveToSlot(var1, var67, var57);
+                              var60 = false;
+                           } else {
+                              giveToBackpack(var1, var67);
+                           }
+
+                           var52 -= var64;
+                           var4 += var64;
+                        }
+                     } else if (LrtEquipment.explicit(var31)) {
+                        for (int var51 = 0; var51 < var1.getInventory().getContainerSize() && var47 > 0; var51++) {
+                           ItemStack var55 = var1.getInventory().getItem(var51);
+                           if (!var55.isEmpty() && var31.equals(LrtEquipment.idOf(var55))) {
+                              int var18 = var55.getMaxStackSize() - var55.getCount();
+                              if (var18 > 0) {
+                                 int var19 = Math.min(var18, var47);
+                                 var55.grow(var19);
+                                 var47 -= var19;
+                                 var4 += var19;
+                              }
+                           }
+                        }
+                     } else {
+                        ItemStack var50 = KitItems.resolve(var31, 1);
+                        int var17 = var2.issuedSlots == null ? -1 : var2.issuedSlots.getOrDefault(var31, -1);
+                        if (!var50.isEmpty()) {
+                           var4 += topUp(var1, var50.getItem(), var47, var17);
+                        }
+                     }
+                  }
+               }
+            }
+         }
+
+         for (int var24 = 0; var24 < var1.getInventory().getContainerSize(); var24++) {
+            ItemStack var28 = var1.getInventory().getItem(var24);
+            if (SuperbAmmo.isGun(var28)) {
+               String var32 = BuiltInRegistries.ITEM.getKey(var28.getItem()).toString();
+               if (this.bagGunsOnly && !isMainOrSecondary(var2, var3, var32)) continue;   // bag: primary and secondary only
+               String var37 = var2.gunAmmo.get(var32);
+               boolean var39 = var3 != null && var3.itemCounts != null && var37 != null && var3.itemCounts.containsKey(var37);
+               int var41 = var3 == null ? 1 : (var39 ? var3.countFor(var37) : var3.countFor(var32));
+               if (var37 == null) {
+                  var37 = var3 != null && var3.gunAmmoType != null ? var3.gunAmmoType.get(var32) : null;
+               }
+
+               String var44 = SuperbAmmo.chosen(var28, var37);
+               if (!var44.isEmpty()) {
+                  ResourceLocation var48 = ResourceLocation.tryParse(var44);
+                  if (var48 != null && BuiltInRegistries.ITEM.containsKey(var48)) {
+                     Item var53 = (Item)BuiltInRegistries.ITEM.get(var48);
+                     int var58 = 0;
+
+                     for (int var61 = 0; var61 < var1.getInventory().getContainerSize(); var61++) {
+                        ItemStack var65 = var1.getInventory().getItem(var61);
+                        if (!var65.isEmpty() && var65.is(var53)) {
+                           var58 += var65.getCount();
+                        }
+                     }
+
+                     int var62 = var41 - var58;
+                     if (var62 > 0) {
+                        int var66 = Math.max(1, var53.getDefaultMaxStackSize());
+
+                        while (var62 > 0) {
+                           int var68 = Math.min(var62, var66);
+                           ItemStack var21 = new ItemStack(var53, var68);
+                           giveToBackpack(var1, var21);
+                           var62 -= var68;
+                           var4 += var68;
+                        }
+                     }
+                  }
+               }
+            }
+         }
+
+         if (var2.ammoTemplates != null) {
+            for (Entry var29 : var2.ammoTemplates.entrySet()) {
+              // A gun that was replaced by a later deploy must not keep feeding its old ammunition.
+              if (var2.issuedAmmo != null && !var2.issuedAmmo.containsKey((String)var29.getKey())) continue;
+               if (var29.getValue() != null && !((ItemStack)var29.getValue()).isEmpty()) {
+                  String var33 = ((ItemStack)var29.getValue()).getComponents().toString();
+                  var5.putIfAbsent(var33, (ItemStack)var29.getValue());
+                  // Sum the wants of every gun that shares this ammunition item: counting by item is accurate, but
+        // several guns (or a tactical launcher and a rifle) can draw on the same stock, and taking only
+        // the first gun's number made the crate stop feeding the rest.
+        Integer recordedCached = var2.issuedAmmo == null ? null : var2.issuedAmmo.get((String)var29.getKey());
+        int issuedCached = recordedCached != null ? recordedCached
+            : ammoStacks(var3, (String)var29.getKey());
+        var6.merge(var33, Math.max(1, issuedCached), (a, b) -> Math.max((Integer)a, (Integer)b));
+               }
+            }
+         }
+
+    BattlefieldOps.LOG.info("[bfops] supportAmmo ammo templates: {} entries", var5.size());
+         for (Entry var30 : (java.lang.Iterable<Entry>)(var5.entrySet())) {
+            ItemStack var34 = (ItemStack)var30.getValue();
+            int var38 = var3 == null ? 1 : Math.max(1, ((Integer)var6.getOrDefault(var30.getKey(), ammoStacks(var3))));
+            int var40 = 0;
+
+            for (int var42 = 0; var42 < var1.getInventory().getContainerSize(); var42++) {
+               ItemStack var45 = var1.getInventory().getItem(var42);
+        // Count by item *and* AmmoId: TaCZ uses a single ammunition item for every calibre, so comparing by
+        // item alone made every type count as one and the crate thought the rockets were full.
+        if (sameAmmo(var45, var34)) {
+                  var40 += var45.getCount();
+               }
+            }
+
+            // ammoStacks is a round count now, not a stack count: multiplying by the stack size refilled the whole
+      // backpack (4 x 64 rockets) instead of the configured four rounds.
+      int var43 = Math.max(0, var38 - var40);
+      // Diagnostic: shows exactly what the crate wants, sees and hands over for each ammunition type.
+      BattlefieldOps.LOG.info("[bfops] resupply {}: want={} have={} give={}", var30.getKey(), var38, var40, var43);
+      // Safety: never hand out more than two stacks in one pass, whatever the numbers say.
+      var43 = Math.min(var43, 2 * Math.max(1, var34.getMaxStackSize()));
+
+            while (var43 > 0) {
+               int var46 = Math.min(var43, var34.getMaxStackSize());
+               ItemStack var49 = var34.copyWithCount(var46);
+               var1.getInventory().add(var49);
+               int var54 = var46 - var49.getCount();
+               var4 += var54;
+               var43 -= var54;
+               if (var54 == 0) {
+                  break;
+               }
+      capAmmo(var1, var34, var38);
+            }
+         }
+
+         if (var4 > 0) {
+      relocateColumnAmmo(var1);
+            var1.inventoryMenu.broadcastChanges();
+            var1.getInventory().setChanged();
+         }
+
+         return var4;
+      } else {
+         return 0;
+      }
+
+   }
+
+   void supportCredit(ServerPlayer var1, ServerPlayer var2, String var3) {
+      if (var1 != var2) {
+         Engine.Member var4 = this.members.get(var1.getUUID());
+         Engine.Member var5 = this.members.get(var2.getUUID());
+         if (this.supportActive(var4) && var5 != null && var4.map.equals(var5.map)) {
+            boolean var6 = var3.equals("地面侦测");
+            if (var6 ? var4.team != var5.team : var4.team == var5.team) {
+               if (var3.equals("信标部署")) {
+                  this.career.count(var1, var4, "squadDeploy", 3, "pathfinder", true);
+               } else if (!var6) {
+                  this.career.count(var1, var4, "supplyRevive", 25, "quartermaster", true);
+               }
+
+               int var7 = this.matches.get(var4.map).rules.map.supportScore;
+               var4.score += var7;
+               var4.credits += var7;
+               Network.send(
+                  var1,
+                  Map.of(
+                     "type",
+                     "bonus",
+                     "label",
+                     var3,
+                     "points",
+                     var7,
+                     "detail",
+                     var2.getScoreboardName(),
+                     "icon",
+                     SupportRules.feedbackIcon(var3),
+                     "killFeed",
+                     false
+                  )
+               );
+            }
+         }
+      }
+   }
+
+   void supportContact(UUID var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1);
+      Engine.Member var4 = this.members.get(var2.getUUID());
+      if (this.supportActive(var3) && var4 != null && var3.map.equals(var4.map) && var3.team != var4.team) {
+         Engine.Match var5 = this.matches.get(var3.map);
+         String var6 = "传感器 · " + var2.getScoreboardName();
+         var5.marks.removeIf(var2x -> var2x.team() == var3.team && var2x.name().equals(var6));
+         var5.marks
+            .add(new Spotting.Mark(var3.team, var2.getX(), var2.getZ(), System.currentTimeMillis() + 2000L, Spotting.Kind.ENEMY, var6, var2.getY() + 2.0));
+
+         while (var5.marks.size() > 32) {
+            var5.marks.removeFirst();
+         }
+      }
+   }
+
+   void supportGadgetDestroyed(ServerPlayer var1, String var2, int var3, Entity var4) {
+      Engine.Member var5 = this.members.get(var1.getUUID());
+      if (this.supportActive(var5) && var5.map.equals(var2) && var5.team != var3) {
+         this.career.count(var1, var5, "tacticalGadget", 3, "destroyer", true);
+         this.cosmeticKills.report(var4, var1, false, "摧毁设备");
+      }
+   }
+
+   boolean knownBeacon(UUID var1) {
+      return this.beacons.containsKey(var1);
+   }
+
+   boolean damageBeacon(Entity var1, DamageSource var2, float var3) {
+      Engine.Beacon var4 = this.beacons.get(var1.getUUID());
+      if (var4 != null && var1 instanceof DeployBeacon var5 && Float.isFinite(var3) && !(var3 <= 0.0F)) {
+         ServerPlayer var6 = VehicleKillCompat.attacker(var2);
+         if (var6 != null) {
+            Engine.Member var7 = this.members.get(var6.getUUID());
+            if (var7 == null || !var7.map.equals(var4.map) || !var7.alive || var7.downed) {
+               return false;
+            }
+
+            if (var7.team == var4.team && !var6.getUUID().equals(var4.owner)) {
+               return false;
+            }
+         }
+
+         boolean var8 = PropVitals.damage(var5, var3);
+         this.beaconHealth.put(var4.entity, var5.getHealth());
+         if (var8) {
+            if (var6 != null) {
+               this.supportGadgetDestroyed(var6, var4.map, var4.team, var1);
+            }
+
+            this.removeBeacon(var4);
+         }
+
+         return true;
+      }
+
+      return false;
+   }
+
+   private void cleanBeacons() {
+      for (Engine.Beacon var2 : new ArrayList<>(this.beacons.values())) {
+         Engine.Member var3 = this.members.get(var2.owner);
+         Engine.Match var4 = this.matches.get(var2.map);
+         boolean var5 = this.chunkLoaded(var2);
+         Entity var6 = var5 ? this.findEntity(var2.entity) : null;
+         String var7 = SquadRules.beaconFate(
+            var3 != null,
+            var4 != null && var4.running,
+            this.ticks >= var2.expires,
+            var5,
+            var6 != null,
+            var6 != null && var6.isAlive(),
+            var3 != null && SquadRules.same(var2.map, var2.team, var2.squad, var3.map, var3.team, var3.squad)
+         );
+         if (var7 != null) {
+            this.removeBeacon(var2);
+         }
+      }
+   }
+
+   private boolean chunkLoaded(Engine.Beacon var1) {
+      Engine.Match var2 = this.matches.get(var1.map);
+      if (var2 != null && var2.rules.map.dimension != null) {
+         ServerLevel var3 = this.level(var2.rules.map);
+         if (var3 == null) {
+            return false;
+         } else {
+            BlockPos var4 = var1.at();
+            return var4 != null && var3.hasChunkAt(var4);
+         }
+      } else {
+         return false;
+      }
+   }
+
+   private boolean legalDynamic(Engine.Match var1, int var2, double var3, double var5, double var7) {
+      return this.legalDynamic(var1, var2, "I", var3, var5, var7);
+   }
+
+   private boolean legalDynamic(Engine.Match var1, int var2, String var3, double var4, double var6, double var8) {
+      Model.Arena var10 = var1.rules.map;
+      return var6 >= (double)var10.minY && var6 <= (double)var10.maxY && var10.deploymentArea(var2, var3, var4, var8, var1.rules.stage, var1.rules.isStaged());
+   }
+
+   private boolean hot(Engine.Match var1, int var2, double var3, double var5, double var7) {
+      return this.enemiesOf(var1.rules, var2)
+         .stream()
+         .anyMatch(var6 -> Math.pow(var6.x() - var3, 2.0) + Math.pow(var6.y() - var5, 2.0) + Math.pow(var6.z() - var7, 2.0) < 256.0);
+   }
+
+   private Deploy.Site safeSite(
+      ServerPlayer var1, Engine.Match var2, int var3, String var4, String var5, String var6, double var7, double var9, double var11, float var13
+   ) {
+      ServerLevel var14 = this.level(var2.rules.map);
+
+      for (int var18 : new int[]{0, 1, -1, 2, -2}) {
+         for (double[] var22 : new double[][]{{2.0, 0.0}, {-2.0, 0.0}, {0.0, 2.0}, {0.0, -2.0}, {2.0, 2.0}, {-2.0, -2.0}}) {
+            double var23 = Math.floor(var7 + var22[0]) + 0.5;
+            double var25 = Math.floor(var9) + (double)var18;
+            double var27 = Math.floor(var11 + var22[1]) + 0.5;
+            BlockPos var29 = BlockPos.containing(var23, var25, var27);
+            if (var14.hasChunkAt(var29)
+               && this.legalDynamic(var2, var3, var23, var25, var27)
+               && var14.getBlockState(var29.below()).isFaceSturdy(var14, var29.below(), Direction.UP)) {
+               BlockState var30 = var14.getBlockState(var29.below());
+               if (!var30.is(Blocks.MAGMA_BLOCK)
+                  && !var30.is(Blocks.CAMPFIRE)
+                  && !var30.is(Blocks.SOUL_CAMPFIRE)
+                  && !var30.is(Blocks.CACTUS)
+                  && !var14.getBlockState(var29).is(BlockTags.FIRE)
+                  && var14.getFluidState(var29).isEmpty()
+                  && var14.getFluidState(var29.above()).isEmpty()
+                  && var14.noCollision(var1, new AABB(var23 - 0.3, var25, var27 - 0.3, var23 + 0.3, var25 + 1.8, var27 + 0.3))) {
+                  return new Deploy.Site(var4, var5, var23, var25, var27, var13, "", false, var6);
+               }
+            }
+         }
+      }
+
+      return null;
+   }
+
+   private void placeBeacon(ServerPlayer var1) {
+      Engine.Member var2 = this.member(var1);
+      Engine.Match var3 = this.matches.get(var2.map);
+      ItemStack var4 = ItemStack.EMPTY;
+
+      for (int var5 = 0; var5 < var1.getInventory().getContainerSize(); var5++) {
+         if (ConquestEquipment.kind(var1.getInventory().getItem(var5)) == SupportRules.Kind.RADIO_BEACON) {
+            var4 = var1.getInventory().getItem(var5);
+            break;
+         }
+      }
+
+      Model.require(var1.isCreative() || !var4.isEmpty(), "请先在配装中携带复活信标装备");
+      Model.require(var3 != null && var3.running && var2.alive && !var2.downed && var2.squad > 0, "请加入小队并在存活时放置信标");
+      Model.require(!var1.isPassenger() && var1.onGround() && var1.level() == this.level(var3.rules.map), "请下车并站在战区地面");
+      Model.require(this.ticks >= var2.beaconAt, "信标冷却尚未结束");
+      Model.require(!this.hot(var3, var2.team, var1.getX(), var1.getY(), var1.getZ()), "附近有敌军，不能放置信标");
+      ServerLevel var20 = this.level(var3.rules.map);
+      Vec3 var6 = var1.getEyePosition();
+      BlockHitResult var7 = var20.clip(new ClipContext(var6, var6.add(var1.getLookAngle().scale(4.5)), Block.COLLIDER, Fluid.NONE, var1));
+      Model.require(var7.getType() == Type.BLOCK && var7.getDirection() == Direction.UP, "请瞄准 4.5 格内地面的上表面放置信标");
+      BlockPos var8 = var7.getBlockPos();
+      Model.require(var20.hasChunkAt(var8) && var20.getBlockState(var8).isFaceSturdy(var20, var8, Direction.UP), "信标需要完整稳固的地面支撑");
+      double var9 = (double)var8.getX() + 0.5;
+      double var11 = var7.getLocation().y + 0.02;
+      double var13 = (double)var8.getZ() + 0.5;
+      Model.require(this.legalDynamic(var3, var2.team, var9, var11, var13) && !this.hot(var3, var2.team, var9, var11, var13), "落点不在可用战区内或附近有敌军");
+      Model.require(var20.getFluidState(BlockPos.containing(var9, var11, var13)).isEmpty(), "信标不能放在水或其他流体中");
+      Deploy.Site var15 = new Deploy.Site("", "", var9, var11, var13, var1.getYRot(), "", false, "BEACON");
+      DeployBeacon var16 = new DeployBeacon(this.level(var3.rules.map), var15.x(), var15.y(), var15.z());
+      var16.setNoGravity(true);
+      var16.setItemSlot(EquipmentSlot.HEAD, ConquestEquipment.stack(SupportRules.Kind.RADIO_BEACON.key(), 1));
+      Model.require(var20.noCollision(var16, var16.getBoundingBox()), "落点空间不足或被实体占用");
+      var16.setCustomName(Component.literal(SquadRules.label(var2.squad) + " · 复活信标"));
+      var16.setCustomNameVisible(false);
+      var16.addTag("bfops_beacon");
+      Engine.Beacon var17 = new Engine.Beacon(var16.getUUID(), var1.getUUID(), var2.map, var2.team, var2.squad, this.ticks + 12000L, var16.blockPosition());
+      this.beacons.put(var17.entity, var17);
+      if (!this.level(var3.rules.map).addFreshEntity(var16)) {
+         this.beacons.remove(var17.entity);
+         throw new IllegalArgumentException("信标放置失败");
+      } else {
+         for (Engine.Beacon var19 : new ArrayList<>(this.beacons.values())) {
+            if (var19 != var17 && SquadRules.same(var19.map, var19.team, var19.squad, var2.map, var2.team, var2.squad)) {
+               this.removeBeacon(var19);
+            }
+         }
+
+         var2.beaconAt = this.ticks + 1200L;
+         this.beaconUses.put(var17.entity, 6);
+         if (!var1.isCreative()) {
+            var4.shrink(1);
+         }
+
+         this.refills.used(var1, SupportRules.Kind.RADIO_BEACON, this.ticks);
+         var1.getInventory().setChanged();
+         var1.inventoryMenu.broadcastChanges();
+      }
+   }
+
+   private List<Engine.DeployOption> deploymentOptions(ServerPlayer var1, Engine.Member var2, Engine.Match var3) {
+      var var4 = new ArrayList();
+
+      for (Deploy.Site var6 : Deploy.sites(var3.rules.map, var2.team, var3.rules.stage, var3.rules.isStaged(), Deploy.owners(var3.rules))) {
+         var4.add(new Engine.DeployOption(var6, "", null));
+      }
+
+      for (ServerPlayer var17 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var7 = this.members.get(var17.getUUID());
+         if (var17 != var1 && var7 != null && SquadRules.same(var2.map, var2.team, var2.squad, var7.map, var7.team, var7.squad)) {
+            String var8 = "mate:" + var17.getUUID();
+            String var9 = "队友 · " + var7.name;
+            String var10 = SquadRules.teammateBlocker(var7.alive, var7.downed, var17.isAlive(), var17.isSpectator(), var17.isCreative(), var17.isPassenger());
+            String var11 = !var10.isEmpty()
+               ? var10
+               : (
+                  var17.level() != this.level(var3.rules.map)
+                     ? "不在本战区"
+                     : (
+                        !this.legalDynamic(var3, var2.team, var17.getX(), var17.getY(), var17.getZ())
+                           ? "超出活动区域"
+                           : (
+                              SquadRules.inCombat(var7.combatUntil, this.ticks)
+                                 ? "队友刚刚交战，稍后可部署"
+                                 : (this.hot(var3, var2.team, var17.getX(), var17.getY(), var17.getZ()) ? "附近有敌军" : "")
+                           )
+                     )
+               );
+            Deploy.Site var12 = var11.isEmpty()
+               ? this.safeSite(var1, var3, var2.team, var8, var9, "TEAMMATE", var17.getX(), var17.getY(), var17.getZ(), var17.getYRot())
+               : null;
+            if (var12 == null) {
+               if (var11.isEmpty()) {
+                  var11 = "无安全落脚点";
+               }
+
+               var12 = new Deploy.Site(var8, var9, var17.getX(), var17.getY(), var17.getZ(), 0.0F, "", false, "TEAMMATE");
+            }
+
+            var4.add(new Engine.DeployOption(var12, var11, null));
+         }
+      }
+
+      for (Engine.Beacon var18 : this.beacons.values()) {
+         if (SquadRules.same(var2.map, var2.team, var2.squad, var18.map, var18.team, var18.squad)) {
+            Entity var20 = this.findEntity(var18.entity);
+            if (var20 != null && var20.isAlive() && this.ticks < var18.expires) {
+               String var22 = "beacon:" + var18.entity;
+               String var24 = "信标 · " + SquadRules.label(var2.squad) + " · 剩余 " + this.beaconUses.getOrDefault(var18.entity, 6) + " 次";
+               String var26 = !this.legalDynamic(var3, var2.team, var20.getX(), var20.getY(), var20.getZ())
+                  ? "不在当前活动区域"
+                  : (this.hot(var3, var2.team, var20.getX(), var20.getY(), var20.getZ()) ? "附近有敌军" : "");
+               Deploy.Site var28 = var26.isEmpty()
+                  ? this.safeSite(var1, var3, var2.team, var22, var24, "BEACON", var20.getX(), var20.getY(), var20.getZ(), 0.0F)
+                  : null;
+               if (var28 == null) {
+                  if (var26.isEmpty()) {
+                     var26 = "无安全落脚点";
+                  }
+
+                  var28 = new Deploy.Site(var22, var24, var20.getX(), var20.getY(), var20.getZ(), 0.0F, "", false, "BEACON");
+               }
+
+               var4.add(new Engine.DeployOption(var28, var26, null));
+            }
+         }
+      }
+
+      for (UUID var19 : var3.vehicles) {
+         if (var3.vehicleTeams.getOrDefault(var19, -1) == var2.team) {
+            Entity var21 = this.findEntity(var19);
+            if (var21 != null && var21.isAlive()) {
+               int var23 = this.catalog.vehicleSeats.getOrDefault(BuiltInRegistries.ENTITY_TYPE.getKey(var21.getType()).toString(), 0);
+               LivingEntity var25 = var21.getControllingPassenger();
+               Engine.Member var27 = var25 instanceof ServerPlayer var29 ? this.members.get(var29.getUUID()) : null;
+               String var30 = VehicleDeploy.boardingBlocker(
+                  var2.map,
+                  var2.team,
+                  var2.squad,
+                  var3.rules.map.teamWideVehicleDeploy,
+                  var25 != null,
+                  var27 == null ? null : var27.map,
+                  var27 == null ? -1 : var27.team,
+                  var27 == null ? 0 : var27.squad,
+                  var27 != null && var27.alive && !var27.downed
+               );
+               String var31 = "登车 · " + var21.getName().getString() + " " + var21.getPassengers().size() + "/" + var23;
+               String var13 = var23 <= var21.getPassengers().size()
+                  ? "座位已满或座位数据不可用"
+                  : (
+                     var21.level() != this.level(var3.rules.map)
+                        ? "不在本战区"
+                        : (
+                           !this.legalDynamic(
+                                 var3,
+                                 var2.team,
+                                 String.valueOf(this.catalog.vehicleClass(BuiltInRegistries.ENTITY_TYPE.getKey(var21.getType()).toString())),
+                                 var21.getX(),
+                                 var21.getY(),
+                                 var21.getZ()
+                              )
+                              ? "不在当前活动区域"
+                              : (this.hot(var3, var2.team, var21.getX(), var21.getY(), var21.getZ()) ? "附近有敌军" : "")
+                        )
+                  );
+               if (var13.isEmpty()) {
+                  var13 = var30;
+               }
+
+               var4.add(
+                  new Engine.DeployOption(
+                     new Deploy.Site("vehicle:" + var19, var31, var21.getX(), var21.getY(), var21.getZ(), var21.getYRot(), "", false, "VEHICLE"), var13, var21
+                  )
+               );
+            }
+         }
+      }
+
+      return var4;
+   }
+
+   private void deploy(ServerPlayer var1, String var2, String var3, String var4, String var5, String var6, String var7, JsonObject var8) throws Exception {
+      Engine.Member var9 = this.member(var1);
+      Engine.Match var10 = this.matches.get(var9.map);
+      Model.require(var10 != null && var10.running && var9.team >= 0, "请等待开局并选择阵营");
+      Model.Arena var11 = var10.rules.map;
+      Model.require(!var9.alive, "只能在部署阶段切换配装");
+      Model.require(!var9.downed, "倒地状态下无法部署，等待队友救援或出血阵亡");
+      Model.require(this.ticks >= var9.readyAt, "重生倒计时尚未结束");
+      Model.require(this.ticks >= var9.entryUntil, "请等待入局简报结束");
+      Model.require(FixedClasses.resolve(var2) != null, "兵种不属于参考端固定四类");
+      Model.Kit var12 = var11.kits
+         .stream()
+         .filter(var1x -> var1x.id.equals(var2))
+         .findFirst()
+         .orElseThrow(() -> new IllegalArgumentException("配装未获地图授权：" + var2));
+      var7 = var11.isTraining() && !var7.isEmpty() ? var7 : var12.selectMelee(var7, var9.team);
+      String var13 = var11.isTraining() ? str(var8, "throwable", "") : var12.selectThrowable(str(var8, "throwable", ""), var9.team);
+      var var14 = this.deploymentOptions(var1, var9, var10);
+      Engine.DeployOption var15 = var14.stream()
+         .filter(var1x -> var1x.site.id().equals(var3))
+         .findFirst()
+         .orElseThrow(() -> new IllegalArgumentException("部署目标已失效，请重新选择"));
+      Model.require(var15.blocked.isEmpty(), var15.blocked);
+      Entity var16 = var15.vehicle;
+      String var17 = DeploymentRules.requestBlocker(var15.site, var4, var16 != null);
+      Model.require(var17.isEmpty(), var17);
+      var var18 = var14.stream().filter(var0 -> var0.blocked.isEmpty()).map(Engine.DeployOption::site).toList();
+      Model.require(!var18.isEmpty(), "本方当前没有可用的部署点");
+      Deploy.Site var19 = var18.stream()
+         .filter(var1x -> var1x.id().equals(var3))
+         .findFirst()
+         .orElseThrow(() -> new IllegalArgumentException("此部署目标已不可用，请重新选择"));
+      Model.Spawn var20 = var19.asSpawn(var9.team);
+      Model.require(!SquadRules.dynamic(var19.kind()) || var4.isEmpty(), "队友、信标和登车部署不能同时刷新新载具");
+      char var21 = 0;
+      EntityType var22 = null;
+      if (!var4.isEmpty()) {
+         Model.require(var11.vehiclesFor(var9.team).contains(var4) && this.catalog.isVehicle(var4), "载具未获地图授权：" + var4);
+         Model.require(this.catalog.deployableVehicle(var4), "该载具不能用于部署：" + var4);
+         Model.require(this.ticks >= var9.vehicleAt, "载具冷却尚未结束（" + (var9.vehicleAt - this.ticks + 19L) / 20L + " 秒）");
+         var10.vehicles.removeIf(var1x -> this.findEntity(var1x) == null);
+         Model.require(this.teamVehicles(var10, var9.team) < var11.vehicleLimitFor(var9.team), "本方载具名额已满");
+         var21 = this.catalog.vehicleClass(var4);
+         var22 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(var4));
+         Model.require(var22 != null, "载具实体未注册：" + var4);
+         Model.require(var19.allows(var21), var21 == 'A' ? var19.id() + " 不是飞机点位，无法放飞航空器" : var19.id() + " 不提供载具刷新");
+      }
+
+      var var23 = var18.stream().filter(var0 -> !SquadRules.dynamic(var0.kind())).map(var1x -> var1x.asSpawn(var9.team)).toList();
+      if (!var4.isEmpty()) {
+         var var24 = Deploy.sitesFor(var18, var21).stream().map(var1x -> var1x.asSpawn(var9.team)).toList();
+         if (!var24.isEmpty()) {
+            var23 = var24;
+         }
+      }
+
+      String var63 = var16 != null
+         ? String.valueOf(this.catalog.vehicleClass(BuiltInRegistries.ENTITY_TYPE.getKey(var16.getType()).toString()))
+         : (var21 == 0 ? "I" : String.valueOf(var21));
+      Model.require(var11.deploymentArea(var9.team, var63, var19.x(), var19.z(), var10.rules.stage, var10.rules.isStaged()), "部署目标不在当前装备的活动范围内");
+      var23 = var23.stream().filter(var4x -> var11.deploymentArea(var9.team, var63, var4x.x, var4x.z, var10.rules.stage, var10.rules.isStaged())).toList();
+      var var25 = this.enemiesOf(var10.rules, var9.team);
+      Model.Spawn var26 = SquadRules.dynamic(var19.kind()) ? var20 : Tactics.chooseSpawn(var20, var23, var25);
+      Deploy.Site var27 = var18.stream().filter(var1x -> var1x.id().equals(var26.id)).findFirst().orElse(var19);
+      boolean var28 = !var27.id().equals(var19.id());
+      if (var22 != null) {
+         VehicleDeploy.Gate var29 = VehicleDeploy.Gate.of(var27.allows(var21), this.teamVehicles(var10, var9.team), var11.vehicleLimitFor(var9.team), true);
+         Model.require(var29.success(), var29.blocker());
+      }
+
+      String var64 = var11.isTraining() && this.catalog.guns.contains(var5) ? var5 : var12.select(true, var5, var9.team);
+      String var30 = var11.isTraining() && this.catalog.guns.contains(var6) ? var6 : var12.select(false, var6, var9.team);
+      var9.issuedAmmo.clear();
+      int var31Rounds = ammoStacks(var12, var64);
+      var var31 = this.catalog.gunRounds(var1, var64, var31Rounds);
+      applyAmmoType(var12, var64, var31);
+      int var32Rounds = ammoStacks(var12, var30);
+      var var32 = this.catalog.gunRounds(var1, var30, var32Rounds);
+      applyAmmoType(var12, var30, var32);
+      var9.issuedAmmo.put(var64, var31Rounds);
+      var9.issuedAmmo.put(var30, var32Rounds);
+      var var33 = selections(var8, "primaryFittings");
+      var var34 = selections(var8, "secondaryFittings");
+      var var35 = selections(var8, "vehicleFittings");
+      int var36 = this.progress.level(var1.getUUID());
+      var33.entrySet().removeIf(var3x -> !InfantryAttachments.blocker(var12, var64, (String)var3x.getValue(), var36).isEmpty());
+      var34.entrySet().removeIf(var3x -> !InfantryAttachments.blocker(var12, var30, (String)var3x.getValue(), var36).isEmpty());
+      InfantryAttachments.authorize(var12, var64, var33, var36, this.catalog.gunFittings.getOrDefault(var64, List.of()));
+      InfantryAttachments.authorize(var12, var30, var34, var36, this.catalog.gunFittings.getOrDefault(var30, List.of()));
+      if (!var31.isEmpty()) {
+         Fittings.applyGun((ItemStack)var31.getFirst(), var33, var1.registryAccess());
+      } else {
+         Model.require(var33.isEmpty(), "没有主武器可改装");
+      }
+
+      if (!var32.isEmpty()) {
+         Fittings.applyGun((ItemStack)var32.getFirst(), var34, var1.registryAccess());
+      } else {
+         Model.require(var34.isEmpty(), "没有副武器可改装");
+      }
+
+      if (var22 != null) {
+         Entity var37 = var22.create(this.level(var11));
+         Model.require(var37 != null, "载具数据不可用");
+         var var38 = Fittings.vehicleOptions(var37);
+         Fittings.validate(var38, var35);
+         VehicleArmament var39 = armamentFor(var11, var37);
+         Fittings.restrict(var38, var35, var39);
+      } else {
+         Model.require(var35.isEmpty(), "未选择载具");
+      }
+
+      ItemStack var65 = var31.isEmpty() ? ItemStack.EMPTY : (ItemStack)var31.getFirst();
+      ItemStack var66 = var32.isEmpty() ? ItemStack.EMPTY : (ItemStack)var32.getFirst();
+      var var67 = var31.size() <= 1 ? List.of() : var31.subList(1, var31.size());
+      var var40 = var32.size() <= 1 ? List.of() : var32.subList(1, var32.size());
+      ItemStack var41 = ItemStack.EMPTY;
+      if (var7 != null && !var7.isEmpty()) {
+         if (this.catalog.isGun(var7)) {
+            var var42 = this.catalog.gun(var1, var7, 0);
+            if (!var42.isEmpty()) {
+               var41 = (ItemStack)var42.getFirst();
+            }
+         } else {
+            var41 = KitItems.resolve(var7, 1);
+         }
+
+         Model.require(!var41.isEmpty(), "所选近身武器无法生成，请确认服务端已加载对应刀包：" + var7);
+      }
+
+      var var68 = new ArrayList();
+      LinkedHashMap var43 = new LinkedHashMap();
+
+      for (KitGear.Entry var45 : var12.gear().deduplicatedItems()) {
+         var43.put(var45.id, var45);
+      }
+
+      for (String var72 : var12.issueOrder()) {
+         if (var72.equals("main_ammo")) {
+            var68.addAll(var67);
+         } else if (var72.equals("side_ammo")) {
+            var68.addAll(var40);
+         }
+      }
+
+      if (var11.isTraining() && var8.has("trainingItems")) {
+         for (JsonElement var73 : var8.getAsJsonArray("trainingItems")) {
+            if (var68.size() >= 24) {
+               break;
+            }
+
+            ItemStack var46 = KitItems.resolve(var73.getAsString(), 1);
+            if (!var46.isEmpty()) {
+               var68.add(var46);
+            }
+         }
+      }
+
+      ItemStack var71 = ItemStack.EMPTY;
+      if (var13 != null && !var13.isEmpty()) {
+         var71 = KitItems.resolve(var13, var12.countFor(var13));
+      }
+
+      var var74 = this.tacticalStacks(var1, var12, var11, var8, "tactical1");
+      var var75 = this.tacticalStacks(var1, var12, var11, var8, "tactical2");
+      ItemStack var47 = var74.isEmpty() ? ItemStack.EMPTY : (ItemStack)var74.getFirst();
+      ItemStack var48 = var75.isEmpty() ? ItemStack.EMPTY : (ItemStack)var75.getFirst();
+      if (var74.size() > 1) {
+         var68.addAll(var74.subList(1, var74.size()));
+      }
+
+      if (var75.size() > 1) {
+         var68.addAll(var75.subList(1, var75.size()));
+      }
+
+      int var49 = (var65.isEmpty() ? 0 : 1)
+         + (var66.isEmpty() ? 0 : 1)
+         + (var41.isEmpty() ? 0 : 1)
+         + (var71.isEmpty() ? 0 : 1)
+         + (var47.isEmpty() ? 0 : 1)
+         + (var48.isEmpty() ? 0 : 1)
+         + var68.size();
+      Model.require(var49 <= 35, "配装超过背包容量");
+      ServerLevel var50 = this.level(var11);
+      var50.getChunkAt(BlockPos.containing(var27.x(), var27.y(), var27.z()));
+      Model.Spawn var51 = var27.asSpawn(var9.team);
+      if (var16 == null && !SquadRules.dynamic(var27.kind())) {
+         String var52 = var22 == null ? "I" : String.valueOf(var21);
+         var51 = AreaDeploy.choose(
+            var50,
+            var1,
+            var27,
+            var11,
+            var9.team,
+            var52,
+            var22 == null ? 0.6 : Math.max(0.6, (double)var22.getWidth()),
+            var22 == null ? 1.8 : Math.max(1.8, (double)var22.getHeight()),
+            var4x -> this.legalDynamic(var10, var9.team, var52, var4x.x, var4x.y, var4x.z) && !this.hot(var10, var9.team, var4x.x, var4x.y, var4x.z)
+         );
+         var27 = new Deploy.Site(var27.id(), var27.label(), var51.x, var51.y, var51.z, var51.yaw, var27.allows(), var27.spawn(), var27.kind());
+      }
+
+      Model.require(
+         var16 != null || var50.noCollision(var1, var1.getBoundingBox().move(var51.x - var1.getX(), var51.y - var1.getY(), var51.z - var1.getZ())),
+         "部署点空间被方块占用，请调整位置"
+      );
+      if (var16 != null) {
+         double var76 = var1.getX();
+         double var54 = var1.getY();
+         double var56 = var1.getZ();
+         float var58 = var1.getYRot();
+         float var59 = var1.getXRot();
+         this.teleport(var1, var50, var51);
+         if (!var1.startRiding(var16, true)) {
+            var1.teleportTo(var50, var76, var54, var56, var58, var59);
+            var1.setDeltaMovement(Vec3.ZERO);
+            var1.fallDistance = 0.0F;
+            throw new IllegalArgumentException("载具拒绝登车，请选择其他座位或部署点");
+         }
+      }
+
+      this.releaseElite(var1.getUUID(), var9);
+      var1.closeContainer();
+      var1.getInventory().clearContent();
+      var1.getInventory().setItem(0, var65);
+      var1.getInventory().setItem(1, var66);
+      var1.getInventory().setItem(2, var41);
+      int var77 = 3;
+      if (!var71.isEmpty()) {
+         var9.issuedSlots.put(str(var8, "throwable", ""), var77);
+         var1.getInventory().setItem(var77++, var71);
+      }
+
+      if (!var47.isEmpty()) {
+         var9.issuedSlots.put(str(var8, "tactical1", ""), var77);
+         var1.getInventory().setItem(var77++, var47);
+      }
+
+      if (!var48.isEmpty()) {
+         var9.issuedSlots.put(str(var8, "tactical2", ""), var77);
+         var1.getInventory().setItem(var77++, var48);
+      }
+
+      var1.getInventory().setItem(var77++, new ItemStack(Items.COOKED_BEEF, 16));
+      if (var11.isTraining() && SupportItems.DEPLOY_TERMINAL.get() != null) {
+         var1.getInventory().setItem(var77++, new ItemStack((ItemLike)SupportItems.DEPLOY_TERMINAL.get()));
+      }
+
+      for (ItemStack var81 : (java.lang.Iterable<ItemStack>)(var68)) {
+         giveToBackpack(var1, var81);
+      }
+
+      CuriosSupport.clear(var1);
+      KitItems.wear(var12, var1);
+      if (var16 == null) {
+         this.teleport(var1, var50, var51);
+      }
+
+      var1.setGameMode(GameType.ADVENTURE);
+      var1.setHealth(var1.getMaxHealth());
+      var1.clearFire();
+      var1.getFoodData().setFoodLevel(20);
+      var1.getFoodData().setSaturation(var11.defaultSaturation ? 20.0F : 5.0F);
+      var9.alive = true;
+      var9.downed = false;
+      var9.kit = var12.id;
+      var9.lastKit = var12.id;
+      var9.lastPrimary = var64;
+      var9.lastMelee = str(var8, "melee", "");
+      var9.lastSecondary = var30;
+      var9.tactical1 = var47.isEmpty() ? "" : str(var8, "tactical1", "");
+      var9.throwable = var71.isEmpty() ? "" : str(var8, "throwable", "");
+      var9.issuedTemplates.clear();
+      var9.ammoTemplates.clear();
+      var var80 = var9.issuedTemplates;
+      String var82 = str(var8, "throwable", "");
+      if (!var82.isEmpty() && !var71.isEmpty()) {
+         var80.put(var82, var71.copyWithCount(1));
+      }
+
+      if (!var47.isEmpty()) {
+         String var55 = str(var8, "tactical1", "");
+         if (!var55.isEmpty()) {
+            var80.put(var55, var47.copyWithCount(1));
+         }
+      }
+
+      if (!var48.isEmpty()) {
+         String var83 = str(var8, "tactical2", "");
+         if (!var83.isEmpty()) {
+            var80.put(var83, var48.copyWithCount(1));
+         }
+      }
+
+      var9.ammoTemplates.clear();
+
+      for (String var95 : new String[]{var64, var30, var9.tactical1, var9.tactical2}) {
+         if (var95 != null && !var95.isEmpty() && this.catalog.isGun(var95)) {
+            try {
+               var var98 = this.catalog.gun(var1, var95, 1);
+               if (var98.size() > 1) {
+                  var9.ammoTemplates.put(var95, ((ItemStack)var98.get(1)).copyWithCount(1));
+               }
+            } catch (RuntimeException | ReflectiveOperationException var60) {
+            }
+         }
+      }
+
+      var9.gunAmmo.clear();
+
+      for (String var96 : new String[]{var64, var30, var9.tactical1, var9.tactical2}) {
+         if (var96 != null && !var96.isEmpty() && SuperbAmmo.isGunId(var96)) {
+            String var99 = ammoChoice(var12, var96, var8);
+            if (!var99.isEmpty()) {
+               var9.gunAmmo.put(var96, var99);
+            }
+         }
+      }
+
+      var9.tactical2 = var48.isEmpty() ? "" : str(var8, "tactical2", "");
+      var9.downedAt = -1L;
+      var9.giveUpAt = -1L;
+      var9.giveUpHeldAt = -100L;
+      var9.readyAt = 0L;
+      var9.hasDeployTarget = true;
+      var9.deployX = var51.x;
+      var9.deployY = var51.y + (double)var1.getEyeHeight();
+      var9.deployZ = var51.z;
+      var9.deployYaw = var51.yaw;
+      var9.deployPitch = 0.0F;
+      downPose(var1, false);
+      var9.outside = 0;
+      var9.warnedSecond = -1;
+      var9.killCredited = false;
+      var9.reviving = null;
+      this.clearGlow(var1, var9);
+      var1.inventoryMenu.broadcastChanges();
+      var1.setGlowingTag(false);
+      if (var22 != null) {
+         String var86 = this.spawnVehicle(var1, var50, var11, var10, var9, var22, var27, var35);
+         if (var86 != null) {
+            var9.alive = false;
+            var9.readyAt = this.ticks;
+            var1.stopRiding();
+            var1.setGameMode(GameType.SPECTATOR);
+            var1.getInventory().clearContent();
+            CuriosSupport.clear(var1);
+            this.state(var1, var9.map, true, var86);
+            var1.sendSystemMessage(Component.literal("§e" + var86 + " —— 已返回部署界面，未扣任何费用"));
+            throw new IllegalArgumentException(var86);
+         }
+      }
+
+      if (var27.id().startsWith("mate:")) {
+         ServerPlayer var87 = this.server.getPlayerList().getPlayer(UUID.fromString(var27.id().substring(5)));
+         if (var87 != null) {
+            Engine.Member var91 = this.members.get(var87.getUUID());
+            if (var91 != null) {
+               this.career.count(var87, var91, "squadDeploy", 3, "pathfinder", true);
+            }
+         }
+      }
+
+      if (var27.id().startsWith("beacon:")) {
+         UUID var88 = UUID.fromString(var27.id().substring(7));
+         Engine.Beacon var92 = this.beacons.get(var88);
+         if (var92 != null) {
+            int var94 = SupportRules.consumeBeacon(this.beaconUses.getOrDefault(var88, 6), true);
+            this.beaconUses.put(var88, var94);
+            ServerPlayer var97 = this.server.getPlayerList().getPlayer(var92.owner);
+            if (var97 != null) {
+               this.supportCredit(var97, var1, "信标部署");
+            }
+
+            if (var94 <= 0) {
+               this.removeBeacon(var92);
+            } else {
+               Entity var100 = this.findEntity(var92.entity);
+               if (var100 != null) {
+                  var100.setCustomName(Component.literal(SquadRules.label(var92.squad) + " · 信标 " + var94 + " 次"));
+               }
+            }
+         }
+      }
+
+      var9.deploySequence++;
+      this.refills.issued(var1);
+      var9.deathVehicleClass = "";
+      var1.displayClientMessage(
+         Component.literal(
+            "§b部署完成 §7· " + DeploymentText.label(var27.id(), var27.kind(), var27.label()) + " · " + var12.id + (var28 ? " · 原目标受压制，已转移安全位置" : "")
+         ),
+         true
+      );
+   }
+
+   private String spawnVehicle(
+      ServerPlayer var1,
+      ServerLevel var2,
+      Model.Arena var3,
+      Engine.Match var4,
+      Engine.Member var5,
+      EntityType<?> var6,
+      Deploy.Site var7,
+      Map<String, String> var8
+   ) {
+      if (!DeploymentRules.canSpawnNew(var7)) {
+         return "当前部署目标不能生成新载具";
+      } else {
+         Entity var9;
+         try {
+            var9 = var6.create(var2);
+         } catch (Exception var15) {
+            return "载具生成失败，未扣分";
+         }
+
+         if (var9 != null && this.catalog.isVehicleEntity(var9)) {
+            var9.moveTo(var7.x(), var7.y(), var7.z(), var7.yaw(), 0.0F);
+            if (!AreaDeploy.footprint(AreaDeploy.shape(var3, var7.id()), var9.getBoundingBox())) {
+               return "载具超出部署范围，请扩大范围或选择其他部署点";
+            } else if (!Model.contains(var3.boundary, var9.getX(), var9.getZ())) {
+               return "载具刷新点在地图边界外";
+            } else if (!var2.noBlockCollision(var9, var9.getBoundingBox())) {
+               return "刷新点空间不足以放下载具";
+            } else {
+               try {
+                  Fittings.applyVehicle(var9, var8);
+               } catch (IllegalArgumentException | ReflectiveOperationException var14) {
+                  var9.discard();
+                  return "载具弹种应用失败：" + var14.getMessage();
+               }
+
+               VehicleArmament var10 = armamentFor(var3, var9);
+
+               try {
+                  Fittings.applyVehicleAttachments(var9, var10);
+               } catch (IllegalArgumentException | ReflectiveOperationException var13) {
+                  BattlefieldOps.LOG.warn("Cannot apply configured vehicle attachments", var13);
+               }
+
+               var9.addTag("bfops_vehicle");
+               UUID var11 = var9.getUUID();
+               this.vehicles.add(var11);
+               var4.vehicles.add(var11);
+               var4.vehicleTeams.put(var11, var5.team);
+               if (!var2.addFreshEntity(var9)) {
+                  this.vehicles.remove(var11);
+                  var4.vehicles.remove(var11);
+                  var4.vehicleTeams.remove(var11);
+                  return "载具生成失败，未扣分";
+               } else {
+                  String var12 = VehicleEquip.equip(var9, VehicleEquip.kindOf(var9), var10);
+                  var1.sendSystemMessage(Component.literal("载具配装：" + var12));
+                  if (!var1.startRiding(var9, true)) {
+                     var9.discard();
+                     this.vehicles.remove(var11);
+                     var4.vehicles.remove(var11);
+                     var4.vehicleTeams.remove(var11);
+                     return "未能坐进载具，载具已回收，未扣冷却";
+                  } else {
+                     var5.vehicleAt = this.ticks + (long)var3.vehicleCooldown * 20L;
+                     return null;
+                  }
+               }
+            }
+         } else {
+            return "载具生成失败，未扣分";
+         }
+      }
+   }
+
+   private int teamVehicles(Engine.Match var1, int var2) {
+      return (int)var1.vehicles.stream().filter(var2x -> var1.vehicleTeams.getOrDefault(var2x, -1) == var2).filter(var1x -> {
+         Entity var2x = this.findEntity(var1x);
+         return var2x != null && var2x.isAlive();
+      }).count();
+   }
+
+   private Entity findEntity(UUID var1) {
+      for (ServerLevel var3 : this.server.getAllLevels()) {
+         Entity var4 = var3.getEntity(var1);
+         if (var4 != null) {
+            return var4;
+         }
+      }
+
+      return null;
+   }
+
+   public boolean foodHealing(Player var1) {
+      Engine.Member var2 = this.members.get(var1.getUUID());
+      if (var2 == null) {
+         return true;
+      } else {
+         Engine.Match var3 = this.matches.get(var2.map);
+         return !var2.downed && (var3 == null || !var3.running || !var2.alive || var3.rules.map.foodRegeneration);
+      }
+   }
+
+   public boolean foodRule(Player var1, boolean var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (var3 == null) {
+         return var2;
+      } else {
+         Engine.Match var4 = this.matches.get(var3.map);
+         return var4 != null && var4.running && var3.alive ? !var3.downed && var4.rules.map.foodRegeneration : var2;
+      }
+   }
+
+   private void tickNutrition() {
+      for (Entry var2 : this.members.entrySet()) {
+         Engine.Member var3 = (Engine.Member)var2.getValue();
+         if (var3.alive && !var3.downed) {
+            Engine.Match var4 = this.matches.get(var3.map);
+            if (var4 != null && var4.running && var4.rules.map.defaultSaturation) {
+               ServerPlayer var5 = this.server.getPlayerList().getPlayer((UUID)var2.getKey());
+               if (var5 != null) {
+                  var5.getFoodData().setFoodLevel(20);
+                  var5.getFoodData().setSaturation(20.0F);
+                  var5.getFoodData().setExhaustion(0.0F);
+               }
+            }
+         }
+      }
+   }
+
+   public boolean isDowned(Player var1) {
+      Engine.Member var2 = this.members.get(var1.getUUID());
+      return var2 != null && var2.downed;
+   }
+
+   public boolean blockDamage(ServerPlayer var1, Entity var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (var3 != null && !var3.alive) {
+         return true;
+      } else if (var3 != null && var3.downed) {
+         return true;
+      } else {
+         if (var2 instanceof ServerPlayer var4) {
+            Engine.Member var5 = this.members.get(var4.getUUID());
+            if (var3 == null != (var5 == null)) {
+               return true;
+            }
+
+            if (var3 != null && var5 != null) {
+               if (var3.map.equals(var5.map) && var5.alive && !var5.downed) {
+                  Engine.Match var6 = this.matches.get(var3.map);
+                  if (var6 != null && var6.rules.map.isTraining()) {
+                     return false;
+                  }
+
+                  return var6 == null || var3.team == var5.team && !var6.rules.map.friendlyFire;
+               }
+
+               return true;
+            }
+         }
+
+         return false;
+      }
+   }
+
+   private void tickDowned() {
+      for (ServerPlayer var2 : (java.lang.Iterable<ServerPlayer>)(new ArrayList(this.server.getPlayerList().getPlayers()))) {
+         Engine.Member var3 = this.members.get(var2.getUUID());
+         if (var3 != null && var3.downed) {
+            Engine.Match var4 = this.matches.get(var3.map);
+            if (var4 != null) {
+               int var5 = Medic.reviveTicks(var4.rules.map.reviveSeconds);
+               ServerPlayer var6 = null;
+
+               for (ServerPlayer var8 : this.server.getPlayerList().getPlayers()) {
+                  if (var8 != var2) {
+                     Engine.Member var9 = this.members.get(var8.getUUID());
+                     if (var9 != null
+                        && var9.alive
+                        && !var9.downed
+                        && var9.map.equals(var3.map)
+                        && var9.team == var3.team
+                        && var2.getUUID().equals(var9.reviving)) {
+                        if (!Medic.continuingRescue(this.ticks, var9.reviveHeldAt, this.canRescue(var8, var2))) {
+                           var9.reviving = null;
+                        } else if (var6 == null || FixedClasses.resolve(var9.kit) == FixedClasses.Role.SUPPORT) {
+                           var6 = var8;
+                        }
+                     }
+                  }
+               }
+
+               downPose(var2, true);
+               int var10 = var6 != null && FixedClasses.resolve(this.members.get(var6.getUUID()).kit) == FixedClasses.Role.SUPPORT
+                  ? var4.rules.map.supportReviveSpeed
+                  : 1;
+               var3.reviveProgress = Math.max(0, Math.min(var5, var3.reviveProgress + (var6 == null ? -2 : var10)));
+               if (this.ticks - var3.giveUpHeldAt > 6L) {
+                  var3.giveUpAt = -1L;
+               }
+
+               if (this.ticks % 4L == 0L) {
+                  Network.send(
+                     var2,
+                     Map.of(
+                        "type",
+                        "medic",
+                        "downLeft",
+                        Medic.secondsLeft(var3.bleedOutAt, this.ticks),
+                        "reviveProgress",
+                        var3.reviveProgress,
+                        "giveUpProgress",
+                        var3.giveUpAt < 0L ? 0L : Math.min(20L, this.ticks - var3.giveUpAt),
+                        "respawnRemaining",
+                        Math.max(0L, (var3.readyAt - this.ticks + 19L) / 20L)
+                     )
+                  );
+               }
+
+               if (var3.reviveProgress >= var5) {
+                  this.revive(var2, var3, var6);
+               } else if (Medic.expired(var3.bleedOutAt, this.ticks)
+                  || var4.rules.map.allowGiveUp && var3.giveUpAt >= 0L && this.ticks - var3.giveUpAt >= 20L && this.ticks - var3.giveUpHeldAt <= 6L) {
+                  ServerPlayer var11 = var3.downedBy == null ? null : this.server.getPlayerList().getPlayer(var3.downedBy);
+                  var3.reviveProgress = 0;
+                  this.clearReviver(var2.getUUID());
+                  downPose(var2, false);
+                  this.death(var2, var11);
+               }
+            }
+         }
+      }
+   }
+
+   public boolean tryDown(ServerPlayer var1, ServerPlayer var2, float var3) {
+      Engine.Member var4 = this.members.get(var1.getUUID());
+      if (var4 == null || !var4.alive || var4.downed) {
+         return false;
+      } else if (var4.bot) {
+         return false;
+      } else {
+         Engine.Match var5 = this.matches.get(var4.map);
+         if (var5 != null && var5.rules.map.downEnabled) {
+            if (var1.isAlive() && Medic.lethal(var1.getHealth(), var3)) {
+               if (var1.getVehicle() != null) {
+                  return false;
+               } else {
+                  Engine.Member var6 = var2 == null ? null : this.members.get(var2.getUUID());
+                  var4.downed = true;
+                  var4.downedAt = this.ticks;
+                  var4.readyAt = this.ticks + (long)var5.rules.map.respawnSeconds * 20L;
+                  var4.giveUpAt = -1L;
+                  var4.giveUpHeldAt = -100L;
+                  var1.stopUsingItem();
+                  var4.bleedOutAt = this.ticks + Medic.bleedOutTicks(var5.rules.map.downSeconds);
+                  var4.reviveProgress = 0;
+                  var4.reviving = null;
+                  var4.downedByName = var6 == null ? "" : var6.name;
+                  var4.downedBy = var6 == null ? null : var2.getUUID();
+                  this.support.down(var1);
+                  var1.setHealth(1.0F);
+                  if (var4.claimKill()) {
+                     this.creditKill(var1, var2);
+                  }
+
+                  downPose(var1, true);
+                  var1.displayClientMessage(Component.literal("§c你倒下了！§f等待队友救援，" + var5.rules.map.downSeconds + " 秒后出血阵亡"), true);
+                  if (var2 != null) {
+                     var2.displayClientMessage(Component.literal("§e" + var4.name + " 被你击倒（可被救起）"), true);
+                  }
+
+                  for (ServerPlayer var8 : this.server.getPlayerList().getPlayers()) {
+                     Engine.Member var9 = this.members.get(var8.getUUID());
+                     if (var9 != null && var9.team == var4.team && var9 != var4 && var9.map.equals(var4.map) && var9.alive) {
+                        var8.displayClientMessage(Component.literal("§e队友 §f" + var4.name + " §e倒地，空手右键救援"), false);
+                     }
+                  }
+
+                  this.state(var1, var4.map, false, "");
+                  return true;
+               }
+            } else {
+               return false;
+            }
+         } else {
+            return false;
+         }
+      }
+   }
+
+   private static void downPose(ServerPlayer var0, boolean var1) {
+      if (var0 != null) {
+         AttributeInstance var2 = var0.getAttribute(Attributes.MOVEMENT_SPEED);
+         if (var2 != null) {
+            if (var1 && !var2.hasModifier(CRAWL_SPEED)) {
+               var2.addTransientModifier(new AttributeModifier(CRAWL_SPEED, -0.75, Operation.ADD_MULTIPLIED_TOTAL));
+            }
+
+            if (!var1) {
+               var2.removeModifier(CRAWL_SPEED);
+            }
+         }
+
+         CrawlPose.apply(var0, var1);
+      }
+   }
+
+   private static boolean rescueRole(Engine.Member var0, Engine.Member var1) {
+      return var0 != null
+         && var1 != null
+         && var0.alive
+         && !var0.downed
+         && var0.team == var1.team
+         && var0.map.equals(var1.map)
+         && (FixedClasses.resolve(var0.kit) == FixedClasses.Role.SUPPORT || var0.squad > 0 && var0.squad == var1.squad);
+   }
+
+   public boolean callRescue(ServerPlayer var1) {
+      Engine.Member var2 = this.members.get(var1.getUUID());
+      if (var2 != null && var2.downed && var2.alive && this.supportActive(var2) && this.ticks - var2.rescueCallAt >= 160L) {
+         var2.rescueCallAt = this.ticks;
+         var2.rescueCallUntil = this.ticks + 160L;
+         FrontVoicePlayRequest var3 = FrontVoicePlayRequest.cue(
+            VoiceCue.DOWNED_HELP, CampType.CN, FrontVoicePlaybackMode.ENTITY, var1.getId(), var1.position(), 1.0F, 1.0F, 96.0F
+         );
+
+         for (ServerPlayer var5 : this.server.getPlayerList().getPlayers()) {
+            if (var5 != var1 && rescueRole(this.members.get(var5.getUUID()), var2) && var5.level() == var1.level() && var5.distanceToSqr(var1) <= 9216.0) {
+               VoiceNetwork.sendToPlayer(var5, new ClientboundPlayAudioPayload(var3));
+               this.state(var5, var2.map, false, "");
+            }
+         }
+
+         return true;
+      } else {
+         return false;
+      }
+   }
+
+   private boolean canRescue(ServerPlayer var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      Engine.Member var4 = this.members.get(var2.getUUID());
+      if (!rescueRole(var3, var4)) {
+         return false;
+      } else if (var3 != null
+         && var4 != null
+         && var3.alive
+         && !var3.downed
+         && var4.downed
+         && var4.alive
+         && var3.team >= 0
+         && var3.team == var4.team
+         && var3.map.equals(var4.map)
+         && var1.getMainHandItem().isEmpty()
+         && var1.level() == var2.level()) {
+         Engine.Match var5 = this.matches.get(var3.map);
+         if (var5 != null && var5.running) {
+            double var6 = (double)var5.rules.map.reviveDistance;
+            Vec3 var8 = var1.getEyePosition();
+            Vec3 var9 = var8.add(var1.getLookAngle().scale(var6));
+            Optional var10 = var2.getBoundingBox().inflate(0.65, 0.3, 0.65).clip(var8, var9);
+            if (!var10.isEmpty() && !(var8.distanceToSqr(var2.getBoundingBox().getCenter()) > (var6 + 0.5) * (var6 + 0.5))) {
+               BlockHitResult var11 = var1.level().clip(new ClipContext(var8, (Vec3)var10.get(), Block.COLLIDER, Fluid.NONE, var1));
+               return var11.getType() == Type.MISS;
+            } else {
+               return false;
+            }
+         } else {
+            return false;
+         }
+      } else {
+         return false;
+      }
+   }
+
+   public boolean reviveStart(ServerPlayer var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      Engine.Member var4 = this.members.get(var2.getUUID());
+      if (var3 == null || var4 == null) {
+         return false;
+      } else if (!var3.alive || var3.downed) {
+         return false;
+      } else if (!var4.downed) {
+         return false;
+      } else if (!var3.map.equals(var4.map) || var3.team != var4.team) {
+         return false;
+      } else if (!this.canRescue(var1, var2)) {
+         return false;
+      } else {
+         var3.reviving = var2.getUUID();
+         var3.reviveHeldAt = this.ticks;
+         var1.displayClientMessage(
+            Component.literal(
+               "§b救援 "
+                  + var4.name
+                  + " "
+                  + (int)(100.0 * Medic.fraction(var4.reviveProgress, Medic.reviveTicks(this.matches.get(var4.map).rules.map.reviveSeconds)))
+                  + "% · 保持空手并按住右键"
+            ),
+            true
+         );
+         return true;
+      }
+   }
+
+   private void clearReviver(UUID var1) {
+      for (Engine.Member var3 : this.members.values()) {
+         if (var1.equals(var3.reviving)) {
+            var3.reviving = null;
+         }
+      }
+   }
+
+   private void revive(ServerPlayer var1, Engine.Member var2, ServerPlayer var3) {
+      Engine.Match var4 = this.matches.get(var2.map);
+      var2.downed = false;
+      var2.reviveProgress = 0;
+      var2.bleedOutAt = 0L;
+      var2.downedAt = -1L;
+      var2.readyAt = 0L;
+      var2.giveUpAt = -1L;
+      var2.giveUpHeldAt = -100L;
+      var2.killCredited = false;
+      this.clearReviver(var1.getUUID());
+      downPose(var1, false);
+      float var5 = Medic.revivedHealth(var4 == null ? 0.0F : (float)var4.rules.map.reviveHealth, var1.getMaxHealth());
+      var1.setHealth(var5);
+      var1.displayClientMessage(Component.literal("§a你被救起了"), true);
+      if (var3 != null) {
+         Engine.Member var6 = this.members.get(var3.getUUID());
+         if (var6 != null && var4 != null) {
+            var6.revives++;
+            this.career.revive(var3, var6);
+            this.career.count(var3, var6, "fieldRevive", 5, "field_medic", true);
+            this.career.count(var3, var6, "revive", 20, "combat_medic", false);
+            this.career.count(var3, var6, "supplyRevive", 25, "quartermaster", true);
+            var6.score = var6.score + var4.rules.map.assistScore;
+            var6.credits = var6.credits + var4.rules.map.assistScore;
+         }
+
+         var3.displayClientMessage(Component.literal("§a已救起 §f" + var2.name), true);
+         award(var3, "救援", var4 == null ? 0 : var4.rules.map.assistScore, var2.name, "assist");
+      }
+
+      this.state(var1, var2.map, false, "");
+   }
+
+   public void death(ServerPlayer var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (var3 != null) {
+         Engine.Match var4 = this.matches.get(var3.map);
+         if (var4 != null) {
+            var1.setHealth(var1.getMaxHealth());
+            if (var3.alive) {
+               this.releaseElite(var1.getUUID(), var3);
+               String var5 = var2 != null && !var2.getUUID().equals(var1.getUUID()) ? var2.getScoreboardName() : (var3.downed ? var3.downedByName : "");
+               var3.alive = false;
+               var3.observerAt = this.ticks + 80L;
+               var3.downed = false;
+               downPose(var1, false);
+               this.clearReviver(var1.getUUID());
+               var3.deaths++;
+               Network.send(var1, Map.of("type", "deathStats", "killer", var5));
+               var3.readyAt = var3.downedAt >= 0L
+                  ? var3.downedAt + (long)var4.rules.map.respawnSeconds * 20L
+                  : this.ticks + (long)var4.rules.map.respawnSeconds * 20L;
+               var3.downedAt = -1L;
+               var3.giveUpAt = -1L;
+               var3.giveUpHeldAt = -100L;
+               var3.outside = 0;
+               Entity var6 = var1.getRootVehicle();
+               var3.deathVehicleClass = var6 == var1
+                  ? ""
+                  : String.valueOf(this.catalog.vehicleClass(BuiltInRegistries.ENTITY_TYPE.getKey(var6.getType()).toString()));
+               var1.stopRiding();
+               var1.setGameMode(GameType.SPECTATOR);
+               var1.clearFire();
+               var1.getInventory().clearContent();
+               var4.rules.death(var3.team);
+               Engine.Member var7 = var3.claimKill() ? this.creditKill(var1, var2) : null;
+               if (var7 != null) {
+                  var1.sendSystemMessage(Component.literal("§c被 §f" + var7.name + " §c击杀"));
+               } else {
+                  var1.sendSystemMessage(Component.literal("§7你阵亡了"));
+               }
+
+               this.clearGlow(var1, var3);
+               var1.sendSystemMessage(Component.literal("§7重生倒计时 §f" + Math.max(0L, (var3.readyAt - this.ticks + 19L) / 20L) + "§7 秒，请选择部署点"));
+               this.state(var1, var3.map, true, "已阵亡，等待重新部署");
+            }
+         }
+      }
+   }
+
+   private Honours.Evidence honourEvidence(ServerPlayer var1, ServerPlayer var2, Engine.Match var3, int var4, boolean var5) {
+      Model.Arena var6 = var3.rules.map;
+      double var7 = var2.getX() - var1.getX();
+      double var9 = var2.getZ() - var1.getZ();
+      double var11 = Math.sqrt(var7 * var7 + var9 * var9);
+      double var13 = var2.getY() - var1.getY();
+      double var15 = Math.sqrt(var2.getDeltaMovement().x * var2.getDeltaMovement().x + var2.getDeltaMovement().z * var2.getDeltaMovement().z);
+      boolean var17 = var1.getVehicle() != null;
+      boolean var18 = var2.getVehicle() == null;
+      boolean var19 = false;
+
+      try {
+         var19 = var1.getLastDamageSource() != null && var1.getLastDamageSource().is(DamageTypeTags.IS_EXPLOSION);
+      } catch (RuntimeException var31) {
+      }
+
+      boolean var20 = false;
+      if (var11 > 0.1) {
+         double var21 = Math.toRadians((double)var1.getYRot());
+         double var23 = -Math.sin(var21);
+         double var25 = Math.cos(var21);
+         double var27 = var7 / var11;
+         double var29 = var9 / var11;
+         var20 = var23 * var27 + var25 * var29 < -0.5;
+      }
+
+      boolean var32 = false;
+      long var22 = System.currentTimeMillis();
+
+      for (Spotting.Mark var34 : var3.marks) {
+         if (var34.expiresAt() > var22) {
+            double var26 = var34.x() - var1.getX();
+            double var28 = var34.z() - var1.getZ();
+            if (var26 * var26 + var28 * var28 <= 36.0) {
+               var32 = true;
+               break;
+            }
+         }
+      }
+
+      boolean var33 = false;
+
+      for (Spotting.Mark var36 : var3.marks) {
+         if (var36.expiresAt() > var22) {
+            double var37 = var36.x() - var2.getX();
+            double var38 = var36.z() - var2.getZ();
+            if (var37 * var37 + var38 * var38 <= 36.0) {
+               var33 = true;
+               break;
+            }
+         }
+      }
+
+      return new Honours.Evidence(
+         var11,
+         var13,
+         var5,
+         var19,
+         var4,
+         var3.streak.getOrDefault(var1.getUUID(), 0) >= 3,
+         var32,
+         var33,
+         var20,
+         var18,
+         var17,
+         var15,
+         (double)(var1.getHealth() / Math.max(1.0F, var1.getMaxHealth())),
+         (double)(var2.getHealth() / Math.max(1.0F, var2.getMaxHealth())),
+         var2.hasEffect(MobEffects.BLINDNESS)
+      );
+   }
+
+   private Engine.Member creditKill(ServerPlayer var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (var3 == null) {
+         return null;
+      } else {
+         Engine.Match var4 = this.matches.get(var3.map);
+         if (var4 == null) {
+            return null;
+         } else {
+            Engine.Member var5 = var2 == null ? null : this.members.get(var2.getUUID());
+            if (var5 != null
+               && var5 != var3
+               && var5.alive
+               && var4.running
+               && var5.team >= 0
+               && var3.team >= 0
+               && var5.map.equals(var3.map)
+               && var5.team != var3.team) {
+               if (!var4.rules.acceptsKillCredit()) {
+                  return null;
+               }
+
+               var4.rules.kill(var5.team, var3.team);
+               var5.kills++;
+               var5.score = var5.score + var4.rules.map.killScore;
+               var5.credits = var5.credits + var4.rules.map.killScore;
+               var2.sendSystemMessage(Component.literal("§a击杀 §f" + var3.name + " §7(+" + var4.rules.map.killScore + ")"));
+               long var6 = System.currentTimeMillis();
+               Model.Arena var8 = var4.rules.map;
+               long var9 = (long)var8.comboSeconds * 1000L;
+               long var11 = (long)var8.assistSeconds * 1000L;
+               int var13 = Awards.streak(var4.streak.getOrDefault(var2.getUUID(), 0), var4.lastKillAt.getOrDefault(var2.getUUID(), 0L), var6, var9);
+               var4.streak.put(var2.getUUID(), var13);
+               var4.lastKillAt.put(var2.getUUID(), var6);
+               int var14 = var8.killScore;
+               var5.score = var5.score + (var13 > 1 ? var8.comboBonus : 0);
+               var5.credits = var5.credits + (var13 > 1 ? var8.comboBonus : 0);
+               boolean var15 = this.cosmeticKills
+                  .headshot(var1, var2, Awards.headshot(Awards.lastHitY(var4.hits.get(var1.getUUID())), var1.getY(), var1.getY() + (double)var1.getBbHeight()));
+               if (var5.score >= 0
+                  && this.members
+                     .values()
+                     .stream()
+                     .filter(var1x -> var1x.map.equals(var3.map) && var1x.team == var3.team && var1x != var3)
+                     .noneMatch(var1x -> var1x.score > var3.score)) {
+                  this.career.repeated(var2, var5, "top");
+               }
+
+               if (Awards.revenge(var4.lastKiller.get(var2.getUUID()), var1.getUUID())) {
+                  this.career.repeated(var2, var5, "avenge");
+               }
+
+               if (var1.getRootVehicle() != var1
+                  ? this.catalog.vehicleClass(BuiltInRegistries.ENTITY_TYPE.getKey(var1.getRootVehicle().getType()).toString()) == 'A'
+                  : "A".equals(var3.deathVehicleClass)) {
+                  this.career.repeated(var2, var5, "flight_dispatcher");
+               }
+
+               for (int var16 = 0; var16 < var8.points.size(); var16++) {
+                  Model.Point var17 = var8.points.get(var16);
+                  if (var4.rules.active(var16) && ObjectiveZone.contains(var17, var2.getX(), var2.getY(), var2.getZ())) {
+                     boolean var18 = ObjectiveZone.contains(var17, var1.getX(), var1.getY(), var1.getZ())
+                        || this.server
+                           .getPlayerList()
+                           .getPlayers()
+                           .stream()
+                           .anyMatch(
+                              var3x -> {
+                                 Engine.Member var4x = this.members.get(var3x.getUUID());
+                                 return var4x != null
+                                    && var4x.alive
+                                    && var4x.map.equals(var5.map)
+                                    && var4x.team >= 0
+                                    && var4x.team != var5.team
+                                    && ObjectiveZone.contains(var17, var3x.getX(), var3x.getY(), var3x.getZ());
+                              }
+                           );
+                     if (var18) {
+                        this.career.count(var2, var5, "garrison", 3, "garrison", true);
+                        break;
+                     }
+                  }
+               }
+
+               this.career.kill(var2, var5, this.honourEvidence(var1, var2, var4, var13, var15), var1);
+               awardKill(var2, Awards.streakLabel(var13), var14, var3.name, var15 ? "headshot" : "kill", var13, var1.getId(), (double)var8.comboSeconds);
+               if (var13 > 1 && var8.comboBonus > 0) {
+                  Network.send(
+                     var2,
+                     Map.of(
+                        "type",
+                        "bonus",
+                        "label",
+                        "连杀加成",
+                        "points",
+                        var8.comboBonus,
+                        "icon",
+                        "streak",
+                        "bonusId",
+                        "KILL_COMBO",
+                        "combo",
+                        var13,
+                        "victimId",
+                        var1.getId(),
+                        "detail",
+                        var3.name
+                     )
+                  );
+               }
+
+               if (var15) {
+                  var5.score = var5.score + var8.headshotBonus;
+                  var5.credits = var5.credits + var8.headshotBonus;
+                  award(var2, "爆头加成", var8.headshotBonus, var3.name, "headshot");
+               }
+
+               for (String var23 : Honours.judge(this.honourEvidence(var1, var2, var4, var13, var15))) {
+                  if (!"headshot".equals(var23)) {
+                     int var25 = Honours.points(var23);
+                     if (var25 > 0) {
+                        var5.score += var25;
+                        var5.credits += var25;
+                     }
+
+                     award(var2, Honours.name(var23), var25, var3.name, Honours.icon(var23));
+                  }
+               }
+
+               if (Awards.revenge(var4.lastKiller.get(var2.getUUID()), var1.getUUID())) {
+                  var5.score = var5.score + var8.revengeBonus;
+                  var5.credits = var5.credits + var8.revengeBonus;
+                  award(var2, "复仇", var8.revengeBonus, var3.name, "revenge");
+               }
+
+               for (UUID var26 : Awards.assists(var4.hits.get(var1.getUUID()), var2.getUUID(), var6, var11)) {
+                  Engine.Member var19 = this.members.get(var26);
+                  if (var19 != null && var19.team != var3.team && var19.map.equals(var3.map)) {
+                     var19.assists++;
+                     var19.score = var19.score + var8.assistScore;
+                     var19.credits = var19.credits + var8.assistScore;
+                     ServerPlayer var20 = this.server.getPlayerList().getPlayer(var26);
+                     if (var20 != null) {
+                        award(var20, "助攻", var8.assistScore, var3.name, "assist");
+                     }
+                  }
+               }
+
+               var4.hits.remove(var1.getUUID());
+               var4.lastKiller.put(var1.getUUID(), var2.getUUID());
+            }
+
+            this.broadcastKill(var5, var3, var4);
+            return var5;
+         }
+      }
+   }
+
+   private void broadcastKill(Engine.Member var1, Engine.Member var2, Engine.Match var3) {
+      String var4 = var1 == null ? "§7" : (var1.team == 0 ? "§9" : "§c");
+      String var5 = var1 == null ? "§7阵亡" : var4 + var1.name + " §7→ " + (var2.team == 0 ? "§9" : "§c") + var2.name;
+
+      for (ServerPlayer var7 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var8 = this.members.get(var7.getUUID());
+         if (var8 != null && var8.team >= 0 && var8.map.equals(var3.rules.map.id)) {
+            var7.sendSystemMessage(Component.literal(var5));
+         }
+      }
+   }
+
+   private void spawnBots(Engine.Match var1, ServerLevel var2) {
+      Model.Arena var3 = var1.rules.map;
+
+      for (int var4 = 0; var4 < 2; var4++) {
+         var var5 = this.legalSpawns(var1.rules, var4);
+         if (!var5.isEmpty()) {
+            for (int var6 = 0; var6 < var3.botsPerTeam; var6++) {
+               this.spawnBotPlayer(var1, var2, var4, (var4 == 0 ? "蓝" : "红") + "人机" + (var6 + 1), (Model.Spawn)var5.get(var6 % var5.size()));
+            }
+         }
+      }
+   }
+
+   private void spawnBotPlayer(Engine.Match var1, ServerLevel var2, int var3, String var4, Model.Spawn var5) {
+      ServerPlayer var6;
+      try {
+         var6 = new ServerPlayer(this.server, var2, new GameProfile(UUID.randomUUID(), var4), ClientInformation.createDefault());
+      } catch (Exception var11) {
+         BattlefieldOps.LOG.warn("Cannot create bot player", var11);
+         return;
+      }
+
+      try {
+         var6.connection = new ServerGamePacketListenerImpl(
+            this.server, new Engine.BotConnection(), var6, CommonListenerCookie.createInitial(var6.getGameProfile(), false)
+         );
+         var6.moveTo(var5.x, var5.y, var5.z, var5.yaw, 0.0F);
+         if (!var2.addFreshEntity(var6)) {
+            BattlefieldOps.LOG.warn("Cannot add bot player to the map dimension");
             return;
-        }
-        Member current = members.get(player.getUUID());
-        if (current != null) selected = current.map;
-        String key = maps.containsKey(selected) ? selected : maps.keySet().stream().findFirst().orElse("");
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("type", "state");
-        out.put("open", open);
-        out.put("message", message);
-        out.put("admin", player.hasPermissions(2));
-        out.put("maps", maps.values().stream()
-                .map(a -> Map.of("id", a.id, "name", a.name, "running", matches.containsKey(a.id) && matches.get(a.id).running, "room", matches.containsKey(a.id)))
-                .toList());
-        out.put("selected", key);
-        Match room = matches.get(key);
-        boolean participating = RoomPolicy.canView(current == null ? null : current.map,
-                current == null ? -1 : current.team, key, room != null && room.running);
-        out.put("inMatch", participating);
-        out.put("roomExists", room != null);
-        out.put("roomRunning", room != null && room.running);
-        out.put("roomPlayers", members.values().stream().filter(m -> m.map.equals(key)).count());
-        out.put("position", List.of(player.getX(), player.getY(), player.getZ()));
-        out.put("yaw", player.getYRot());
-        out.put("dimension", player.level().dimension().location().toString());
-        out.put("diagnostics", catalog.diagnostics);
-        out.put("catalogCount", catalog.entries.size());
-        out.put("catalog", Map.of("guns", catalog.guns.size(), "vehicles", catalog.vehicles.size()));
+         }
 
-        // Which presentation surfaces this mod is allowed to use. The client cannot work this out
-        // itself: TAB lives on the proxy and Xaero is a client mod, so only the server has enough
-        // context to decide, and only the server knows whether a sidebar write would fight TAB.
-        Map<String, Object> hud = new LinkedHashMap<>();
-        hud.put("sidebar", sidebarShown);
-        hud.put("teams", board.teamsEnabled());
-        hud.put("minimap", compat.policy().mayUseMinimap(
-                compat.settings().minimap, compat.settings().xaeroMinimap));
-        hud.put("xaero", compat.settings().xaeroMinimap);
-        // Which corner the HUD minimap takes. Sent as a name rather than coordinates: only the client knows
-        // the GUI size, and a corner survives a window resize where pixels would not.
-        hud.put("minimapCorner", Briefing.normaliseCorner(compat.settings().minimapCorner));
-        // Whether the client should hide Xaero's minimap for the duration of a match. The client
-        // enforces it because Xaero lives there, but the decision belongs to the server: it is a match
-        // rule, and it must be the same for everyone in the room.
-        hud.put("hideXaero", compat.settings().hideXaeroInMatch);
-        out.put("hud", hud);
-        // Exposed so an operator can see why a surface was given up, without reading the log.
-        out.put("compat", compat.report(Catalog.hasTacz(), Catalog.hasSuperbWarfare(),
-                server.getServerModName()));
+         Engine.Member var7 = new Engine.Member(var1.rules.map.id, var4, var3);
+         var7.bot = true;
+         this.members.put(var6.getUUID(), var7);
+         var1.bots.add(var6.getUUID());
+         this.deployBot(var6, var7, var1.rules, var2, var5);
+         this.broadcastPlayerInfo(var6, true);
+      } catch (Throwable var10) {
+         BattlefieldOps.LOG.warn("Cannot spawn bot player " + var4, var10);
 
-        // Minimap blips. Teammates are always shown; enemies only appear once they are glowing,
-        // which is exactly when the server decided they are close and in someone's line of sight.
-        // Sending every enemy would hand the client a radar the server never authorised.
-        Member viewer = members.get(player.getUUID());
-        List<Map<String, Object>> mates = new ArrayList<>();
-        if (participating) {
-            mates.add(blip(player, viewer, true, false));
-            for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-                Member mate = members.get(other.getUUID());
-                if (mate == null || mate == viewer || !mate.alive) continue;
-                if (!mate.map.equals(viewer.map)) continue;
-                boolean hostile = mate.team != viewer.team;
-                if (!hostile && !room.rules.map.glowTeammates) continue;
-                if (hostile) {
-                    // Only what this player can see for themselves. A teammate's line of sight does not
-                    // silently hand the team a contact: sharing is a deliberate act, and the mark key is that
-                    // act. Automatic team-wide exposure turned the map into a radar nobody had to work for.
-                    if (!room.rules.map.glowEnemies
-                            || !Tactics.enemyVisible(at(player), at(other), player.hasLineOfSight(other))) continue;
-                }
-                mates.add(blip(other, mate, false, hostile));
-            }
-        }
-        out.put("mates", mates);
-        if (participating) {
-            // Only this team's marks are sent: a mark is shared information within a side, never across it.
-            List<Map<String, Object>> marks = new ArrayList<>();
-            long now = System.currentTimeMillis();
-            for (Spotting.Mark mark : Spotting.visibleTo(
-                    matches.get(key).marks, viewer.team, now)) {
-                Map<String, Object> one = new LinkedHashMap<>();
-                one.put("x", mark.x());
-                one.put("z", mark.z());
-                // Seconds left, so the map can show a countdown instead of a marker that silently vanishes.
-                one.put("left", Math.max(0, (mark.expiresAt() - now + 999) / 1000));
-                marks.add(one);
-            }
-            out.put("marks", marks);
-        }
-        out.put("elapsed", participating ? matches.get(key).rules.elapsed : 0);
-        out.put("vehicles", participating ? vehicleBlips(key, viewer) : List.of());
-        if (maps.containsKey(key)) {
-            Model.Arena arena = maps.get(key);
-            out.put("arena", arena);
-            out.put("names", names(arena));
-        }
-        Member me = members.get(player.getUUID());
-        if (me != null) {
-            out.put("me", me);
-            out.put("respawnRemaining", Math.max(0, (me.readyAt - ticks + 19) / 20));
-            // Bleed-out clock, top level rather than inside "me": it is derived from the tick counter, not a
-            // field of the member, and putting a transient value on the serialised member would persist it.
-            out.put("downLeft", me.downed ? Medic.secondsLeft(me.bleedOutAt, ticks) : 0);
-            out.put("reviveProgress", me.downed ? me.reviveProgress : 0);
-            out.put("vehicleRemaining", Math.max(0, (me.vehicleAt - ticks + 19) / 20));
-            out.put("team", me.team);
-            out.put("teamName", Board.label(me.team));
-            // Whether this player could take a vehicle right now, and if not, why. Computed on the
-            // server because the blockers (credits, cooldown, match cap) are server-side facts and
-            // the client must not be able to talk itself into a vehicle it cannot have.
-            out.put("vehicleState", vehicleState(key, me));
+         try {
+            var6.discard();
+         } catch (Throwable var9) {
+         }
+      }
+   }
 
-            // The exact deploy sites the server will accept, including capture points this team holds.
-            // Sent rather than derived on the client so the list a player picks from is the list the
-            // server validates against; any divergence would surface as "the point I chose was
-            // rejected". Each entry carries its vehicle mask so the GUI can grey out an air point for
-            // a tank without asking the server again on every click.
-            if (room != null) {
-                List<Map<String, Object>> sites = new ArrayList<>();
-                for (Deploy.Site site : Deploy.sites(maps.get(key), me.team, room.rules.stage,
-                        room.rules.isBreakthrough(), Deploy.owners(room.rules))) {
-                    Map<String, Object> entry = new LinkedHashMap<>();
-                    entry.put("id", site.id());
-                    entry.put("x", site.x());
-                    entry.put("y", site.y());
-                    entry.put("z", site.z());
-                    entry.put("allows", site.allows());
-                    entry.put("spawn", site.spawn());
-                    // Headquarters / forward post / airfield. The client groups by this so an airfield
-                    // is presented as its own choice rather than as an oddly-named base.
-                    entry.put("kind", site.kind());
-                    sites.add(entry);
-                }
-                out.put("deploySites", sites);
+   private void deployBot(ServerPlayer var1, Engine.Member var2, Rules var3, ServerLevel var4, Model.Spawn var5) {
+      var2.alive = true;
+      var2.downed = false;
+      var2.killCredited = false;
+      var2.reviving = null;
+      var2.outside = 0;
+      var1.stopRiding();
+      var1.setGameMode(GameType.SURVIVAL);
+      var1.getInventory().clearContent();
+      var1.setHealth(var1.getMaxHealth());
+      var1.getFoodData().setFoodLevel(20);
+      var1.teleportTo(var4, var5.x, var5.y, var5.z, var5.yaw, 0.0F);
+      var1.fallDistance = 0.0F;
+      this.board.apply(var1, var2.map, var2.team, var3.map.friendlyFire, var3.map.hideEnemyNametags);
+   }
+
+   private void broadcastPlayerInfo(ServerPlayer var1, boolean var2) {
+      try {
+         if (var2) {
+            ClientboundPlayerInfoUpdatePacket var3 = new ClientboundPlayerInfoUpdatePacket(Action.ADD_PLAYER, var1);
+
+            for (ServerPlayer var5 : this.server.getPlayerList().getPlayers()) {
+               var5.connection.send(var3);
             }
-        }
-        // Vehicle classification, so the deploy screen can separate aircraft from ground vehicles
-        // without shipping the whole superbwarfare metadata table to the client.
-        Map<String, String> classes = new LinkedHashMap<>();
-        if (maps.containsKey(key)) {
-            for (String id : maps.get(key).vehicles) classes.put(id, String.valueOf(catalog.vehicleClass(id)));
-        }
-        out.put("vehicleClasses", classes);
-        Match match = matches.get(key);
-        if (participating) {
-            out.put("tickets", match.rules.tickets);
-            out.put("tracksTickets", List.of(match.rules.tracksTickets(0), match.rules.tracksTickets(1)));
-            out.put("owned", match.rules.owned());
-            out.put("stage", match.rules.stage);
-            out.put("stages", match.rules.stageCount());
-            out.put("flags", match.rules.flags);
-            int objective=-1;
-            Model.Arena activeMap=match.rules.map;
-            if(me.alive&&player.isAlive()&&!player.isSpectator()&&me.outside==0
-                    &&player.level().dimension().location().toString().equals(activeMap.dimension)){
-                for(int i=0;i<activeMap.points.size();i++)if(match.rules.active(i)&&ObjectiveZone.contains(activeMap.points.get(i),player.getX(),player.getY(),player.getZ())){objective=i;break;}
+         } else {
+            ClientboundPlayerInfoRemovePacket var7 = new ClientboundPlayerInfoRemovePacket(List.of(var1.getUUID()));
+
+            for (ServerPlayer var9 : this.server.getPlayerList().getPlayers()) {
+               var9.connection.send(var7);
             }
-            out.put("objective",objective);
-            if(objective<0&&me.alive&&player.isAlive()){
-                for(int i=0;i<activeMap.points.size();i++){
-                    Model.Point point=activeMap.points.get(i);
-                    if(Math.hypot(player.getX()-point.x,player.getZ()-point.z)>point.radius)continue;
-                    String hint=!match.rules.active(i)?point.id+" 尚未解锁（突破阶段 "+(point.sector+1)+"）":
-                        !ObjectiveZone.contains(point,player.getX(),player.getY(),player.getZ())?point.id+" 高度不符：Y "+Math.round(point.y-point.height/2)+"～"+Math.round(point.y+point.height/2):"战区外不能占点";
-                    out.put("objectiveHint",hint);break;
-                }
+         }
+      } catch (LinkageError | RuntimeException var6) {
+         BattlefieldOps.LOG.debug("Cannot broadcast bot player info", var6);
+      }
+   }
+
+   private void removeBots(Engine.Match var1) {
+      for (UUID var3 : var1.bots) {
+         Entity var4 = this.findEntity(var3);
+         if (var4 instanceof ServerPlayer var5) {
+            this.broadcastPlayerInfo(var5, false);
+            var5.serverLevel().removePlayerImmediately(var5, RemovalReason.DISCARDED);
+         } else if (var4 != null) {
+            var4.discard();
+         }
+
+         this.members.remove(var3);
+      }
+
+      var1.bots.clear();
+      var1.botsSpawned = false;
+   }
+
+   private void respawnBots(Engine.Match var1, ServerLevel var2) {
+      if (!var1.bots.isEmpty()) {
+         Model.Arena var3 = var1.rules.map;
+
+         for (UUID var5 : new ArrayList<>(var1.bots)) {
+            Engine.Member var6 = this.members.get(var5);
+            if (var6 != null) {
+               ServerPlayer var8 = this.findEntity(var5) instanceof ServerPlayer var9 ? var9 : null;
+               if (var6.alive) {
+                  if (var8 == null || !var8.isAlive()) {
+                     var6.alive = false;
+                     var6.readyAt = this.ticks + (long)Math.max(1, var3.respawnSeconds) * 20L;
+                  }
+               } else if (this.ticks >= var6.readyAt) {
+                  if (var8 == null) {
+                     var var10 = this.legalSpawns(var1.rules, var6.team);
+                     if (!var10.isEmpty()) {
+                        this.spawnBotPlayer(var1, var2, var6.team, var6.name, (Model.Spawn)var10.get(var6.deaths % var10.size()));
+                     }
+                  } else {
+                     var var11 = this.legalSpawns(var1.rules, var6.team);
+                     if (!var11.isEmpty()) {
+                        this.deployBot(var8, var6, var1.rules, var2, (Model.Spawn)var11.get(var6.deaths % var11.size()));
+                     }
+                  }
+               }
             }
-            out.put("scores", members.values().stream()
-                    .filter(m -> m.map.equals(key) && m.team >= 0 && !m.bot)
-                    .sorted(Comparator.comparingInt((Member m) -> m.score).reversed())
-                    .toList());
-        }
-        out.put("result", results.getOrDefault(key, ""));
-        Network.send(player, out);
+         }
+      }
+   }
+
+   private void tickBotsMovement() {
+      for (Engine.Match var2 : this.matches.values()) {
+         if (!var2.bots.isEmpty()) {
+            ServerLevel var3 = this.levelOrNull(var2.rules.map);
+            if (var3 != null) {
+               for (UUID var5 : var2.bots) {
+                  Engine.Member var6 = this.members.get(var5);
+                  if (var6 != null && var6.alive && !var6.downed) {
+                     Entity var7 = this.findEntity(var5);
+                     if (var7 instanceof ServerPlayer) {
+                        ServerPlayer var8 = (ServerPlayer)var7;
+                        if (var8.isAlive()) {
+                           Model.Point var9 = this.nearestActivePoint(var2, var8);
+                           if (var9 != null) {
+                              double var10 = var9.x - var8.getX();
+                              double var12 = var9.z - var8.getZ();
+                              double var14 = Math.hypot(var10, var12);
+                              if (var14 > 1.5) {
+                                 var8.setYRot((float)Math.toDegrees(Math.atan2(-var10, var12)));
+                                 var8.setYHeadRot(var8.getYRot());
+                                 double var16 = 0.2;
+                                 var8.move(MoverType.SELF, new Vec3(var10 / var14 * var16, 0.0, var12 / var14 * var16));
+                              }
+                           }
+
+                           if (this.ticks >= var6.botNextAttackAt) {
+                              LivingEntity var18 = this.nearestEnemy(var2, var6, var8);
+                              if (var18 != null && var8.distanceToSqr(var18) <= 12.25) {
+                                 var18.hurt(var3.damageSources().playerAttack(var8), 5.0F);
+                                 var6.botNextAttackAt = this.ticks + 20L;
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   private Model.Point nearestActivePoint(Engine.Match var1, LivingEntity var2) {
+      if (var1.rules.map.isDeathmatch()) {
+         Engine.Member var11 = this.members.get(var2.getUUID());
+         LivingEntity var12 = var11 == null ? null : this.nearestEnemy(var1, var11, var2);
+         if (var12 == null) {
+            return null;
+         } else {
+            Model.Point var5 = new Model.Point();
+            var5.x = var12.getX();
+            var5.y = var12.getY();
+            var5.z = var12.getZ();
+            return var5;
+         }
+      } else {
+         Model.Point var3 = null;
+         double var4 = Double.MAX_VALUE;
+         var var6 = var1.rules.map.points;
+
+         for (int var7 = 0; var7 < var6.size(); var7++) {
+            if (var1.rules.active(var7)) {
+               Model.Point var8 = (Model.Point)var6.get(var7);
+               double var9 = var2.distanceToSqr(var8.x, var8.y, var8.z);
+               if (var9 < var4) {
+                  var4 = var9;
+                  var3 = var8;
+               }
+            }
+         }
+
+         return var3;
+      }
+   }
+
+   private LivingEntity nearestEnemy(Engine.Match var1, Engine.Member var2, LivingEntity var3) {
+      Object var4 = null;
+      double var5 = Double.MAX_VALUE;
+
+      for (ServerPlayer var8 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var9 = this.members.get(var8.getUUID());
+         if (var9 != null && var9.map.equals(var2.map) && var9.team != var2.team && var9.alive && var8.isAlive()) {
+            double var10 = var3.distanceToSqr(var8);
+            if (var10 < var5) {
+               var5 = var10;
+               var4 = var8;
+            }
+         }
+      }
+
+      for (UUID var15 : var1.bots) {
+         if (!var15.equals(var3.getUUID())) {
+            Engine.Member var16 = this.members.get(var15);
+            if (var16 != null && var16.team != var2.team) {
+               Entity var17 = this.findEntity(var15);
+               if (var17 instanceof LivingEntity) {
+                  LivingEntity var11 = (LivingEntity)var17;
+                  if (var11.isAlive()) {
+                     double var12 = var3.distanceToSqr(var11);
+                     if (var12 < var5) {
+                        var5 = var12;
+                        var4 = var11;
+                     }
+                  }
+               }
+            }
+         }
+      }
+
+      return (LivingEntity)var4;
+   }
+
+   private boolean stepTerrainBakes() {
+      if (this.bakes.isEmpty()) {
+         return false;
+      } else {
+         boolean var1 = false;
+
+         for (Entry var3 : new ArrayList<>(this.bakes.entrySet())) {
+            String var4 = (String)var3.getKey();
+            TerrainBake var5 = (TerrainBake)var3.getValue();
+            Model.Arena var6 = this.maps.get(var4);
+            if (var6 == null) {
+               this.bakes.remove(var4);
+               this.terrainWaiters.remove(var4);
+            } else {
+               ServerLevel var7 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var6.dimension)));
+               boolean var8 = var7 != null && var5.step(var7);
+               if (var5.abandoned()) {
+                  this.bakes.remove(var4);
+
+                  for (ServerPlayer var13 : this.takeWaiters(var4)) {
+                     Network.send(var13, Map.of("type", "terrain", "map", var4, "state", "FAILED"));
+                  }
+               } else if (var8) {
+                  this.bakes.remove(var4);
+                  TerrainMap var9 = var5.result();
+                  this.terrainMaps.put(var4, var9);
+                  TerrainBake.store(this.folder, var9);
+                  var1 = true;
+
+                  for (ServerPlayer var11 : this.takeWaiters(var4)) {
+                     sendTerrain(var11, var4, var9);
+                  }
+               }
+            }
+         }
+
+         return var1;
+      }
+   }
+
+   private Set<ServerPlayer> takeWaiters(String var1) {
+      var var2 = this.terrainWaiters.remove(var1);
+      if (var2 != null && !var2.isEmpty()) {
+         LinkedHashSet var3 = new LinkedHashSet();
+
+         for (UUID var5 : (java.lang.Iterable<UUID>)(var2)) {
+            ServerPlayer var6 = this.server.getPlayerList().getPlayer(var5);
+            if (var6 != null) {
+               var3.add(var6);
+            }
+         }
+
+         return var3;
+      } else {
+         return Set.of();
+      }
+   }
+
+   private static void sendTerrain(ServerPlayer var0, String var1, TerrainMap var2) {
+      try {
+         sendTerrainUnsafe(var0, var1, var2);
+      } catch (RuntimeException var4) {
+         BattlefieldOps.LOG.warn("Cannot send terrain for " + var1 + " to " + var0.getName().getString(), var4);
+      }
+   }
+
+   private static void sendTerrainUnsafe(ServerPlayer var0, String var1, TerrainMap var2) {
+      LinkedHashMap var3 = new LinkedHashMap();
+      var3.put("type", "terrain");
+      var3.put("map", var1);
+      var3.put("state", "READY");
+      var3.put("signature", var2.signature);
+      var3.put("data", var2.encode());
+      Network.send(var0, var3);
+   }
+
+   private static void award(ServerPlayer var0, String var1, int var2) {
+      award(var0, var1, var2, "", "kill");
+   }
+
+   private static void awardKill(ServerPlayer var0, String var1, int var2, String var3, String var4, int var5, int var6, double var7) {
+      if (var0 != null) {
+         try {
+            LinkedHashMap var9 = new LinkedHashMap();
+            var9.put("type", "bonus");
+            var9.put("label", var1);
+            var9.put("points", var2);
+            var9.put("detail", var3 == null ? "" : var3);
+            var9.put("icon", var4 == null ? "kill" : var4);
+            var9.put("elimination", true);
+            var9.put("combo", var5);
+            var9.put("victimId", var6);
+            var9.put("comboSeconds", var7);
+            if (var0.level().getEntity(var6) != null) {
+               var9.put("distance", var0.distanceTo(var0.level().getEntity(var6)));
+            }
+
+            var9.put("bonusId", FeedbackTypes.bonusId("", var4));
+            Network.send(var0, var9);
+            BattlefieldOps.LOG.debug("awardKill -> {}: +{} {} ({}) combo={}", new Object[]{var0.getScoreboardName(), var2, var1, var4, var5});
+         } catch (RuntimeException var10) {
+            BattlefieldOps.LOG.debug("Cannot send kill award", var10);
+         }
+      }
+   }
+
+   private static void award(ServerPlayer var0, String var1, int var2, String var3, String var4) {
+      if (var0 != null && (var2 > 0 || var3 != null && !var3.isEmpty())) {
+         try {
+            LinkedHashMap var5 = new LinkedHashMap();
+            var5.put("type", "bonus");
+            var5.put("label", var1);
+            var5.put("points", var2);
+            var5.put("detail", var3 == null ? "" : var3);
+            var5.put("icon", var4 == null ? "kill" : var4);
+            if ("远距离击杀".equals(var1)) {
+               ServerPlayer var6 = var0.getServer().getPlayerList().getPlayerByName(var3);
+               if (var6 != null) {
+                  var5.put("extra", Long.toString((long)Math.round(var0.distanceTo(var6))));
+               }
+            }
+
+            Network.send(var0, var5);
+            BattlefieldOps.LOG.debug("award -> {}: +{} {} ({})", new Object[]{var0.getScoreboardName(), var2, var1, var4});
+         } catch (RuntimeException var7) {
+            BattlefieldOps.LOG.debug("Cannot send bonus feed entry", var7);
+         }
+      }
+   }
+
+   void vehicleDestroyed(ServerPlayer var1, Entity var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (this.supportActive(var3) && var3.alive && !var3.downed) {
+         Engine.Match var4 = this.matches.get(var3.map);
+         Integer var5 = var4.vehicleTeams.get(var2.getUUID());
+         if (var5 != null && var5 != var3.team && var4.vehicles.contains(var2.getUUID()) && var2.level() == var1.level()) {
+            String var6 = BuiltInRegistries.ENTITY_TYPE.getKey(var2.getType()).toString();
+            boolean var7 = this.catalog.isAircraft(var6);
+            boolean var8 = "TANK".equals(this.catalog.vehicleTypes.get(var6));
+            boolean var9 = var1.getRootVehicle() != var1
+               && this.catalog.isAircraft(BuiltInRegistries.ENTITY_TYPE.getKey(var1.getRootVehicle().getType()).toString());
+            this.career.destroyVehicle(var1, var3, var2, var7, var8, var9);
+            if (this.finalHonours.mineKill(var1, var2)) {
+               this.career.repeated(var1, var3, "minelayer");
+            }
+         }
+      }
+   }
+
+   void vehicleMount(ServerPlayer var1, Entity var2, boolean var3) {
+      Engine.Member var4 = this.members.get(var1.getUUID());
+      if (this.supportActive(var4) && var4.alive && !var4.downed) {
+         Engine.Match var5 = this.matches.get(var4.map);
+         if (var5.vehicleTeams.getOrDefault(var2.getUUID(), -1) == var4.team) {
+            if (this.catalog.isAircraft(BuiltInRegistries.ENTITY_TYPE.getKey(var2.getType()).toString())) {
+               this.career.mount(var1, var4, var2, var3);
+            }
+         }
+      }
+   }
+
+   Rules rushRules(String var1) {
+      Engine.Match var2 = this.matches.get(var1);
+      return var2 != null && var2.running && var2.rules.map.isRush() ? var2.rules : null;
+   }
+
+   void rushPlant(ServerPlayer var1, Engine.Member var2) {
+      this.career.rushObjective(var2, true);
+      int var3 = this.matches.get(var2.map).rules.map.supportScore;
+      var2.score += var3;
+      var2.credits += var3;
+      Network.send(var1, Map.of("type", "bonus", "label", "炸点安放", "points", var3, "bonusId", "RUSH_BOMB_PLANTED", "icon", "capture"));
+   }
+
+   void rushAward(ServerPlayer var1, Engine.Member var2, String var3) {
+      boolean var4 = var3.equals("bomb_technician");
+      if (var4) {
+         this.career.rushObjective(var2, false);
+      } else {
+         var2.captures++;
+      }
+
+      int var5 = this.matches.get(var2.map).rules.map.captureScore;
+      var2.score += var5;
+      var2.credits += var5;
+      Network.send(
+         var1,
+         Map.of(
+            "type",
+            "bonus",
+            "label",
+            var4 ? "炸点拆除" : "目标摧毁",
+            "points",
+            var5,
+            "bonusId",
+            var4 ? "RUSH_BOMB_DEFUSED" : "RUSH_OBJECTIVE_DESTROYED",
+            "icon",
+            "capture"
+         )
+      );
+      this.career.repeated(var1, var2, var3);
+   }
+
+   void atmosphereHit(Entity var1) {
+      this.atmosphere.hit(var1);
+   }
+
+   void atmosphereTick(Entity var1) {
+      this.atmosphere.tick(var1, this.ticks);
+   }
+
+   String gunCategory(String var1) {
+      String var2 = this.catalog.gunTypes.getOrDefault(var1, "rifle");
+      return Set.of("smg", "sniper", "rpg").contains(var2) ? var2 : "rifle";
+   }
+
+   void suppression(ServerPlayer var1, ServerPlayer var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (this.supportActive(var3)) {
+         if (this.career.increment(var3, "life:nearMiss") % 35 == 0) {
+            this.career.count(var1, var3, "fireSupport", 5, "fire_support", true);
+            int var4 = this.matches.get(var3.map).rules.map.supportScore;
+            var3.score += var4;
+            var3.credits += var4;
+            Network.send(
+               var1,
+               Map.of("type", "bonus", "label", "火力压制", "points", var4, "bonusId", "FIRE_SUPPRESSION", "icon", "support", "detail", var2.getScoreboardName())
+            );
+         }
+      }
+   }
+
+   boolean friendlyHull(ServerPlayer var1, Entity var2) {
+      Engine.Member var3 = this.members.get(var1.getUUID());
+      if (this.supportActive(var3) && var3.alive && !var3.downed) {
+         Engine.Match var4 = this.matches.get(var3.map);
+         return var4.vehicleTeams.getOrDefault(var2.getUUID(), -1) == var3.team && var4.vehicles.contains(var2.getUUID()) && var2.level() == var1.level();
+      } else {
+         return false;
+      }
+   }
+
+   boolean repairAward(ServerPlayer var1, Entity var2, String var3) {
+      Engine.Member var4 = this.members.get(var1.getUUID());
+      if (var4 != null && var4.map.equals(var3) && this.friendlyHull(var1, var2)) {
+         this.career.count(var1, var4, "repair", 25, "mechanic", true);
+         int var5 = this.matches.get(var3).rules.map.supportScore;
+         var4.score += var5;
+         var4.credits += var5;
+         Network.send(
+            var1,
+            Map.of("type", "bonus", "label", "维修载具", "points", var5, "bonusId", "REPAIR_VEHICLE", "icon", "repair", "detail", var2.getDisplayName().getString())
+         );
+         return true;
+      } else {
+         return false;
+      }
+   }
+
+   void vehicleDamage(ServerPlayer var1, Entity var2, float var3) {
+      Engine.Member var4 = this.members.get(var1.getUUID());
+      if (this.supportActive(var4) && var4.alive && !var4.downed && Float.isFinite(var3) && !(var3 <= 0.0F)) {
+         Engine.Match var5 = this.matches.get(var4.map);
+         Integer var6 = var5.vehicleTeams.get(var2.getUUID());
+         if (var6 != null && var6 != var4.team && var2.level() == var1.level()) {
+            this.career.vehicleDamage(var1, var4, var3);
+         }
+      }
+   }
+
+   ServerPlayer recentAttacker(ServerPlayer var1) {
+      ServerPlayer var2 = this.recentAttacker.get(var1.getUUID());
+      Long var3 = this.recentAttackerAt.get(var1.getUUID());
+      if (var2 != null && var3 != null) {
+         if (var1.level().getGameTime() - var3 > 300L) {
+            return null;
+         } else if (var2 != var1 && var2.isAlive()) {
+            return this.members.containsKey(var2.getUUID()) ? var2 : null;
+         } else {
+            return null;
+         }
+      } else {
+         return null;
+      }
+   }
+
+  /** True when the player was hit within the given number of ticks. */
+  boolean hurtRecently(java.util.UUID id, int window) {
+    Integer at = this.damageTicks.get(id);
+    if (at == null) return false;
+    // The server keeps a jiffy counter that needs no per-tick bookkeeping.
+    for (ServerPlayer player : this.server.getPlayerList().getPlayers()) {
+      if (player.getUUID().equals(id)) return player.tickCount - at <= window;
     }
+    return false;
+  }
 
-    /**
-     * Vehicle blips for the HUD, coloured by owner.
-     *
-     * <p>Every vehicle in the match is sent, including enemy ones. Unlike enemy players — which are
-     * withheld until the server decides they are spotted — a vehicle is a large, loud, plainly
-     * visible object, so hiding it from the HUD would be inconsistent rather than stealthy. Nothing
-     * here leaks information the player could not already see.
-     *
-     * @param viewer the requesting member, or {@code null} for a non-participant
-     */
-    private List<Map<String, Object>> vehicleBlips(String mapId, Member viewer) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        Match match = matches.get(mapId);
-        if (match == null) return out;
-        int viewerTeam = viewer == null ? -1 : viewer.team;
-        for (UUID uuid : new ArrayList<>(match.vehicles)) {
-            Entity entity = findEntity(uuid);
-            if (entity == null || entity.isRemoved()) {
-                // Drop hulls that no longer exist so the HUD does not show ghosts of destroyed
-                // vehicles until the next cleanup pass.
-                match.vehicles.remove(uuid);
-                match.vehicleTeams.remove(uuid);
-                continue;
+   void noteDamage(ServerPlayer var1, ServerPlayer var2, DamageSource var3) {
+    if (var1 != null && var1.getServer() != null) this.damageTicks.put(var1.getUUID(), var1.tickCount);
+      if (this.members.containsKey(var1.getUUID())) {
+         this.career.damage(var1, var2, var3);
+      }
+   }
+
+   void gunEvidence(ServerPlayer var1, Entity var2, String var3) {
+      this.career.hit(var1, var2, var3, this.catalog.gunTypes.getOrDefault(var3, ""));
+   }
+
+   void gunReload(ServerPlayer var1) {
+      this.career.reload(var1);
+   }
+
+   public void hitNotice(ServerPlayer var1, ServerPlayer var2, float var3, double var4, boolean var6) {
+      if (var1 != null && var2 != null && !(var3 <= 0.0F)) {
+         if (var1 != var2) {
+            this.recentAttacker.put(var2.getUUID(), var1);
+            this.recentAttackerAt.put(var2.getUUID(), var2.level().getGameTime());
+         }
+
+         Engine.Member var7 = this.members.get(var1.getUUID());
+         Engine.Member var8 = this.members.get(var2.getUUID());
+         if (var7 != null && var8 != null) {
+            if (var7.alive && var7.map.equals(var8.map)) {
+               if (var7.team != var8.team) {
+                  var7.combatUntil = this.ticks + 140L;
+                  var8.combatUntil = this.ticks + 140L;
+                  Engine.Match var9 = this.matches.get(var7.map);
+                  if (var9 != null) {
+                     long var10 = System.currentTimeMillis();
+                     long var12 = (long)var9.rules.map.assistSeconds * 1000L;
+                     UUID var14 = var2.getUUID();
+                     var9.hits.put(var14, Awards.record(var9.hits.get(var14), new Awards.Hit(var1.getUUID(), var3, var10, var4)));
+                     var9.hits.replaceAll((var4x, var5) -> Awards.prune((List<Awards.Hit>)var5, var10, var12));
+                  }
+
+                  try {
+                     Network.send(var1, Map.of("type", "hit", "damage", var3, "nativeMarker", var6, "victimId", var2.getId()));
+                  } catch (RuntimeException var15) {
+                     BattlefieldOps.LOG.debug("Cannot send hit marker", var15);
+                  }
+               }
             }
-            int owner = match.vehicleTeams.getOrDefault(uuid, -1);
-            VehicleHud.Blip blip = new VehicleHud.Blip(owner, entity.getX(), entity.getZ(),
-                    entity.getPassengers().size(), entity.isRemoved());
-            if (!VehicleHud.visible(blip)) continue;
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("name", Catalog.prettify(
-                    BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString()));
-            entry.put("x", entity.getX());
-            entry.put("z", entity.getZ());
-            entry.put("team", owner);
-            entry.put("friendly", VehicleHud.friendly(blip, viewerTeam));
-            entry.put("occupants", blip.occupants());
-            entry.put("occupancy", VehicleHud.occupancy(blip));
-            entry.put("shareable", VehicleHud.shareable(blip, viewerTeam));
-            out.add(entry);
-        }
-        return out;
-    }
+         }
+      }
+   }
 
-    /**
-     * Whether this player could deploy a vehicle right now.
-     *
-     * <p>Reports the specific blocker rather than a bare boolean, because a player staring at a
-     * disabled button needs the reason in order to change their plan.
-     */
-    private Map<String, Object> vehicleState(String mapId, Member member) {
-        Model.Arena map = maps.get(mapId);
-        Match match = matches.get(mapId);
-        Map<String, Object> out = new LinkedHashMap<>();
-        if (map == null || match == null) {
-            out.put("state", "NOT_ALLOWED");
-            out.put("deployable", false);
-            out.put("text", VehicleHud.describe(VehicleHud.State.NOT_ALLOWED, 0, 0, 0));
-            return out;
-        }
-        match.vehicles.removeIf(uuid -> findEntity(uuid) == null);
-        int cooldownTicks = (int) Math.max(0, member.vehicleAt - ticks);
-        // Whether the team currently holds a spawn that can launch a vehicle at all. Reporting this
-        // separately lets the HUD say "无可用刷新点" instead of the misleading "可部署" followed by a
-        // rejection at deploy time.
-        boolean siteAvailable = Deploy.sites(map, member.team, match.rules.stage,
-                match.rules.isBreakthrough(), Deploy.owners(match.rules)).stream()
-                .anyMatch(site -> !site.allows().isEmpty());
-        VehicleHud.State state = VehicleHud.availability(
-                !map.vehicles.isEmpty(), true, siteAvailable,
-                cooldownTicks, teamVehicles(match,member.team), map.vehicleLimitFor(member.team));
-        out.put("state", state.name());
-        out.put("deployable", VehicleHud.deployable(state));
-        out.put("text", VehicleHud.describe(state, (cooldownTicks + 19) / 20,
-                teamVehicles(match,member.team), map.vehicleLimitFor(member.team)));
-        out.put("cooldown", map.vehicleCooldown);
-        out.put("remaining", (cooldownTicks + 19) / 20);
-        out.put("limit", map.vehicleLimitFor(member.team));
-        out.put("used", teamVehicles(match,member.team));
-        return out;
-    }
+   private void mark(ServerPlayer var1, JsonObject var2) throws Exception {
+      Engine.Member var3 = this.member(var1);
+      Engine.Match var4 = this.matches.get(var3.map);
+      Model.require(var4 != null && var4.running && var3.alive && var1.isAlive() && var3.team >= 0, "当前无法标记");
+      long var5 = System.currentTimeMillis();
+      if (var5 - var3.lastMarkAt >= 450L) {
+         var3.lastMarkAt = var5;
+         Vec3 var7 = var1.getEyePosition();
+         Vec3 var8 = var7.add(var1.getLookAngle().scale(150.0));
+         BlockHitResult var9 = var1.level().clip(new ClipContext(var7, var8, Block.COLLIDER, Fluid.NONE, var1));
+         double var10 = var7.distanceToSqr(var9.getLocation());
+         Entity var12 = null;
+         double var13 = var10;
 
-    /**
-     * One minimap blip. Includes the vehicle type when the player is riding one, which is the
-     * "show what vehicle someone is in" request — read from the entity itself so a vehicle addon
-     * that is not in the whitelist still shows up correctly.
-     */
-    private Map<String, Object> blip(ServerPlayer player, Member member, boolean self, boolean hostile) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", member.name);
-        out.put("x", player.getX());
-        out.put("z", player.getZ());
-        out.put("self", self);
-        // Heading, so a teammate can be drawn as an arrow rather than a dot. Without it the map says where
-        // somebody is but not which way they are facing, which is half of what a squad marker is for.
-        out.put("yaw", player.getYRot());
-        out.put("alive", member.alive);
-        out.put("team", member.team);
-        out.put("hostile", hostile);
-        Entity vehicle = player.getVehicle();
-        if (vehicle != null) {
-            // Name only: sending the full entity id list would leak the addon's internals and is
-            // useless to the client, which cannot spawn anything from it.
-            out.put("vehicle", Catalog.prettify(
-                    BuiltInRegistries.ENTITY_TYPE.getKey(vehicle.getType()).toString()));
-        }
-        return out;
-    }
+         for (Entity var16 : var1.serverLevel()
+            .getEntities(var1, var1.getBoundingBox().expandTowards(var1.getLookAngle().scale(150.0)).inflate(2.0), var0 -> var0.isAlive() && var0.isPickable())) {
+            if (var16 != var1.getRootVehicle() && Model.contains(var4.rules.map.boundary, var16.getX(), var16.getZ())) {
+               Engine.Member var17 = var16 instanceof ServerPlayer var18 ? this.members.get(var18.getUUID()) : null;
+               if ((!(var16 instanceof ServerPlayer) || var17 != null && var17.alive && var17.map.equals(var3.map))
+                  && (var16 instanceof ServerPlayer || this.catalog.vehicles.contains(BuiltInRegistries.ENTITY_TYPE.getKey(var16.getType()).toString()))) {
+                  Optional var28 = var16.getBoundingBox().inflate(0.45).clip(var7, var8);
+                  if (var28.isPresent() && var7.distanceToSqr((Vec3)var28.get()) <= var13) {
+                     var13 = var7.distanceToSqr((Vec3)var28.get());
+                     var12 = var16;
+                  }
+               }
+            }
+         }
 
-    /** Human-readable gun / vehicle names, so the GUI never shows raw registry ids only. */
-    private Map<String, String> names(Model.Arena arena) {
-        Map<String, String> out = new LinkedHashMap<>();
-        for (Model.Kit kit : arena.kits) {
-            for(boolean main:new boolean[]{true,false})for(String id:kit.options(main))if(!id.isEmpty())out.put(id,catalog.name(id));
-            if (!kit.primary.isEmpty()) out.put(kit.primary, catalog.name(kit.primary));
-            if (!kit.secondary.isEmpty()) out.put(kit.secondary, catalog.name(kit.secondary));
-        }
-        for (String vehicle : arena.vehicles) out.put(vehicle, catalog.name(vehicle));
-        return out;
-    }
+         Spotting.Kind var25 = Spotting.Kind.POSITION;
+         String var26 = "观察此处";
+         String var27 = "";
+         String var29 = "";
+         Vec3 var19 = var9.getLocation();
+         if (var12 != null) {
+            var19 = var12.position().add(0.0, (double)var12.getBbHeight() + 0.35, 0.0);
+            var29 = var12.getUUID().toString();
+            if (var12 instanceof ServerPlayer var20) {
+               Engine.Member var21 = this.members.get(var20.getUUID());
+               var27 = var21.kit;
+               var26 = var20.getName().getString();
+               if (var21.team != var3.team) {
+                  var25 = Spotting.Kind.ENEMY;
+               } else if (FixedClasses.resolve(var21.kit) == FixedClasses.Role.SUPPORT) {
+                  var25 = var1.isShiftKeyDown() ? Spotting.Kind.REQUEST_HEAL : Spotting.Kind.REQUEST_AMMO;
+                  var26 = var25 == Spotting.Kind.REQUEST_HEAL ? "请求医疗" : "请求弹药";
+                  var20.displayClientMessage(Component.literal(var1.getName().getString() + " · " + var26), true);
+                  var19 = var1.position().add(0.0, 2.3, 0.0);
+                  var29 = var1.getUUID().toString();
+                  var27 = var3.kit;
+               } else {
+                  var25 = Spotting.Kind.MATE;
+               }
+            } else {
+               var25 = Spotting.Kind.VEHICLE;
+               var26 = "载具";
+
+               for (Entity var22 : var12.getPassengers()) {
+                  if (var22 instanceof ServerPlayer var23) {
+                     Engine.Member var24 = this.members.get(var23.getUUID());
+                     if (var24 != null && var24.map.equals(var3.map) && var24.team != var3.team) {
+                        var25 = Spotting.Kind.ENEMY;
+                        break;
+                     }
+                  }
+               }
+            }
+         } else {
+            for (Model.Point var34 : var4.rules.map.points) {
+               if (ObjectiveZone.horizontal(var34, var19.x, var19.z)) {
+                  var25 = Spotting.Kind.OBJECTIVE;
+                  var26 = "据点 " + var34.id;
+                  var19 = new Vec3(var34.x, var34.y + 2.0, var34.z);
+                  break;
+               }
+            }
+         }
+
+         if (!var4.rules.map.boundary.isEmpty() && !Model.contains(var4.rules.map.boundary, var19.x, var19.z)) {
+            Network.send(var1, Map.of("type", "supportSound", "cue", "mark_failed"));
+            var1.displayClientMessage(Component.literal("该位置在战场边界外，无法标记"), true);
+         } else {
+            if (!var29.isEmpty()) {
+               final int markTeam = var3.team;
+               final var markTarget = var29;
+               var4.marks.removeIf(var2x -> var2x.team() == markTeam && var2x.target().equals(markTarget));
+            }
+
+            var4.marks
+               .add(
+                  new Spotting.Mark(
+                     var3.team, var19.x, var19.z, var5 + (long)var4.rules.map.markSeconds * 1000L, var25, var26, var19.y, var29, var27, var25.id()
+                  )
+               );
+
+            while (var4.marks.size() > 32) {
+               var4.marks.removeFirst();
+            }
+
+            if (var25 == Spotting.Kind.ENEMY && var5 - var3.rewardedMarks.getOrDefault(var29, 0L) >= 30000L) {
+               var3.rewardedMarks.put(var29, Long.valueOf(var5));
+
+               while (var3.rewardedMarks.size() > 64) {
+                  var3.rewardedMarks.remove(var3.rewardedMarks.keySet().iterator().next());
+               }
+
+               this.career.count(var1, var3, "scout", 20, "scout", true);
+               int var31 = var4.rules.map.markScore;
+               if (var31 > 0) {
+                  var3.score += var31;
+                  var3.credits += var31;
+                  award(var1, "标记", var31, var26, "spot_assist");
+               }
+            }
+
+            Network.send(var1, Map.of("type", "supportSound", "cue", "mark_success"));
+
+            for (ServerPlayer var35 : this.server.getPlayerList().getPlayers()) {
+               Engine.Member var36 = this.members.get(var35.getUUID());
+               if (var36 != null && var36.team == var3.team && var36.map.equals(var3.map)) {
+                  this.state(var35, var3.map, false, "");
+               }
+            }
+         }
+      }
+   }
+
+   private void addMark(ServerPlayer var1, Engine.Member var2, Engine.Match var3, ServerPlayer var4, Spotting.Kind var5, double var6) throws Exception {
+      var3.marks
+         .add(
+            new Spotting.Mark(
+               var2.team,
+               var4.getX(),
+               var4.getZ(),
+               System.currentTimeMillis() + (long)var3.rules.map.markSeconds * 1000L,
+               var5,
+               var4.getName().getString(),
+               var4.getY() + 2.0
+            )
+         );
+
+      while (var3.marks.size() > 32) {
+         var3.marks.removeFirst();
+      }
+
+      boolean var8 = var5 == Spotting.Kind.ENEMY;
+      String var9 = var8 ? "已标记" : "已呼叫";
+      int var10 = var8 ? var3.rules.map.markScore : 0;
+      if (var10 > 0) {
+         var2.score += var10;
+         var2.credits += var10;
+         award(var1, var9, var10, var4.getName().getString(), var8 ? "spot_assist" : "assist");
+      } else {
+         award(var1, var9, 0, var4.getName().getString(), var8 ? "spot_assist" : "assist");
+      }
+
+      this.announce(var1, var9, var4.getName().getString() + " · " + (int)var6 + " 格");
+      Network.send(var1, Map.of("type", "supportSound", "cue", var8 ? "mark_success" : "select"));
+
+      for (ServerPlayer var12 : this.server.getPlayerList().getPlayers()) {
+         Engine.Member var13 = this.members.get(var12.getUUID());
+         if (var13 != null && var13.team == var2.team && var13.map.equals(var2.map)) {
+            this.state(var12, var2.map, false, "");
+         }
+      }
+   }
+
+   private void terrain(ServerPlayer var1, JsonObject var2) {
+      String var3 = str(var2, "map", "");
+      Model.Arena var4 = this.maps.get(var3);
+      if (var4 == null && this.maps.size() == 1) {
+         var4 = this.maps.values().iterator().next();
+      }
+
+      Model.require(var4 != null, "地图不存在");
+      double[] var5 = TerrainBake.bounds(var4);
+      int[] var6 = TerrainMap.dimensions(Math.max(1.0, var5[2] - var5[0]), Math.max(1.0, var5[3] - var5[1]));
+      String var7 = TerrainMap.signature(var4, var6[0], var6[1]);
+      TerrainMap var8 = this.terrainMaps.get(var4.id);
+      if (var8 != null && var8.signature.equals(var7) && var8.valid()) {
+         sendTerrain(var1, var4.id, var8);
+      } else {
+         if (var8 != null) {
+            this.terrainMaps.remove(var4.id);
+         }
+
+         TerrainMap var9 = TerrainBake.load(this.folder, var4.id, var7);
+         if (var9 != null && var9.valid()) {
+            this.terrainMaps.put(var4.id, var9);
+            sendTerrain(var1, var4.id, var9);
+         } else {
+            TerrainBake var10 = this.bakes.get(var4.id);
+            if (var10 == null || !var10.signature().equals(var7)) {
+               this.bakes.put(var4.id, new TerrainBake(var4));
+               this.terrainWaiters.remove(var4.id);
+            }
+
+            this.terrainWaiters.computeIfAbsent(var4.id, var0 -> new LinkedHashSet<>()).add(var1.getUUID());
+            LinkedHashMap var11 = new LinkedHashMap();
+            var11.put("type", "terrain");
+            var11.put("map", var4.id);
+            var11.put("state", "BAKING");
+            var11.put("progress", this.bakes.get(var4.id).progress());
+            Network.send(var1, var11);
+         }
+      }
+   }
+
+   public void tick() {
+      this.cosmeticKills.tick();
+      this.ticks++;
+      if (this.ticks % 20L == 0L) {
+         for (Entry var2 : this.members.entrySet()) {
+            ServerPlayer var3 = this.server.getPlayerList().getPlayer((UUID)var2.getKey());
+            if (var3 != null) {
+               this.career.poll(var3, (Engine.Member)var2.getValue());
+            }
+         }
+      }
+
+      if (this.ticks % 1200L == 0L) {
+         this.career.save();
+      }
+
+      this.support.tick(this.ticks);
+      this.rush.tick(this.ticks);
+      this.refills.tick(this.ticks);
+      if (this.ticks % 20L == 0L) {
+         this.tickNutrition();
+      }
+
+      try {
+         this.tickDowned();
+      } catch (LinkageError | RuntimeException var28) {
+         BattlefieldOps.LOG.error("Downed-state tick failed", var28);
+      }
+
+      try {
+         this.stepTerrainBakes();
+      } catch (LinkageError | RuntimeException var27) {
+         BattlefieldOps.LOG.error("Terrain bake step failed", var27);
+         this.bakes.clear();
+      }
+
+      try {
+         this.tickBotsMovement();
+      } catch (LinkageError | RuntimeException var26) {
+         BattlefieldOps.LOG.error("Bot movement tick failed", var26);
+      }
+
+      for (Entry var32 : this.members.entrySet()) {
+         Engine.Member var35 = (Engine.Member)var32.getValue();
+         if (var35.entryUntil >= 0L && (this.ticks >= var35.entryUntil || this.ticks % 20L == 0L)) {
+            ServerPlayer var4 = this.server.getPlayerList().getPlayer((UUID)var32.getKey());
+            if (var4 != null) {
+               boolean var5 = this.ticks >= var35.entryUntil;
+               if (var5) {
+                  var35.entryUntil = -1L;
+                  var35.observerAt = this.ticks;
+               }
+
+               this.state(var4, var35.map, var5, "");
+            }
+         }
+      }
+
+      if (this.ticks % 20L == 0L) {
+         this.positionDeployObservers();
+         this.cleanBeacons();
+
+         for (Engine.Match var33 : this.matches.values()) {
+            for (UUID var38 : new ArrayList<>(var33.elites.claims.keySet())) {
+               Engine.Member var40 = this.members.get(var38);
+               if (var40 == null || !var40.alive || !var40.map.equals(var33.rules.map.id) || var40.eliteType.isEmpty()) {
+                  var33.elites.release(var38, this.ticks);
+                  if (var40 != null && !var40.alive) {
+                     var40.eliteType = "";
+                  }
+               }
+            }
+         }
+
+         for (Entry var34 : new ArrayList<>(this.matches.entrySet())) {
+            String var37 = (String)var34.getKey();
+            Engine.Match var39 = (Engine.Match)var34.getValue();
+            Rules var41 = var39.rules;
+            Model.Arena var6 = var41.map;
+
+            try {
+               this.refreshMarks(var39);
+            } catch (LinkageError | RuntimeException var25) {
+               BattlefieldOps.LOG.error("Cannot refresh enemy spotting for " + var37, var25);
+            }
+
+            List var7 = this.server.getPlayerList().getPlayers().stream().filter(var2x -> {
+               Engine.Member var3x = this.members.get(var2x.getUUID());
+               return var3x != null && var3x.map.equals(var37);
+            }).toList();
+            if (!var39.running) {
+               for (ServerPlayer var43 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                  this.state(var43, var37, false, "");
+               }
+            } else {
+               ServerLevel var8 = this.levelOrNull(var6);
+               if (var6.botMode) {
+                  if (!var39.botsSpawned && var8 != null) {
+                     var39.botsSpawned = true;
+                     this.spawnBots(var39, var8);
+                  }
+
+                  if (var8 != null) {
+                     this.respawnBots(var39, var8);
+                  }
+               }
+
+               if (!var7.isEmpty() || !var39.bots.isEmpty()) {
+                  int[][] var9 = new int[var6.points.size()][2];
+                  HashMap var10 = new HashMap();
+
+                  for (ServerPlayer var12 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                     Engine.Member var13 = this.members.get(var12.getUUID());
+                     if (var13.alive && var12.isAlive() && var13.team >= 0) {
+                        boolean var14 = var12.level().dimension().location().toString().equals(var6.dimension);
+                        boolean var15 = !var14 || RoomPolicy.beyond(var6, var12.getX(), var12.getY(), var12.getZ());
+                        if (var15) {
+                           this.death(var12, null);
+                           this.state(var12, var37, true, "离开战区过远，已阵亡，请重新部署");
+                        } else {
+                           boolean var16 = Model.contains(var6.boundary, var12.getX(), var12.getZ())
+                              && var12.getY() >= (double)var6.minY
+                              && var12.getY() <= (double)var6.maxY;
+                           boolean var17 = !var41.isStaged() || var6.inSector(var41.stage, var12.getX(), var12.getZ());
+                           Entity var18 = var12.getRootVehicle();
+                           String var19 = var18 == var12
+                              ? "I"
+                              : String.valueOf(this.catalog.vehicleClass(BuiltInRegistries.ENTITY_TYPE.getKey(var18.getType()).toString()));
+                           Model.Zone var20 = var6.zone(var13.team, var19);
+                           if (!var19.equals("I") && var20 != null && var19.equals(var20.mobility)) {
+                              var17 = true;
+                           }
+
+                           boolean var21 = var6.inZone(var13.team, var19, var12.getX(), var12.getZ());
+                           boolean var22 = var16 && var17 && var21;
+                           if (var22) {
+                              var13.outside = 0;
+                              var13.warnedSecond = -1;
+                              if (!var12.isSpectator() && !var13.downed) {
+                                 for (int var75 = 0; var75 < var6.points.size(); var75++) {
+                                    if (var41.active(var75)) {
+                                       Model.Point var24 = var6.points.get(var75);
+                                       if (ObjectiveZone.contains(var24, var12.getX(), var12.getY(), var12.getZ())) {
+                                          var9[var75][var13.team]++;
+                                          ((List<ServerPlayer>)var10.computeIfAbsent(var75, var0 -> new ArrayList<ServerPlayer>())).add(var12);
+                                       }
+                                    }
+                                 }
+                              }
+                           } else {
+                              var13.outside++;
+                              int var23 = Math.max(0, var6.outsideSeconds - var13.outside);
+                              this.boundaryWarning(var12, var23, var16 && var17 ? "已离开本方活动区域 " : "已离开战区 ");
+                              if (var13.outside >= var6.outsideSeconds) {
+                                 this.death(var12, null);
+                                 this.state(var12, var37, true, "越界倒计时结束，已阵亡，请重新部署");
+                              }
+                           }
+                        }
+                     }
+                  }
+
+                  for (UUID var46 : var39.bots) {
+                     Engine.Member var53 = this.members.get(var46);
+                     if (var53 != null && var53.alive && this.findEntity(var46) instanceof LivingEntity var66 && var66.isAlive()) {
+                        for (int var70 = 0; var70 < var6.points.size(); var70++) {
+                           if (var41.active(var70)) {
+                              Model.Point var74 = var6.points.get(var70);
+                              if (ObjectiveZone.contains(var74, var66.getX(), var66.getY(), var66.getZ())) {
+                                 var9[var70][var53.team]++;
+                                 break;
+                              }
+                           }
+                        }
+                     }
+                  }
+
+                  this.updateGlow(var7);
+                  this.updateSupply(var6, var7);
+                  this.reapEmptyVehicles(var39);
+                  int var45 = var41.stage;
+
+                  for (Rules.Capture var54 : var41.tick(var9)) {
+                     if (var54.team() >= 0) {
+                        for (ServerPlayer var67 : (java.lang.Iterable<ServerPlayer>)(var10.getOrDefault(var54.point(), List.of()))) {
+                           Engine.Member var71 = this.members.get(var67.getUUID());
+                           if (var71.team == var54.team()) {
+                              var71.captures++;
+                              this.career.capture(var71, var6.captureScore);
+                              var71.score = var71.score + var6.captureScore;
+                              var71.credits = var71.credits + var6.captureScore;
+                              award(var67, "占领", var6.captureScore, "", "capture");
+                           }
+                        }
+                     }
+                  }
+
+                  if (var41.winner != -2) {
+                     if (var41.isStaged()) {
+                        for (ServerPlayer var59 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                           Engine.Member var65 = this.members.get(var59.getUUID());
+                           if (var65 != null) {
+                              this.career.stage(var59, var65, var41.map.isRush());
+                           }
+                        }
+                     }
+
+                     this.finish(var37, var41.result());
+                  } else {
+                     for (Rules.Notice var55 : var41.drainNotices()) {
+                        for (ServerPlayer var68 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                           Engine.Member var72 = this.members.get(var68.getUUID());
+                           if (var72 != null && var72.team >= 0) {
+                              var68.displayClientMessage(Component.literal((var72.team == var55.team() ? "§b我军" : "§c敌军") + "§r" + var55.text()), false);
+                              var68.displayClientMessage(Component.literal((var72.team == var55.team() ? "§b我军" : "§c敌军") + "§r" + var55.text()), true);
+                           }
+                        }
+                     }
+
+                     if (var45 != var41.stage) {
+                        for (ServerPlayer var56 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                           Engine.Member var63 = this.members.get(var56.getUUID());
+                           if (var63 != null) {
+                              this.career.stage(var56, var63, var41.map.isRush());
+                           }
+                        }
+
+                        for (ServerPlayer var57 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                           Engine.Member var64 = this.members.get(var57.getUUID());
+                           if (var64 != null && var64.team >= 0) {
+                              var64.alive = false;
+                              var64.downed = false;
+                              var64.downedAt = -1L;
+                              var64.giveUpAt = -1L;
+                              var64.giveUpHeldAt = -100L;
+                              var64.reviveProgress = 0;
+                              var64.reviving = null;
+                              this.clearReviver(var57.getUUID());
+                              downPose(var57, false);
+                              var64.readyAt = this.ticks + 40L;
+                              var64.observerAt = this.ticks;
+                              var57.stopRiding();
+                              var57.getInventory().clearContent();
+                              var57.setGameMode(GameType.SPECTATOR);
+                              int var69 = var41.stage;
+                              Model.Spawn var73 = var6.spawns
+                                 .stream()
+                                 .filter(var2x -> var2x.team == var64.team && var2x.sector == var69)
+                                 .findFirst()
+                                 .orElseThrow(() -> new IllegalStateException("阶段 " + var69 + " 缺少出生点"));
+                              this.teleport(var57, this.level(var6), var73);
+                              this.state(var57, var37, true, "突破成功，进入阶段 " + var41.stage + "，请重新部署");
+                           }
+                        }
+                     }
+
+                     this.sidebar(var39);
+
+                     for (ServerPlayer var58 : (java.lang.Iterable<ServerPlayer>)(var7)) {
+                        this.state(var58, var37, false, "");
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+
+   private void boundaryWarning(ServerPlayer var1, int var2) {
+      this.boundaryWarning(var1, var2, "已离开战区 ");
+   }
+
+   private void boundaryWarning(ServerPlayer var1, int var2, String var3) {
+      var1.displayClientMessage(Component.literal("返回战区 · " + var2 + " 秒 · " + var3.trim()), true);
+   }
+
+   private void announce(ServerPlayer var1, String var2, String var3) {
+      var1.displayClientMessage(Component.literal(var2 + (var3.isEmpty() ? "" : " · " + var3)), true);
+   }
+
+   private void updateGlow(List<ServerPlayer> var1) {
+      for (ServerPlayer var3 : var1) {
+         Engine.Member var4 = this.members.get(var3.getUUID());
+         if (var4 != null && var4.glowing) {
+            this.clearGlow(var3, var4);
+         }
+      }
+   }
+
+   private void clearGlow(ServerPlayer var1, Engine.Member var2) {
+      if (var2 != null && var2.glowing) {
+         var1.setGlowingTag(false);
+      }
+
+      if (var2 != null) {
+         var2.glowing = false;
+      }
+   }
+
+   private static Tactics.At at(ServerPlayer var0) {
+      return new Tactics.At(var0.getX(), var0.getY(), var0.getZ());
+   }
+
+   private void sidebar(Engine.Match var1) {
+      this.board.hideSidebar();
+      this.sidebarShown = false;
+   }
+
+   private void finish(String var1, String var2) {
+      this.rush.close(var1);
+      Engine.Match var3 = this.matches.remove(var1);
+      if (var3 != null) {
+         this.results.put(var1, var2);
+         boolean var4 = var2.contains("平局");
+         int var5 = var4 ? -1 : (var2.contains("机械轴心") ? 0 : (var2.contains("格雷同盟") ? 1 : -1));
+         List var6 = this.members
+            .values()
+            .stream()
+            .filter(var1x -> var1x.map.equals(var1) && !var1x.bot)
+            .sorted(Comparator.<Engine.Member>comparingInt(var0 -> var0.score).reversed())
+            .toList();
+
+         try {
+            for (ServerPlayer var8 : (java.lang.Iterable<ServerPlayer>)(new ArrayList(this.server.getPlayerList().getPlayers()))) {
+               Engine.Member var9 = this.members.get(var8.getUUID());
+               if (var9 != null && var9.map.equals(var1)) {
+                  try {
+                     if (var3.running && var9.team >= 0) {
+                        this.clearGlow(var8, var9);
+                        LinkedHashMap var10 = new LinkedHashMap();
+                        var10.put("type", "result");
+                        var10.put("mapName", var3.rules.map.name);
+                        var10.put("mode", var3.rules.map.mode);
+                        var10.put("modeName", var3.rules.map.modeName());
+                        var10.put("reason", var2);
+                        var10.put("outcome", var3.rules.winner == -2 ? "对局结束" : (var5 < 0 ? "平局" : (var5 == var9.team ? "胜利" : "失败")));
+                        var10.put("kills", var9.kills);
+                        var10.put("deaths", var9.deaths);
+                        var10.put("captures", var9.captures);
+                        var10.put("score", var9.score);
+                        var10.put("assists", var9.assists);
+                        var10.put("revives", var9.revives);
+                        var10.put("ranking", var6);
+                        var10.put("team", var9.team);
+                        var10.put("playerName", var9.name);
+                        if (var3.rules.winner != -2) {
+                           try {
+                              var10.put("experience", this.progress.award(var8.getUUID(), var9.score, var5 == var9.team));
+                              var10.put("level", this.progress.level(var8.getUUID()));
+                           } catch (IOException var38) {
+                              BattlefieldOps.LOG.error("Cannot persist player progression", var38);
+                              var10.put("progressError", "等级结算写入失败，请联系管理员检查 progression.json；原文件已保留");
+                           }
+                        }
+
+                        this.leave(var8);
+                        this.transferToLobby(var8);
+                        this.state(var8, var1, false, var2);
+                        Network.send(var8, var10);
+                     } else {
+                        this.leave(var8);
+                        this.transferToLobby(var8);
+                        this.state(var8, var1, false, var2);
+                     }
+                  } catch (LinkageError | RuntimeException var41) {
+                     BattlefieldOps.LOG.error("Cannot finish participant {} in {}", new Object[]{var8.getUUID(), var1, var41});
+
+                     try {
+                        this.leave(var8);
+                        this.recover(var8);
+                        this.transferToLobby(var8);
+                        this.state(var8, var1, false, var2);
+                     } catch (LinkageError | RuntimeException var37) {
+                        BattlefieldOps.LOG.error("Participant cleanup failed; inventory backup retained", var37);
+                     }
+                  }
+               }
+            }
+         } finally {
+            try {
+               this.career.finish(var1);
+               this.board.clearMap(var1);
+               this.board.hideSidebar();
+            } catch (LinkageError | RuntimeException var36) {
+               BattlefieldOps.LOG.error("Cannot clear room scoreboard " + var1, var36);
+            }
+
+            try {
+               this.removeBots(var3);
+            } catch (LinkageError | RuntimeException var35) {
+               BattlefieldOps.LOG.error("Cannot remove room bots " + var1, var35);
+            }
+         }
+
+         for (UUID var44 : var3.vehicles) {
+            try {
+               Entity var45 = this.findEntity(var44);
+               if (var45 != null) {
+                  var45.discard();
+               }
+            } catch (LinkageError | RuntimeException var39) {
+               BattlefieldOps.LOG.error("Cannot remove room vehicle " + var44, var39);
+            } finally {
+               this.vehicles.remove(var44);
+            }
+         }
+      }
+   }
+
+   private static String resultTitle(String var0) {
+      if (var0.contains("平局")) {
+         return "§7平局";
+      } else if (var0.contains("机械轴心")) {
+         return "§9机械轴心胜利";
+      } else {
+         return var0.contains("格雷同盟") ? "§c格雷同盟胜利" : var0;
+      }
+   }
+
+   private static String resultSubtitle(Engine.Member var0, int var1) {
+      String var2 = var1 < 0 ? "§7平局" : (var1 == var0.team ? "§a胜利" : "§c失败");
+      return var2 + " §7击杀 " + var0.kills + " 阵亡 " + var0.deaths + " 占点 " + var0.captures + " §f得分 " + var0.score;
+   }
+
+   void deactivate() {
+      this.shutdown();
+
+      for (ServerPlayer var2 : this.server.getPlayerList().getPlayers()) {
+         if (this.members.containsKey(var2.getUUID())) {
+            this.leave(var2);
+         } else {
+            this.recover(var2);
+         }
+
+         LobbyAccess.remove(var2);
+         Model.require(!Files.exists(this.folder.resolve("players").resolve(var2.getUUID() + ".nbt")), "玩家 " + var2.getScoreboardName() + " 的背包尚未恢复");
+      }
+   }
+
+   public void shutdown() {
+      this.career.save();
+      this.support.close();
+      this.refills.clear();
+
+      for (Engine.Beacon var2 : new ArrayList<>(this.beacons.values())) {
+         this.removeBeacon(var2);
+      }
+
+      for (String var4 : new ArrayList<>(this.matches.keySet())) {
+         this.finish(var4, "服务器关闭，对局结束");
+      }
+
+      this.board.clearAll();
+   }
+
+   public void open(ServerPlayer var1) {
+      if (Network.supported(var1) && !this.members.containsKey(var1.getUUID())) {
+         this.lobby(var1, true, "");
+      } else {
+         this.state(var1, "", true, "");
+      }
+   }
+
+   private void setLobby(ServerPlayer var1) throws IOException {
+      Model.require(!this.members.containsKey(var1.getUUID()), "请先退出房间，再设置大厅位置");
+      Model.require(var1.isAlive() && !var1.isPassenger(), "请存活并离开载具后设置大厅");
+      LobbySettings var2 = new LobbySettings();
+      var2.enabled = true;
+      var2.dimension = var1.level().dimension().location().toString();
+      var2.x = var1.getX();
+      var2.y = var1.getY();
+      var2.z = var1.getZ();
+      var2.yaw = var1.getYRot();
+      var2.pitch = var1.getXRot();
+      var2.validate();
+
+      for (Engine.Match var4 : this.matches.values()) {
+         Model.require(!RoomPolicy.hubConflict(var4.rules.map, var2.dimension, var2.x, var2.z), "大厅应远离现有房间及退出缓冲区");
+      }
+
+      MapFiles.save(this.folder, "lobby", BattlefieldOps.GSON.toJson(var2));
+      this.lobbySettings = var2;
+   }
+
+   private void transferToLobby(ServerPlayer var1) {
+      if (this.lobbySettings.enabled
+         && !this.members.containsKey(var1.getUUID())
+         && !Files.exists(this.folder.resolve("players").resolve(var1.getUUID() + ".nbt"))) {
+         ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(this.lobbySettings.dimension)));
+         if (var2 == null) {
+            var1.sendSystemMessage(Component.literal("大厅维度不可用，已保留原位置"));
+         } else {
+            var1.stopRiding();
+            var1.teleportTo(var2, this.lobbySettings.x, this.lobbySettings.y, this.lobbySettings.z, this.lobbySettings.yaw, this.lobbySettings.pitch);
+            var1.setDeltaMovement(0.0, 0.0, 0.0);
+            var1.fallDistance = 0.0F;
+         }
+      }
+   }
+
+   private void lobby(ServerPlayer var1, boolean var2, String var3) {
+      Engine.Member var4 = this.members.get(var1.getUUID());
+      var var5 = new ArrayList();
+
+      for (Model.Arena var7 : this.maps.values()) {
+         Engine.Match var8 = this.matches.get(var7.id);
+         var var9 = this.members.values().stream().filter(var1x -> var1x.map.equals(var7.id) && !var1x.bot).toList();
+         LinkedHashMap var10 = new LinkedHashMap();
+         var10.put("id", var7.id);
+         var10.put("name", var7.name);
+         var10.put("mode", var7.mode);
+         var10.put("modeName", var7.modeName());
+         var10.put("room", var8 != null);
+         var10.put("running", var8 != null && var8.running);
+         var10.put("players", var9.size());
+         var10.put("capacity", var8 == null ? var7.maxPlayers : var8.rules.map.maxPlayers);
+         var10.put("blue", var9.stream().filter(var0 -> var0.team == 0).count());
+         var10.put("red", var9.stream().filter(var0 -> var0.team == 1).count());
+         var10.put("waiting", var9.stream().filter(var0 -> var0.team < 0).count());
+         var10.put("dimension", var7.dimension);
+         var10.put("canManage", var8 != null && this.roomControl(var1, var8));
+         var10.put("host", var8 == null ? "" : var8.ownerName);
+         var5.add(var10);
+      }
+
+      LinkedHashMap var11 = new LinkedHashMap();
+      var11.put("type", "lobby");
+      var11.put("open", var2);
+      var11.put("message", var3);
+      var11.put("admin", var1.hasPermissions(2));
+
+      for (Map var13 : (java.lang.Iterable<Map>)(var5)) {
+         String var14 = String.valueOf(var13.get("id"));
+         Model.Arena var15 = this.maps.get(var14);
+         if (var15 != null) {
+            var13.put("description", var15.roomDescription);
+         }
+      }
+
+      var11.put("rooms", var5);
+      var11.put("membership", var4 == null ? "" : var4.map);
+      var11.put("hubEnabled", this.lobbySettings.enabled);
+      var11.put(
+         "hub",
+         this.lobbySettings.enabled
+            ? this.lobbySettings.dimension
+               + " · "
+               + Math.round(this.lobbySettings.x)
+               + ", "
+               + Math.round(this.lobbySettings.y)
+               + ", "
+               + Math.round(this.lobbySettings.z)
+            : "未设置：退出房间恢复原位置"
+      );
+      var11.put("online", this.server.getPlayerList().getPlayerCount());
+      var11.put("activeRooms", this.matches.size());
+      Network.send(var1, var11);
+   }
+
+   public void state(ServerPlayer var1, String var2, boolean var3, String var4) {
+      if (!Network.supported(var1)) {
+         if (var3) {
+            var1.sendSystemMessage(Component.literal("你可以正常游玩服务器；安装战地风云客户端模组后才能加入地图对局。"));
+         }
+      } else {
+         Engine.Member var5 = this.members.get(var1.getUUID());
+         if (var5 != null) {
+            var2 = var5.map;
+         }
+
+         String var6 = this.maps.containsKey(var2) ? var2 : this.maps.keySet().stream().findFirst().orElse("");
+         LinkedHashMap var7 = new LinkedHashMap();
+         var7.put("type", "state");
+         var7.put("open", var3);
+         var7.put("message", var4);
+         var7.put("admin", var1.hasPermissions(2));
+         var7.put(
+            "maps",
+            this.maps
+               .values()
+               .stream()
+               .map(
+                  var1x -> Map.of(
+                        "id",
+                        var1x.id,
+                        "name",
+                        var1x.name,
+                        "modeName",
+                        var1x.modeName(),
+                        "running",
+                        this.matches.containsKey(var1x.id) && this.matches.get(var1x.id).running,
+                        "room",
+                        this.matches.containsKey(var1x.id)
+                     )
+               )
+               .toList()
+         );
+         var7.put("selected", var6);
+         Engine.Match var8 = this.matches.get(var6);
+         boolean var9 = RoomPolicy.canView(var5 == null ? null : var5.map, var5 == null ? -1 : var5.team, var6, var8 != null && var8.running);
+         var7.put("inMatch", var9);
+         var7.put("roomExists", var8 != null);
+         var7.put("canManageRoom", var8 != null && this.roomControl(var1, var8));
+         var7.put("roomRunning", var8 != null && var8.running);
+         var7.put("roomPlayers", this.members.values().stream().filter(var1x -> var1x.map.equals(var6)).count());
+         var var10 = new ArrayList();
+         if (var5 != null && var5.team >= 0) {
+            for (int var11 = 1; var11 <= 8; var11++) {
+               int var12 = var11;
+               List var13 = this.members
+                  .values()
+                  .stream()
+                  .filter(var3x -> SquadRules.same(var6, var5.team, var12, var3x.map, var3x.team, var3x.squad))
+                  .map(var0 -> var0.name)
+                  .toList();
+               var10.add(Map.of("id", var11, "count", var13.size(), "members", String.join("、", var13)));
+            }
+         }
+
+         var7.put("squads", var10);
+         var7.put("position", List.of(var1.getX(), var1.getY(), var1.getZ()));
+         var7.put("yaw", var1.getYRot());
+         var7.put("dimension", var1.level().dimension().location().toString());
+         var7.put("diagnostics", this.catalog.diagnostics);
+         var7.put("catalogCount", this.catalog.entries.size());
+         var7.put("catalog", Map.of("guns", this.catalog.guns.size(), "vehicles", this.catalog.vehicles.size()));
+         LinkedHashMap var24 = new LinkedHashMap();
+         var24.put("battleMapEnabled", this.compat.settings().minimap != CompatPolicy.Mode.NEVER);
+         var24.put("sidebar", this.sidebarShown);
+         var24.put("teams", this.board.teamsEnabled());
+         var24.put("minimap", this.compat.policy().mayUseMinimap(this.compat.settings().minimap, this.compat.settings().xaeroMinimap));
+         var24.put("xaero", this.compat.settings().xaeroMinimap);
+         var24.put("minimapCorner", Briefing.normaliseCorner(this.compat.settings().minimapCorner));
+         var24.put("hideXaero", this.compat.settings().hideXaeroInMatch);
+         var24.put("strictAids", this.compat.settings().strictAidsInMatch);
+         var7.put("hud", var24);
+         var7.put("compat", this.compat.report(Catalog.hasTacz(), Catalog.hasSuperbWarfare(), this.server.getServerModName()));
+         Engine.Member var25 = this.members.get(var1.getUUID());
+         var var26 = new ArrayList();
+         if (var9) {
+            var26.add(this.blip(var1, var25, true, false, var25));
+
+            for (ServerPlayer var15 : this.server.getPlayerList().getPlayers()) {
+               Engine.Member var16 = this.members.get(var15.getUUID());
+               if (var16 != null && var16 != var25 && var16.alive && var16.map.equals(var25.map)) {
+                  boolean var17 = var16.team != var25.team;
+                  if (var17) {
+                     boolean var18 = var8.marks
+                        .stream()
+                        .anyMatch(
+                           var2x -> var2x.kind() == Spotting.Kind.ENEMY
+                                 && var2x.team() == var25.team
+                                 && var2x.active(System.currentTimeMillis())
+                                 && var2x.target().equals(var15.getUUID().toString())
+                        );
+                     if (!var18 || !var25.alive || var1.level() != var15.level()) {
+                        continue;
+                     }
+                  }
+
+                  var26.add(this.blip(var15, var16, false, var17, var25));
+               }
+            }
+         }
+
+         var7.put("mates", var26);
+         if (var25 != null && this.supportActive(var25)) {
+            var var27 = new ArrayList();
+            boolean var31 = false;
+
+            for (Entry var43 : this.members.entrySet()) {
+               Engine.Member var50 = (Engine.Member)var43.getValue();
+               boolean var19 = ((UUID)var43.getKey()).equals(var1.getUUID());
+               if (var19 || var25.squad > 0 && SquadRules.same(var25.map, var25.team, var25.squad, var50.map, var50.team, var50.squad)) {
+                  boolean var20 = !var31 && !var19 && var25.squad > 0;
+                  if (var20) {
+                     var31 = true;
+                  }
+
+                  var27.add(Map.of("name", var50.name, "self", var19, "alive", var50.alive, "downed", var50.downed, "kit", var50.kit, "leader", var20));
+               }
+            }
+
+            var7.put("squadRoster", var27);
+         }
+
+         var7.put("supportDevices", var9 ? this.support.snapshot(var25) : List.of());
+         var7.put("gadgets", var9 ? this.refills.snapshot(var1, this.ticks) : List.of());
+         var7.put("elitePoints", var9 ? this.eliteSnapshot(var1, var25, var8) : List.of());
+         if (var9) {
+            var var28 = new ArrayList();
+            long var32 = System.currentTimeMillis();
+            Iterator var44 = Spotting.visibleTo(this.matches.get(var6).marks, var25.team, var32).iterator();
+
+            label357:
+            while (true) {
+               Spotting.Mark var51;
+               LinkedHashMap var56;
+               while (true) {
+                  if (!var44.hasNext()) {
+                     var7.put("marks", var28);
+                     break label357;
+                  }
+
+                  var51 = (Spotting.Mark)var44.next();
+                  var56 = new LinkedHashMap();
+                  var56.put("team", var51.team());
+                  var56.put("kind", var51.kind().id());
+                  var56.put("name", var51.name());
+                  var56.put("target", var51.target());
+                  var56.put("kit", var51.kit());
+                  var56.put("action", var51.action());
+                  var56.put("x", var51.x());
+                  var56.put("y", var51.y());
+                  var56.put("z", var51.z());
+                  if (!var51.target().isEmpty()) {
+                     try {
+                        Entity var61 = var1.serverLevel().getEntity(UUID.fromString(var51.target()));
+                        if (var61 instanceof ServerPlayer var21) {
+                           Engine.Member var22 = this.members.get(var21.getUUID());
+                           if (var22 == null || !var22.alive || !var22.map.equals(var25.map)) {
+                              continue;
+                           }
+                        }
+
+                        if (var61 != null && var61.isAlive()) {
+                           var56.put("entityId", var61.getId());
+                           var56.put("x", var61.getX());
+                           var56.put("y", var61.getY() + (double)var61.getBbHeight() + 0.35);
+                           var56.put("z", var61.getZ());
+                        }
+                     } catch (IllegalArgumentException var23) {
+                     }
+                  }
+                  break;
+               }
+
+               var56.put("left", Math.max(0L, (var51.expiresAt() - var32 + 999L) / 1000L));
+               var56.put("leftMs", Math.max(0L, var51.expiresAt() - var32));
+               var28.add(var56);
+            }
+         }
+
+         var7.put("elapsed", var9 ? this.matches.get(var6).rules.elapsed : 0);
+         if (var9) {
+            var7.put("rush", this.rush.snapshot(var6, this.ticks, var25 == null ? -1 : var25.team));
+            if (this.matches.get(var6).rules.map.isRush()) {
+               var7.put("rushHint", "空手朝向炸点中心，按住右键安放／拆除");
+            }
+         }
+
+         var7.put("vehicles", var9 ? this.vehicleBlips(var6, var25, var1) : List.of());
+         var7.put("hazards", var9 ? DangerMarkers.snapshot(var1, this.matches.get(var6).rules.map, var25, this) : List.of());
+         var7.put("pads", var9 ? this.padBlips(var6) : List.of());
+         var7.put("refill", var9 ? this.support.refillProgress(var1) : 0.0);
+      var7.put("refillWait", var9 ? this.support.refillWait(var1) : 0.0);
+      try {
+        var7.put("refillNeed", var9 && this.supportNeeded(var1));
+      } catch (ReflectiveOperationException unreadable) {
+        var7.put("refillNeed", false);
+      }
+         if (this.maps.containsKey(var6)) {
+            Model.Arena var29 = this.maps.get(var6);
+            var7.put("arena", var29);
+            var7.put("names", this.names(var29));
+            var7.put("gunStats", this.gunStats(var29));
+            var7.put("vehicleFacts", this.vehicleFacts(var29));
+            LinkedHashMap var33 = new LinkedHashMap();
+
+            for (String var45 : var29.vehicles) {
+               Integer var52 = this.catalog.vehicleSeats.get(var45);
+               if (var52 != null && var52 > 0) {
+                  var33.put(var45, var52);
+               }
+            }
+
+            var7.put("vehicleSeats", var33);
+            var7.put("fittingCounts", this.fittingCounts(var29));
+         }
+
+         Engine.Member var30 = this.members.get(var1.getUUID());
+         if (var30 != null) {
+            var7.put("me", var30);
+            if (var30.entryUntil > this.ticks && this.matches.containsKey(var30.map)) {
+               Model.Arena var34 = this.matches.get(var30.map).rules.map;
+               LinkedHashMap var39 = new LinkedHashMap();
+               var39.put("token", var30.entryToken);
+               var39.put("remaining", Long.valueOf(var30.entryUntil - this.ticks));
+               var39.put("duration", Integer.valueOf(var34.entrySeconds * 20));
+               var39.put("room", var34.name);
+               var39.put("map", var34.name);
+               var39.put("dimension", var34.dimension);
+               var39.put("description", var34.roomDescription);
+               var39.put(
+                  "tips",
+                  List.of(
+                     var34.entryTip1 == null ? "" : var34.entryTip1,
+                     var34.entryTip2 == null ? "" : var34.entryTip2,
+                     var34.entryTip3 == null ? "" : var34.entryTip3
+                  )
+               );
+               Model.EntryLayout var46 = var34.entry == null ? new Model.EntryLayout() : var34.entry;
+               var39.put(
+                  "layout",
+                  Map.of(
+                     "textX",
+                     var46.textX,
+                     "textY",
+                     var46.textY,
+                     "titleScale",
+                     Math.round(var46.titleScale * 10.0F),
+                     "descWidth",
+                     var46.descWidth,
+                     "descHeight",
+                     var46.descHeight,
+                     "descBottom",
+                     var46.descBottom,
+                     "waitX",
+                     var46.waitX
+                  )
+               );
+               if (var34.customEntryView) {
+                  var39.put("camera", List.of(var34.entryX, var34.entryY, var34.entryZ, var34.entryYaw, var34.entryPitch));
+               } else if (var34.customDeployView) {
+                  var39.put("camera", List.of(var34.deployViewX, var34.deployViewY, var34.deployViewZ, var34.deployViewYaw, var34.deployViewPitch));
+               } else {
+                  double[] var53 = var34.extent(var34.boundary);
+                  double var57 = var34.spawns.stream().mapToDouble(var0 -> var0.y).max().orElse(64.0);
+                  var39.put("camera", List.of(var53[0], var57 + 81.62, var53[1], 0, 90));
+               }
+
+               var7.put("entry", var39);
+            }
+
+            var7.put("respawnRemaining", Math.max(0L, (var30.readyAt - this.ticks + 19L) / 20L));
+            var7.put(
+               "giveUpProgress",
+               var30.downed && var30.giveUpAt >= 0L && this.ticks - var30.giveUpHeldAt <= 6L ? Math.min(20L, this.ticks - var30.giveUpAt) : 0L
+            );
+            var7.put("downLeft", var30.downed ? Medic.secondsLeft(var30.bleedOutAt, this.ticks) : 0);
+            var7.put("reviveProgress", var30.downed ? var30.reviveProgress : 0);
+            var7.put("vehicleRemaining", Math.max(0L, (var30.vehicleAt - this.ticks + 19L) / 20L));
+            var7.put("team", var30.team);
+            var7.put("teamName", Board.label(var30.team));
+            var7.put("vehicleState", this.vehicleState(var6, var30));
+            if (var8 != null) {
+               var var35 = new ArrayList();
+               var var40 = new ArrayList();
+
+               for (Engine.DeployOption var54 : this.deploymentOptions(var1, var30, var8)) {
+                  Deploy.Site var58 = var54.site;
+                  if (!var54.blocked.isEmpty()) {
+                     var40.add(Map.of("id", var58.id(), "label", var58.label(), "reason", var54.blocked));
+                  } else {
+                     LinkedHashMap var62 = new LinkedHashMap();
+                     var62.put("id", var58.id());
+                     var62.put("label", var58.label());
+                     var62.put("x", var58.x());
+                     var62.put("y", var58.y());
+                     var62.put("z", var58.z());
+                     var62.put("allows", var58.allows());
+                     var62.put("spawn", var58.spawn());
+                     var62.put("kind", var58.kind());
+                     var35.add(var62);
+                  }
+               }
+
+               var7.put("deploySites", var35);
+               var7.put("blockedDeploySites", var40);
+            }
+         }
+
+         LinkedHashMap var36 = new LinkedHashMap();
+         if (this.maps.containsKey(var6)) {
+            for (String var48 : this.maps.get(var6).vehicles) {
+               var36.put(var48, String.valueOf(this.catalog.vehicleClass(var48)));
+            }
+         }
+
+         var7.put("vehicleClasses", var36);
+         Engine.Match var42 = this.matches.get(var6);
+         if (var9) {
+            var7.put("tickets", var42.rules.tickets);
+            var7.put("teamScores", var42.rules.teamScores);
+            var7.put("scoreMode", var42.rules.map.isDeathmatch() ? "SCORE_TARGET" : "TICKETS");
+            var7.put("scoreTarget", var42.rules.map.targetKills);
+            var7.put("tracksTickets", List.of(var42.rules.tracksTickets(0), var42.rules.tracksTickets(1)));
+            var7.put("owned", var42.rules.owned());
+            var7.put("stage", var42.rules.stage);
+            var7.put("stages", var42.rules.stageCount());
+            var7.put("flags", var42.rules.flags);
+            int var49 = -1;
+            Model.Arena var55 = var42.rules.map;
+            if (var30.alive
+               && !var30.downed
+               && var1.isAlive()
+               && !var1.isSpectator()
+               && var30.outside == 0
+               && var1.level().dimension().location().toString().equals(var55.dimension)) {
+               for (int var59 = 0; var59 < var55.points.size(); var59++) {
+                  if (var42.rules.active(var59) && ObjectiveZone.contains(var55.points.get(var59), var1.getX(), var1.getY(), var1.getZ())) {
+                     var49 = var59;
+                     break;
+                  }
+               }
+            }
+
+            var7.put("objective", var49);
+            if (!var55.isDeathmatch() && var49 < 0 && var30.alive && var1.isAlive()) {
+               for (int var60 = 0; var60 < var55.points.size(); var60++) {
+                  Model.Point var63 = var55.points.get(var60);
+                  if (ObjectiveZone.horizontal(var63, var1.getX(), var1.getZ())) {
+                     String var64 = !var42.rules.active(var60)
+                        ? var63.id + " 尚未解锁（突破阶段 " + (var63.sector + 1) + "）"
+                        : (
+                           !ObjectiveZone.contains(var63, var1.getX(), var1.getY(), var1.getZ())
+                              ? var63.id + " 高度不符：Y " + Math.round(var63.y - var63.height / 2.0) + "～" + Math.round(var63.y + var63.height / 2.0)
+                              : "战区外不能占点"
+                        );
+                     var7.put("objectiveHint", var64);
+                     break;
+                  }
+               }
+            }
+
+            var7.put(
+               "scores",
+               this.members
+                  .values()
+                  .stream()
+                  .filter(var1x -> var1x.map.equals(var6) && var1x.team >= 0 && !var1x.bot)
+                  .sorted(Comparator.<Engine.Member>comparingInt(var0 -> var0.score).reversed())
+                  .toList()
+            );
+         }
+
+         var7.put("result", this.results.getOrDefault(var6, ""));
+         Network.send(var1, var7);
+      }
+   }
+
+   private List<Map<String, Object>> vehicleBlips(String var1, Engine.Member var2, ServerPlayer var3) {
+      var var4 = new ArrayList();
+      Engine.Match var5 = this.matches.get(var1);
+      if (var5 == null) {
+         return var4;
+      } else {
+         int var6 = var2 == null ? -1 : var2.team;
+
+         for (UUID var8 : new ArrayList<>(var5.vehicles)) {
+            Entity var9 = this.findEntity(var8);
+            if (var9 != null && !var9.isRemoved()) {
+               int var10 = var5.vehicleTeams.getOrDefault(var8, -1);
+               Engine.Member var12 = var9.getControllingPassenger() instanceof ServerPlayer var13 ? this.members.get(var13.getUUID()) : null;
+               if (var12 != null && var12.map.equals(var1) && var12.team >= 0) {
+                  var10 = var12.team;
+               }
+
+               if (var9.level() == var3.level()
+                  && Tactics.contactVisible(
+                     var10,
+                     var6,
+                     var2 != null && var2.alive,
+                     var5.rules.map.glowEnemies,
+                     at(var3),
+                     new Tactics.At(var9.getX(), var9.getY(), var9.getZ()),
+                     var3.hasLineOfSight(var9)
+                  )) {
+                  VehicleHud.Blip var18 = new VehicleHud.Blip(var10, var9.getX(), var9.getZ(), var9.getPassengers().size(), var9.isRemoved());
+                  if (VehicleHud.visible(var18)) {
+                     LinkedHashMap var14 = new LinkedHashMap();
+                     String var15 = BuiltInRegistries.ENTITY_TYPE.getKey(var9.getType()).toString();
+                     var14.put("name", Catalog.prettify(var15));
+                     var14.put("type", var15);
+                     var14.put("x", var9.getX());
+                     var14.put("y", var9.getY());
+                     var14.put("z", var9.getZ());
+                     var14.put("team", var10);
+                     var14.put("friendly", VehicleHud.friendly(var18, var6));
+                     var14.put("occupants", var18.occupants());
+                     var14.put("occupancy", VehicleHud.occupancy(var18));
+                     var14.put("shareable", VehicleHud.shareable(var18, var6));
+                     float var16 = this.catalog.vehicleHealthFraction(var9);
+                     if (var16 >= 0.0F) {
+                        var14.put("health", var16);
+                     }
+
+                     Integer var17 = this.catalog.vehicleSeats.get(var15);
+                     if (var17 != null && var17 > 0) {
+                        var14.put("seats", var17);
+                     }
+
+                     var4.add(var14);
+                  }
+               }
+            } else {
+               var5.vehicles.remove(var8);
+               var5.vehicleTeams.remove(var8);
+            }
+         }
+
+         return var4;
+      }
+   }
+
+   private Map<String, Object> vehicleState(String var1, Engine.Member var2) {
+      Model.Arena var3 = this.maps.get(var1);
+      Engine.Match var4 = this.matches.get(var1);
+      LinkedHashMap var5 = new LinkedHashMap();
+      if (var3 != null && var4 != null) {
+         var4.vehicles.removeIf(var1x -> this.findEntity(var1x) == null);
+         int var6 = (int)Math.max(0L, var2.vehicleAt - this.ticks);
+         boolean var7 = Deploy.sites(var3, var2.team, var4.rules.stage, var4.rules.isStaged(), Deploy.owners(var4.rules))
+            .stream()
+            .anyMatch(var0 -> !var0.allows().isEmpty());
+         VehicleHud.State var8 = VehicleHud.availability(
+            !var3.vehicles.isEmpty(), true, var7, var6, this.teamVehicles(var4, var2.team), var3.vehicleLimitFor(var2.team)
+         );
+         var5.put("state", var8.name());
+         var5.put("deployable", VehicleHud.deployable(var8));
+         var5.put("text", VehicleHud.describe(var8, (var6 + 19) / 20, this.teamVehicles(var4, var2.team), var3.vehicleLimitFor(var2.team)));
+         var5.put("cooldown", var3.vehicleCooldown);
+         var5.put("remaining", (var6 + 19) / 20);
+         var5.put("limit", var3.vehicleLimitFor(var2.team));
+         var5.put("used", this.teamVehicles(var4, var2.team));
+         return var5;
+      } else {
+         var5.put("state", "NOT_ALLOWED");
+         var5.put("deployable", false);
+         var5.put("text", VehicleHud.describe(VehicleHud.State.NOT_ALLOWED, 0, 0, 0));
+         return var5;
+      }
+   }
+
+   private Map<String, Object> blip(ServerPlayer var1, Engine.Member var2, boolean var3, boolean var4, Engine.Member var5) {
+      LinkedHashMap var6 = new LinkedHashMap();
+      var6.put("name", var2.name);
+      var6.put("uuid", var1.getUUID().toString());
+      var6.put("y", var1.getY());
+      var6.put("x", var1.getX());
+      var6.put("z", var1.getZ());
+      var6.put("self", var3);
+      var6.put("yaw", var1.getYRot());
+      var6.put("alive", var2.alive);
+      var6.put("downed", var2.downed);
+      var6.put("rescuable", !var4 && rescueRole(var5, var2));
+      var6.put("rescueCall", var2.downed && var2.rescueCallUntil > this.ticks);
+      var6.put("team", var2.team);
+      var6.put("hostile", var4);
+      var6.put("kit", var2.kit == null ? "" : var2.kit);
+      var6.put("elite", var2.eliteType);
+      var6.put("squad", var5 != null && SquadRules.same(var2.map, var2.team, var2.squad, var5.map, var5.team, var5.squad));
+      Entity var7 = var1.getVehicle();
+      if (var7 != null) {
+         var6.put("vehicle", Catalog.prettify(BuiltInRegistries.ENTITY_TYPE.getKey(var7.getType()).toString()));
+      }
+
+      return var6;
+   }
+
+   private Map<String, String> names(Model.Arena var1) {
+      LinkedHashMap var2 = new LinkedHashMap();
+
+      for (Model.Kit var4 : var1.kits) {
+         for (boolean var8 : new boolean[]{true, false}) {
+            for (String var10 : var4.options(var8)) {
+               if (!var10.isEmpty()) {
+                  var2.put(var10, this.catalog.name(var10));
+               }
+            }
+         }
+
+         if (!var4.primary.isEmpty()) {
+            var2.put(var4.primary, this.catalog.name(var4.primary));
+         }
+
+         if (!var4.secondary.isEmpty()) {
+            var2.put(var4.secondary, this.catalog.name(var4.secondary));
+         }
+      }
+
+      for (String var12 : var1.vehicles) {
+         var2.put(var12, this.catalog.name(var12));
+      }
+
+      return var2;
+   }
+
+   private Map<String, String> gunStats(Model.Arena var1) {
+      LinkedHashMap var2 = new LinkedHashMap();
+
+      for (Model.Kit var4 : var1.kits) {
+         for (boolean var8 : new boolean[]{true, false}) {
+            for (String var10 : var4.options(var8)) {
+               if (!var10.isEmpty() && this.catalog.gunStats.containsKey(var10)) {
+                  var2.put(var10, this.catalog.gunStats.get(var10));
+               }
+            }
+         }
+
+         if (!var4.primary.isEmpty() && this.catalog.gunStats.containsKey(var4.primary)) {
+            var2.put(var4.primary, this.catalog.gunStats.get(var4.primary));
+         }
+
+         if (!var4.secondary.isEmpty() && this.catalog.gunStats.containsKey(var4.secondary)) {
+            var2.put(var4.secondary, this.catalog.gunStats.get(var4.secondary));
+         }
+      }
+
+      return var2;
+   }
+
+   private Map<String, Map<String, Integer>> fittingCounts(Model.Arena var1) {
+      LinkedHashMap var2 = new LinkedHashMap();
+
+      for (Model.Kit var4 : var1.kits) {
+         for (boolean var8 : new boolean[]{true, false}) {
+            for (String var10 : var4.options(var8)) {
+               if (!var10.isEmpty() && !var2.containsKey(var10)) {
+                  var var11 = this.catalog.gunFittings.getOrDefault(var10, List.of());
+                  if (!var11.isEmpty()) {
+                     LinkedHashMap var12 = new LinkedHashMap();
+
+                     for (Fittings.Group var14 : (java.lang.Iterable<Fittings.Group>)(var11)) {
+                        var12.put(var14.id(), var14.options().size());
+                     }
+
+                     var2.put(var10, var12);
+                  }
+               }
+            }
+         }
+      }
+
+      return var2;
+   }
+
+   private Map<String, String> vehicleFacts(Model.Arena var1) {
+      LinkedHashMap var2 = new LinkedHashMap();
+
+      for (String var4 : var1.vehicles) {
+         StringBuilder var5 = new StringBuilder();
+         Integer var6 = this.catalog.vehicleSeats.get(var4);
+         Float var7 = this.catalog.vehicleHealth.get(var4);
+         if (var6 != null && var6 > 0) {
+            var5.append(var6).append(" 座");
+         }
+
+         if (var7 != null && var7 > 0.0F) {
+            if (var5.length() > 0) {
+               var5.append(" · ");
+            }
+
+            var5.append("血量 ").append(Math.round(var7));
+         }
+
+         int var8 = this.catalog.vehicleFittings.getOrDefault(var4, List.of()).size();
+         if (var8 > 0) {
+            if (var5.length() > 0) {
+               var5.append(" · ");
+            }
+
+            var5.append(var8).append(" 武器站");
+         }
+
+         if (var5.length() > 0) {
+            var2.put(var4, var5.toString());
+         }
+      }
+
+      return var2;
+   }
+
+   private static record Beacon(UUID entity, UUID owner, String map, int team, int squad, long expires, BlockPos at) {
+   }
+
+   private static final class BotConnection extends Connection {
+      BotConnection() {
+         super(PacketFlow.SERVERBOUND);
+
+         try {
+            Field var1 = Connection.class.getDeclaredField("channel");
+            var1.trySetAccessible();
+            var1.set(this, new EmbeddedChannel());
+         } catch (Throwable var2) {
+         }
+      }
+
+      public void send(Packet<?> var1) {
+      }
+
+      public void send(Packet<?> var1, PacketSendListener var2) {
+      }
+
+      public void send(Packet<?> var1, PacketSendListener var2, boolean var3) {
+      }
+
+      public void disconnect(Component var1) {
+      }
+
+      public void handleDisconnection() {
+      }
+   }
+
+   private static record DeployOption(Deploy.Site site, String blocked, Entity vehicle) {
+   }
+
+   static final class Match {
+      final Rules rules;
+      boolean running;
+      final EliteRuntime elites = new EliteRuntime();
+      UUID owner;
+      String ownerName = "";
+      final Set<UUID> vehicles = new HashSet<>();
+      final Map<UUID, Integer> vehicleTeams = new HashMap<>();
+      final List<Spotting.Mark> marks = new ArrayList<>();
+      final Map<UUID, List<Awards.Hit>> hits = new HashMap<>();
+      final Map<UUID, UUID> lastKiller = new HashMap<>();
+      final Map<UUID, Long> lastKillAt = new HashMap<>();
+      final Map<UUID, Integer> streak = new HashMap<>();
+      final List<UUID> bots = new ArrayList<>();
+      boolean botsSpawned;
+
+      Match(Model.Arena var1) {
+         this.rules = new Rules(var1);
+      }
+   }
+
+   public static final class Member {
+      long observerAt = -1L;
+      long entryStarted;
+      long entryUntil = -1L;
+      String entryToken = "";
+      public String map;
+      public String name;
+      public transient String deathVehicleClass = "";
+      public int team;
+      public int score;
+      public int kills;
+      public int deaths;
+      public int captures;
+      public int assists;
+      public int revives;
+      public int outside;
+      public int squad;
+      public long beaconAt;
+      public long combatUntil;
+      public long proneAt = -100L;
+      public int credits;
+      public boolean alive;
+      public boolean downed;
+      public long bleedOutAt;
+      public long rescueCallAt = -1000L;
+      public long rescueCallUntil;
+      public long downedAt = -1L;
+      public long giveUpAt = -1L;
+      public long giveUpHeldAt = -100L;
+      public String lastPrimary = "";
+      public String lastMelee = "";
+      /** Rounds actually issued per gun at deploy; resupply tops up to this, not to the map default. */
+      public java.util.Map<String,Integer> issuedAmmo = new java.util.LinkedHashMap<>();
+      public String lastSecondary = "";
+      public String lastKit = "";
+      public String tactical1 = "";
+      public String tactical2 = "";
+      public Map<String, String> gunAmmo = new LinkedHashMap<>();
+      public transient Map<String, ItemStack> issuedTemplates = new LinkedHashMap<>();
+      public Map<String, Integer> issuedSlots = new LinkedHashMap<>();
+      public transient Map<String, ItemStack> ammoTemplates = new LinkedHashMap<>();
+      public String throwable = "";
+      public String downedByName = "";
+      public UUID downedBy;
+      public int reviveProgress;
+      public UUID reviving;
+      public boolean killCredited;
+      public boolean hasDeployTarget;
+      public double deployX;
+      public double deployY;
+      public double deployZ;
+      public float deployYaw;
+      public float deployPitch;
+      public long reviveHeldAt = -100L;
+      public long readyAt;
+      public long vehicleAt;
+      public long deploySequence;
+      public int warnedSecond = -1;
+      public boolean glowing;
+      public boolean bot;
+      public long botNextPathAt;
+      public String kit = "";
+      public long lastMarkAt;
+      public final LinkedHashMap<String, Long> rewardedMarks = new LinkedHashMap<>();
+      public String eliteType = "";
+      public long botNextAttackAt;
+
+      boolean claimKill() {
+         if (this.killCredited) {
+            return false;
+         } else {
+            this.killCredited = true;
+            return true;
+         }
+      }
+
+      public Member(String var1, String var2, int var3) {
+         this.map = var1;
+         this.name = var2;
+         this.team = var3;
+      }
+   }
 }

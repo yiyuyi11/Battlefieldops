@@ -19,16 +19,35 @@ import java.util.*;
  * opaque surfaces, and every control living inside a {@link Form} that owns its rows and clips them.
  */
 final class BattleScreen extends FrontScreen {
-    private static final String[] TABS = {"角色配装 / 部署", "作战房间", "本局统计", "地图与规则管理"};
+    @Override public boolean shouldCloseOnEsc(){return !DeploymentLock.required(Client.state);}
+    @Override public void onClose(){if(!DeploymentLock.required(Client.state))super.onClose();}
+    private static final String[] TABS = {"角色配装 / 部署", "退出至大厅", "本局统计", "地图与规则管理"};
 
-    private Map<String,String> fitting(String kind,String id){
+    Map<String,String> fitting(String kind,String id){
         if(Client.fittingMemory.size()>512)Client.fittingMemory.clear();
-        return Client.fittingMemory.computeIfAbsent(selected+"/"+kind+":"+id,k->new LinkedHashMap<>());
+        return Client.fittingMemory.computeIfAbsent(kind+":"+id,k->new LinkedHashMap<>());
     }
     private void customize(String kind,String id){
         Model.require(!id.isEmpty(),"请先选择装备");
-        minecraft.setScreen(new FittingScreen(this,selected,id,kind,fitting(kind,id)));
+        minecraft.setScreen(new FittingScreen(this,selected,id,kind,fitting(kind,id),kit()==null?"":kit().id));
     }
+    private boolean tacticalMap;
+    private boolean overviewOnly=true;
+    private Form overviewControls;
+    private Form overviewDeploy;
+    private Form overviewLoadout;
+    private Form overviewSquad;
+    private Form overviewRight;
+    private Form overviewLeave;
+    private Form overviewAmmo;
+    boolean fullBattlefield(){return overviewOnly && tab==0 && DeploymentLock.room(Client.state) && !alive() && !tacticalMap;}
+    Layout.Rect overviewViewport(){return fullBattlefield()?new Layout.Rect(0,0,width,height):Ui.headerBody(layout.right);}
+
+    @Override protected boolean showBottomBar(){return !fullBattlefield();}
+    @Override protected boolean showFooter(){return !fullBattlefield();}
+    @Override protected boolean showChrome(){return !fullBattlefield();}
+    @Override protected boolean worldBackdrop() { return tab==0 && DeploymentLock.room(Client.state) && !alive() && !tacticalMap; }
+
     private int tab;
     private int formTab;
     private final int[] scrollMemory = new int[4];
@@ -37,10 +56,146 @@ final class BattleScreen extends FrontScreen {
     /** Page count from the last paint, used to clamp wheel paging. */
     private int scorePages = 1;
 
-    private String selected = "";
-    private String kitId = "", primary = "", secondary = "", spawn = "", vehicle = "";
+    String selected = "";
+    String kitId = "", primary = "", secondary = "", melee = "", throwable = "", tactical1 = "", tactical2 = "";
+    private String selectionMap="";
+    /** Emits one ammunition-type row per equipped Superb Warfare gun, used by every loadout view. */
+    void ammoRows(Form form) {
+        for (String gunId : new String[]{tactical1, tactical2}) {
+            if (gunId == null || gunId.isEmpty()) continue;
+            if (!SuperbAmmo.isGunId(gunId)) {
+                // TaCZ guns have a single ammunition item, so there is nothing to choose; log it once so a
+                // missing row can be told apart from a gun that simply has no alternatives.
+                BattlefieldOps.LOG.debug("[bfops] no ammo choice for {} (not a Superb Warfare gun)", gunId);
+                continue;
+            }
+            // Nothing to choose means nothing to show: one candidate is not a choice, and no launcher in
+            // either tactical slot means the strip should not exist at all.
+            var candidates = kit() == null ? java.util.List.<String>of() : ammoCandidates(kit(), gunId);
+            if (candidates.size() < 2) {
+                BattlefieldOps.LOG.debug("[bfops] ammo choice for {} has {} candidates: {}", gunId, candidates.size(), candidates);
+                continue;
+            }
+            row(form, "弹种 · " + meleeName(gunId), ammoRowText(gunId), () -> pickAmmo(gunId));
+        }
+    }
 
-    private Model.Arena arena;
+    /** True when at least one equipped launcher offers more than one ammunition type. */
+    private boolean hasAmmoChoice() {
+        Model.Kit k = kit();
+        if (k == null) return false;
+        for (String gunId : new String[]{tactical1, tactical2}) {
+            if (gunId == null || gunId.isEmpty() || !SuperbAmmo.isGunId(gunId)) continue;
+            if (ammoCandidates(k, gunId).size() > 1) return true;
+        }
+        return false;
+    }
+
+    /** Types the player may pick: the map's whitelist, or everything the gun itself declares when unset. */
+    private java.util.List<String> ammoCandidates(Model.Kit kit, String gunId) {
+        var whitelisted = kit.ammoWhitelist(gunId);
+        if (!whitelisted.isEmpty()) return whitelisted;
+        var probe = SuperbAmmo.gunBundle(gunId, 0);
+        return probe.isEmpty() ? java.util.List.of() : SuperbAmmo.ammoIds(probe.getFirst());
+    }
+
+    /** Text for the ammunition row of one gun on the deploy screen. */
+    private String ammoRowText(String gunId) {
+        Model.Kit k = kit();
+        if (k == null) return "未设置";
+        var allowed = ammoCandidates(k, gunId);
+        if (allowed.isEmpty()) return "默认";
+        String picked = Client.deployedAmmo.getOrDefault(gunId, allowed.getFirst());
+        return allowed.contains(picked) ? KitItems.name(picked) : KitItems.name(allowed.getFirst());
+    }
+
+    /** Cycles this gun's ammunition through the map's whitelist; the choice travels with the deploy request. */
+    private void pickAmmo(String gunId) {
+        Model.Kit k = kit();
+        if (k == null) return;
+        var allowed = ammoCandidates(k, gunId);
+        if (allowed.isEmpty()) return;
+        String current = Client.deployedAmmo.getOrDefault(gunId, allowed.getFirst());
+        int next = (allowed.indexOf(current) + 1) % allowed.size();
+        Client.deployedAmmo.put(gunId, allowed.get(next));
+        rememberLoadout();
+        rebuild();
+    }
+
+    /** " ×3" when the map authored a count above one; nothing otherwise, so single items stay clean. */
+    private String countSuffix(String id) {
+        Model.Kit k = kit();
+        if (k == null || id == null || id.isEmpty()) return "";
+        int count = k.countFor(id);
+        if (count <= 1) return "";
+        // A gun's number is rounds, not objects: saying "×3 发" removes the ambiguity for rocket launchers.
+        return ItemCatalog.isGun(id) ? " ×" + count + " 发" : " ×" + count + " 个";
+    }
+
+    void rememberLoadout(){
+        // rebuildContent() calls this before the snapshot has filled the fields, and writing that blank state
+        // over the stored loadout is what made the throwable and both tactical slots read "none" again.
+        boolean blank=primary.isEmpty()&&secondary.isEmpty()&&melee.isEmpty()
+                &&throwable.isEmpty()&&tactical1.isEmpty()&&tactical2.isEmpty();
+        if(!kitId.isEmpty()&&!blank){
+            if(Client.loadoutMemory.size()>512)Client.loadoutMemory.clear();
+            String[] loadout={kitId,primary,secondary,melee,throwable,tactical1,tactical2};
+            Client.loadoutMemory.put(selected+"/"+kitId,loadout);
+        }
+    }
+    void selectKit(String id){
+        // Do NOT remember the current fields here: on a freshly opened screen they are still empty, and
+        // saving them first overwrote the stored loadout with blanks - that is what made the tactical slots
+        // (and previously the throwable) read "none" after a redeploy. Pickers save on their own edits.
+        String previousMelee=melee;
+        kitId=id;
+        String[] saved=Client.loadoutMemory.getOrDefault(selected+"/"+id,Client.lobbyLoadouts.get(id));
+        Model.Kit next=kit();
+        primary=saved==null||saved.length<2?"":saved[1];
+        secondary=saved==null||saved.length<3?"":saved[2];
+        melee=saved==null||saved.length<4?"":saved[3];
+        throwable=saved==null||saved.length<5?"":saved[4];
+        tactical1=saved==null||saved.length<6?"":saved[5];
+        tactical2=saved==null||saved.length<7?"":saved[6];
+        if(saved==null){
+            // No local memory (fresh client): adopt whatever the server says is actually carried.
+            var me=Client.state.has("me")?Client.state.getAsJsonObject("me"):new com.google.gson.JsonObject();
+            tactical1=Engine.str(me,"tactical1","");
+            tactical2=Engine.str(me,"tactical2","");
+        }
+        if(next!=null){
+            if(!gunAllowed(next,true,primary))primary=next.options(true).getFirst();
+            if(!gunAllowed(next,false,secondary))secondary=next.options(false).getFirst();
+            boolean prunesMelee=arena!=null&&!arena.isTraining();
+            if(saved==null||(prunesMelee&&!melee.isEmpty()&&!meleeAllowed(next,melee)))melee=next.melee==null?"":next.melee;
+            // Never leave the melee slot empty by accident: memory, then the class default, then the first
+            // authorised option, then whatever the player already had.
+            if(melee.isEmpty()){
+                // Last resort before defaults: what the server says this player actually deployed with. That
+                // record survives a client restart, so a loadout is never lost just because the memory file is.
+                var me=Client.state.has("me")?Client.state.getAsJsonObject("me"):new com.google.gson.JsonObject();
+                String carried=Engine.str(me,"lastMelee","");
+                if(!carried.isEmpty()&&meleeAllowed(next,carried))melee=carried;
+            }
+            if(melee.isEmpty()){
+                if(next.melee!=null&&!next.melee.isEmpty())melee=next.melee;
+                else if(!next.meleeOptions().isEmpty())melee=next.meleeOptions().getFirst();
+                else if(meleeAllowed(next,previousMelee))melee=previousMelee;
+            }
+            // Only a normal map prunes an unauthorised throwable. On a firing range (or before the arena has
+            // arrived, which happens right after respawning) the player's own choice is kept: the server is
+            // the authority on authorisation, and wiping here is what made the slot read "none" again.
+            boolean prunesThrowable=arena!=null&&!arena.isTraining();
+            if(prunesThrowable&&!throwable.isEmpty()&&!next.throwableOptions().contains(throwable))throwable=next.throwable==null?"":next.throwable;
+        }
+        rememberLoadout();
+    }
+    private String spawn = "";
+    String vehicle = "";
+    /** Extra items the player may take only in a firing range; ignored by every normal map. */
+    private final java.util.List<String> trainingItems = new java.util.ArrayList<>();
+
+    Model.Arena arena;
     /**
      * The shared map widget. The same class paints the editor canvas, so the in-match map and the
      * designer's map cannot drift apart in projection, terrain or overlay.
@@ -58,6 +213,8 @@ final class BattleScreen extends FrontScreen {
 
     BattleScreen() {
         super("战地风云");
+        // The tactical map rotates with the player's heading; the editor's own MapPicker does not.
+        map.rotating = true;
     }
 
     // ------------------------------------------------------------------ state glue
@@ -93,8 +250,8 @@ final class BattleScreen extends FrontScreen {
 
     private String teamName() {
         return switch (team()) {
-            case 0 -> "蓝方";
-            case 1 -> "红方";
+            case 0 -> "机械轴心";
+            case 1 -> "格雷同盟";
             default -> "未选队";
         };
     }
@@ -102,23 +259,60 @@ final class BattleScreen extends FrontScreen {
     private void chooseVehicle(List<String> options,String title){
         var choices=options.stream().map(id->new ChoiceScreen.Choice(id,id.isEmpty()?"不部署载具":name(id),"vehicle")).toList();
         minecraft.setScreen(new ChoiceScreen(this,title,choices,id->{
-            vehicle=id;
-            // Keep the site usable for whatever was just picked. Without this the two rows disagree and
-            // the deploy button goes grey with no obvious cause — which is what "only non-admins cannot
-            // deploy a vehicle" turned out to be. An admin who tested right after editing the map had
-            // usually set the site by hand, so the defect only showed up for ordinary players.
-            spawn = Deploy.siteFor(sites(), spawn, vehicle, vehicleClass(vehicle));
+            selectVehicle(id);
             rebuild();
         }));
     }
 
-    private String name(String id) {
+    /** Sets the vehicle pick and keeps the spawn usable for it, so the two rows never disagree. */
+    boolean vehicleSpawnAllowed(){return DeploymentRules.canSpawnNew(site(spawn));}
+    void selectSite(String id){
+        Deploy.Site target=site(id);Model.require(target!=null,"部署目标已失效");
+        spawn=id;
+        if(!vehicle.isEmpty()&&(!DeploymentRules.canSpawnNew(target)||!target.allows(vehicleClass(vehicle)))){
+            vehicle="";say("已选择 "+target.label()+"，本次按步兵增援部署");
+        }
+        DeployMarkers.select(id);
+        ok("已选择："+DeploymentText.label(target.id(),target.kind(),target.label())+" · 空格确认入场");
+    }
+    void selectVehicle(String id) {
+        Model.require(id.isEmpty()||vehicleSpawnAllowed(),"小队、信标和登车只能步兵部署，请先选择固定载具刷新点");
+        vehicle=id;String previous=spawn;
+        spawn=Deploy.siteFor(sites(),spawn,vehicle,vehicleClass(vehicle));
+        if(!previous.equals(spawn)){var target=site(spawn);say("新载具将从 "+(target==null?spawn:target.label())+" 刷新");}
+    }
+
+    String name(String id) {
         if (id == null || id.isEmpty()) return "未选择";
         JsonObject names = Client.state.has("names") ? Client.state.getAsJsonObject("names") : null;
         return names != null && names.has(id) ? names.get(id).getAsString() : Catalog.prettify(id);
     }
 
-    private Model.Kit kit() {
+    /** Every scanned gun, used by the firing-range loadout where the kit's authorisation does not apply. */
+    static java.util.List<String> allGuns() {
+        var out = new java.util.ArrayList<String>();
+        JsonObject catalog = Client.catalog;
+        if (catalog != null && catalog.has("entries")) {
+            for (var element : catalog.getAsJsonArray("entries")) {
+                var entry = element.getAsJsonObject();
+                if ("gun".equals(Engine.str(entry, "kind", ""))) out.add(Engine.str(entry, "id", ""));
+            }
+        }
+        return out;
+    }
+
+    /** True when the id may be taken in this slot: any gun at a firing range, otherwise the kit's list. */
+    boolean gunAllowed(Model.Kit kit, boolean main, String id) {
+        if (arena != null && arena.isTraining()) return allGuns().contains(id);
+        return kit.options(main,team()).contains(id);
+    }
+
+    boolean meleeAllowed(Model.Kit kit, String id) {
+        if (arena != null && arena.isTraining()) return !id.isEmpty();
+        return kit.meleeOptions(team()).contains(id);
+    }
+
+    Model.Kit kit() {
         if (arena == null) return null;
         return arena.kits.stream().filter(k -> k.id.equals(kitId)).findFirst().orElse(null);
     }
@@ -156,7 +350,7 @@ final class BattleScreen extends FrontScreen {
      * <p>Read from the server's {@code vehicleClasses} map so the client does not need to load
      * superbwarfare's metadata; a missing entry defaults to ground, which is the safe direction.
      */
-    private char vehicleClass(String id) {
+    char vehicleClass(String id) {
         if (id == null || id.isEmpty()) return 'G';
         JsonObject classes = Client.state.has("vehicleClasses")
                 ? Client.state.getAsJsonObject("vehicleClasses") : null;
@@ -169,7 +363,7 @@ final class BattleScreen extends FrontScreen {
 
     private List<String> vehicles() {
         if (arena == null) return List.of();
-        return arena.vehicles;
+        return arena.vehiclesFor(team());
     }
 
     private void send(String op) {
@@ -194,6 +388,7 @@ final class BattleScreen extends FrontScreen {
 
     @Override
     protected boolean onTab(int index) {
+        if(index==1){LobbyScreen.open();return true;}
         if (index == 3) {
             minecraft.setScreen(new OpsScreen());
             return true;
@@ -223,6 +418,11 @@ final class BattleScreen extends FrontScreen {
     @Override
     protected void init() {
         super.init();
+        spaceArmed=!com.mojang.blaze3d.platform.InputConstants.isKeyDown(minecraft.getWindow().getWindow(),org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE);
+        // The firing-range weapon picker lists every scanned gun, which needs the catalog on the client.
+        // It is only sent on request, so ask for it as soon as the deploy screen opens.
+        if(!Client.catalog.has("entries"))Client.send(Client.request("catalog",""));
+        sync();
     }
 
     @Override
@@ -252,6 +452,20 @@ final class BattleScreen extends FrontScreen {
         arena = Client.state.has("arena")
                 ? BattlefieldOps.GSON.fromJson(Client.state.get("arena"), Model.Arena.class) : null;
         if (arena != null) {
+            if(!selectionMap.equals(selected)){
+                selectionMap=selected;
+                JsonObject who=Client.state.has("me")?Client.state.getAsJsonObject("me"):new JsonObject();
+                kitId=Engine.str(who,"lastKit",Engine.str(who,"kit",""));
+                String[] saved=Client.loadoutMemory.getOrDefault(selected+"/"+kitId,Client.lobbyLoadouts.get(kitId));
+                primary=saved!=null?saved[1]:Engine.str(who,"lastPrimary","");
+                secondary=saved!=null?saved[2]:Engine.str(who,"lastSecondary","");
+                melee=saved!=null?saved[3]:Engine.str(who,"lastMelee","");
+                // These three were never restored here, which is why a redeploy showed "none": the screen is
+                // rebuilt with empty fields and only the class dropdown used to re-read the memory.
+                throwable=saved!=null&&saved.length>4&&!saved[4].isEmpty()?saved[4]:Engine.str(who,"throwable","");
+                tactical1=saved!=null&&saved.length>5&&!saved[5].isEmpty()?saved[5]:Engine.str(who,"tactical1","");
+                tactical2=saved!=null&&saved.length>6&&!saved[6].isEmpty()?saved[6]:Engine.str(who,"tactical2","");
+            }
             // Keep the three selections honest against what the server will accept: a kit that was
             // deleted, a weapon the kit no longer authorises, or a spawn on the wrong team all have
             // to fall back here, where the player can see the result.
@@ -262,23 +476,30 @@ final class BattleScreen extends FrontScreen {
             }
             Model.Kit kit = kit();
             if (kit != null) {
-                if (!kit.options(true).contains(primary)) primary = kit.options(true).getFirst();
-                if (!kit.options(false).contains(secondary)) secondary = kit.options(false).getFirst();
+                if (!gunAllowed(kit,true,primary)) primary = kit.options(true,team()).getFirst();
+                if (!gunAllowed(kit,false,secondary)) secondary = kit.options(false,team()).getFirst();
+                if(!melee.isEmpty()&&!meleeAllowed(kit,melee))melee=kit.melee==null?"":kit.melee;
+                // A firing range accepts any item, so the whitelist must not reset the choice back to empty.
+                if(!throwable.isEmpty()&&!(arena!=null&&arena.isTraining())&&!kit.throwableOptions(team()).contains(throwable))throwable=kit.throwable==null?"":kit.throwable;
             }
             List<String> spawns = spawns();
             if (!spawns.contains(spawn)) spawn = spawns.isEmpty() ? "" : spawns.getFirst();
-            if (!arena.vehicles.contains(vehicle)) vehicle = "";
+            if (!arena.vehiclesFor(team()).contains(vehicle)) vehicle = "";
             // Re-reconcile after the snapshot: a site can disappear (a capture point lost, a stage
             // advanced) or the vehicle list can change, either of which can leave the pair inconsistent.
+            vehicle=DeploymentRules.keepVehicle(site(spawn),vehicle);
             spawn = Deploy.siteFor(sites(), spawn, vehicle, vehicleClass(vehicle));
         }
+        DeployMarkers.syncSelection(DeploymentLock.room(Client.state)&&!alive()?spawn:"");
         rebuild();
     }
 
     // ------------------------------------------------------------------ rebuild
 
     @Override
-    protected void rebuild() {
+    protected void rebuildContent() {
+        deployReady=false;
+        rememberLoadout();
         if(leftForm!=null)scrollMemory[formTab]=leftForm.scroll();
         formTab=tab;
         clearWidgets();
@@ -296,6 +517,61 @@ final class BattleScreen extends FrontScreen {
         }
         if(leftForm!=null){leftForm.scrollTo(scrollMemory[tab]);leftForm.finish();}
         buildBar();
+        overviewControls=null;overviewDeploy=null;overviewLoadout=null;overviewSquad=null;overviewRight=null;overviewLeave=null;overviewAmmo=null;
+        if(fullBattlefield()){
+            clearWidgets(); // Hidden controls must not remain clickable or keyboard-focusable.
+            // Battlefield layout: squad by the squad list, loadout options stacked on the right above
+            // Deploy, and the leave action tucked into the top-left where it cannot be hit by accident.
+            var squadRect=new Layout.Rect(8,height-142,112,22);
+            overviewSquad=newForm(squadRect);
+            place(overviewSquad,squadRect.inset(2),"小队 "+SquadRules.label(Engine.num(me(),"squad",0)),"","","",!alive(),()->minecraft.setScreen(new SquadSelectScreen(this)));
+            overviewSquad.finish();
+            int rightW=136,rx=Math.max(8,width-rightW-8),btnH=24,gap=2,deployTop=height-38;
+            // A firing range gets one extra action: re-arm with the current loadout, live, without dying.
+            boolean training=arena!=null&&arena.isTraining();
+            int rows=training?5:4;
+            int by=deployTop-6-rows*(btnH+gap);
+            overviewRight=newForm(new Layout.Rect(rx,by,rightW,rows*(btnH+gap)));
+            int row=0;
+            if(training)place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"切换配装","","","",!alive(),this::rearm);
+            
+            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"兵种配装","","","",kit()!=null,()->minecraft.setScreen(new LoadoutScreen(this)));
+            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"部署选项","","","",true,()->{overviewOnly=false;rebuild();});
+            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"战术地图","","","",true,()->{tacticalMap=true;overviewOnly=false;rebuild();});
+        if (hasAmmoChoice()) ammoRows(overviewRight);
+            overviewRight.finish();
+            // Leave room: top-left, far from the deploy action.
+            var leaveRect=new Layout.Rect(8,44,96,20);
+            overviewLeave=newForm(leaveRect);
+            place(overviewLeave,leaveRect.inset(2),"离开房间","","","",true,()->minecraft.setScreen(new ConfirmActionScreen(this,"退出当前房间？","退出后返回大厅并恢复原背包。","退出房间",()->send("lobbyReturn"))));
+            overviewLeave.finish();
+            // Fullscreen weapon strip: class dropdown at the left, then the five weapon slots, like
+            // Battlefield's bottom bar.
+            int stripW=Math.max(340,Math.min(600,width-360));
+            var stripRect=new Layout.Rect((width-stripW)/2,height-68,stripW,26);
+            overviewLoadout=newForm(stripRect);
+            var stripCells=Layout.columns(stripRect.inset(2),8,3);
+            dropdown(overviewLoadout,stripCells[0],"兵种",kit()==null?"":kit().id,kitChoices(),id->{selectKit(id);rebuild();});
+            place(overviewLoadout,stripCells[1],"主 "+name(first(kit(),true)),"","","",kit()!=null,()->weapon(kit(),true));
+            place(overviewLoadout,stripCells[2],"副 "+name(first(kit(),false)),"","","",kit()!=null,()->weapon(kit(),false));
+            place(overviewLoadout,stripCells[3],"近身 "+meleeName(melee),"","","",kit()!=null,this::pickMelee);
+            place(overviewLoadout,stripCells[4],"投掷 "+meleeName(throwable)+countSuffix(throwable),"","","",kit()!=null,this::pickThrowable);
+            place(overviewLoadout,stripCells[5],"战术1 "+meleeName(tactical1)+countSuffix(tactical1),"","","",kit()!=null,()->pickTactical(false));
+        place(overviewLoadout,stripCells[6],"战术2 "+meleeName(tactical2)+countSuffix(tactical2),"","","",kit()!=null,()->pickTactical(true));
+        place(overviewLoadout,stripCells[7],"全部配装","","","",true,()->minecraft.setScreen(new LoadoutScreen(this)));
+        // Ammunition choice needs its own strip: the loadout bar above is a single row of cells, and the
+        // left panel does not exist yet on this page (it is built for the list view).
+            overviewLoadout.finish();
+            // Battlefield pins the primary Deploy action to the bottom-right, apart from the smaller controls.
+            var deployRect=new Layout.Rect(Math.max(width-144,8),height-38,136,30);
+            overviewDeploy=newForm(deployRect);
+            var deployButton=place(overviewDeploy,deployRect.inset(2),"部署","","","",deployReady,this::deploy);
+            deployButton.primary=true;
+            overviewDeploy.finish();
+        }else if(tab==0&&DeploymentLock.room(Client.state)&&!alive()){
+            row(leftForm,"全屏查看战场","收起侧栏",()->{overviewOnly=true;tacticalMap=false;rebuild();});
+            leftForm.finish();
+        }
     }
 
     private Form form(Layout.Rect panel, String title) {
@@ -339,45 +615,88 @@ final class BattleScreen extends FrontScreen {
         if (arena == null) {
             f.paragraph("还没有选中任何地图。先去「作战房间」选择一张地图。", Ui.TEXT_DIM);
             f.skip(4);
-            primary(f, "前往作战房间", true, () -> { tab = 1; rebuild(); });
+            primary(f, "前往游戏大厅", true, LobbyScreen::open);
             return;
         }
         if (me() == null) {
             f.paragraph("你还没有加入这张地图的房间。加入后才能选择阵营并部署。", Ui.TEXT_DIM);
             f.skip(4);
-            primary(f, "前往作战房间", true, () -> { tab = 1; rebuild(); });
+            primary(f, "前往游戏大厅", true, LobbyScreen::open);
             return;
         }
         if (team() < 0) {
             f.paragraph("房间已加入，但还没有选择阵营。阵营决定出生点、队伍颜色和计分板归属。", Ui.TEXT_WARN);
             f.skip(2);
-            primary(f, "选择蓝方 / 进攻方", true, () -> chooseTeam(0));
-            primary(f, "选择红方 / 防守方", true, () -> chooseTeam(1));
+            primary(f, "选择机械轴心 / 进攻方", true, () -> chooseTeam(0));
+            primary(f, "选择格雷同盟 / 防守方", true, () -> chooseTeam(1));
             f.skip(2);
-            row(f, "退出房间", "恢复原背包", () -> send("leave"));
+            row(f,"退出房间","返回游戏大厅",LobbyScreen::open);
             return;
         }
 
         f.caption("阵营  " + teamName(), team() == 0 ? Ui.BLUE : Ui.RED);
         if (!flag("roomRunning")) {
-            f.paragraph("对局尚未开始，管理员开始后即可部署。", Ui.TEXT_WARN);
+            f.paragraph("对局尚未开始，房主或管理员开始后即可部署。", Ui.TEXT_WARN);
+            if(flag("canManageRoom"))primary(f,"开始本局",true,()->send("start"));
         }
 
+        row(f,"服务器总榜与荣誉","长期累计战绩 · 查看个人勋章",true,()->CareerScreen.open(this));
+        row(f,"详细排行榜","击杀 / 得分 / 助攻 / 救援与个人分类榜",true,()->NativeKillIcons.openScoreboard(this));
+        row(f,"操作设置","趴下：切换 / 按住",()->minecraft.setScreen(new ControlSettingsScreen(this)));
+        row(f,"小地图设置","范围 / 图层 / 名单",()->minecraft.setScreen(new MinimapSettingsScreen(this)));
+        f.section("小队 / 复活信标");
+        int squad=Engine.num(me(),"squad",0);
+        row(f,"我的小队",SquadRules.label(squad),!alive(),()->{
+            List<ChoiceScreen.Choice> choices=new ArrayList<>();
+            choices.add(new ChoiceScreen.Choice("0","退出小队",""));
+            if(Client.state.has("squads"))for(var item:Client.state.getAsJsonArray("squads")){
+                var one=item.getAsJsonObject();int id=Engine.num(one,"id",0),count=Engine.num(one,"count",0);
+                if(count<SquadRules.CAPACITY||id==squad)choices.add(new ChoiceScreen.Choice(""+id,
+                    SquadRules.label(id)+" · "+count+"/4 · "+Engine.str(one,"members",""),""));
+            }
+            pick("加入小队（待部署时可切换）",choices,id->{var request=Client.request("squad",selected);request.addProperty("squad",Integer.parseInt(id));Client.send(request);});
+        });
+        if(squad>0){
+            if(Client.state.has("squads"))for(var item:Client.state.getAsJsonArray("squads")){
+                var one=item.getAsJsonObject();if(Engine.num(one,"id",0)==squad)f.paragraph("成员："+Engine.str(one,"members",""),Ui.TEXT_DIM);
+            }
+            row(f,"放置复活信标","当前位置 · 每小队一个",alive()&&!me().get("downed").getAsBoolean(),()->send("placeBeacon"));
+            row(f,"回收我的信标","到期 / 离场自动移除",()->send("removeBeacon"));
+            f.caption("携带信标装备 · 6 次部署 · 冷却 60 秒",Ui.TEXT_FAINT);
+        }
         // --- loadout
         f.section("配装");
         Model.Kit kit = kit();
         if (kit == null) {
             f.caption("本图没有可用兵种，请管理员在编辑器中添加。", Ui.TEXT_WARN);
         } else {
-            row(f, "兵种", kit.id, "role", kit.id, () -> pick("选择兵种 / 配装",
-                    arena.kits.stream().map(k -> new ChoiceScreen.Choice(k.id, k.id, "role")).toList(),
-                    id -> { kitId = id; primary = ""; secondary = ""; rebuild(); }));
+            dropdown(f,"兵种",kit.id,arena.kits.stream().map(k->new ChoiceScreen.Choice(k.id,k.id,"role",k.id)).toList(),id->{selectKit(id);rebuild();});
             row(f, "主武器", name(first(kit,true)), "gun", first(kit, true), () -> weapon(kit, true));
             row(f,"改装主武器",fitting("gun",first(kit,true)).size()+" 项",!first(kit,true).isEmpty(),()->customize("gun",first(kit,true)));
             row(f, "副武器", first(kit,false).isEmpty() ? "无" : name(first(kit,false)),
                     "gun", first(kit, false), () -> weapon(kit, false));
             row(f,"改装副武器",fitting("gun",first(kit,false)).size()+" 项",!first(kit,false).isEmpty(),()->customize("gun",first(kit,false)));
+            row(f, "近身武器", meleeName(melee), melee.isEmpty() ? "" : "gun", melee, this::pickMelee);
+            row(f, "投掷武器", throwable.isEmpty() ? "无" : meleeName(throwable) + countSuffix(throwable), throwable.isEmpty() ? "" : "item", throwable, this::pickThrowable);
+        row(f, "战术道具 1", tactical1.isEmpty() ? "无" : meleeName(tactical1) + countSuffix(tactical1), tactical1.isEmpty() ? "" : "item", tactical1, () -> pickTactical(false));
+            ammoRows(f);
+        row(f, "战术道具 2", tactical2.isEmpty() ? "无" : meleeName(tactical2) + countSuffix(tactical2), tactical2.isEmpty() ? "" : "item", tactical2, () -> pickTactical(true));
+            // Firing range: re-arm live from the side panel too, so it is reachable while alive as well.
+            if(arena!=null&&arena.isTraining())row(f,"切换配装（靶场）","立即生效 · 无需重生",this::rearm);
+            if (arena != null && arena.isTraining()) {
+                // Firing range only: any item can be taken for testing. Never sent for a normal map.
+                row(f, "靶场临时物品", trainingItems.isEmpty() ? "无" : trainingItems.size() + " 项",
+                        () -> minecraft.setScreen(new ItemPickerScreen(this, id -> {
+                            if (id != null && !id.isEmpty() && !trainingItems.contains(id) && trainingItems.size() < 8)
+                                trainingItems.add(id);
+                            rebuild();
+                        })));
+                if (!trainingItems.isEmpty())
+                    row(f, "清空靶场物品", "", () -> { trainingItems.clear(); rebuild(); });
+            }
             gearFacts(f, kit);
+            f.skip(2);
+            primary(f, "编辑配装（卡片视图）", true, () -> minecraft.setScreen(new LoadoutScreen(this)));
         }
 
         // --- deployment
@@ -388,22 +707,13 @@ final class BattleScreen extends FrontScreen {
         } else {
             if (allSites.stream().noneMatch(s -> s.id().equals(spawn))) spawn = allSites.getFirst().id();
             Deploy.Site current = site(spawn);
-            row(f, "部署点", spawn, () -> {
-                // Move to the next site, preferring one that can still launch the current vehicle so
-                // cycling sites does not silently drop the vehicle the player already picked.
-                List<String> options = spawns();
-                if (!vehicle.isEmpty()) {
-                    List<Deploy.Site> capable = sitesFor(vehicleClass(vehicle));
-                    List<String> capableIds = capable.stream().map(Deploy.Site::id).toList();
-                    if (!capableIds.isEmpty()) options = capableIds;
-                }
-                spawn = cycle(options, spawn);
-                rebuild();
-            });
-            if (current != null) {
-                f.caption(current.spawn() ? "出生点" : "已占领据点（仅地面载具）",
-                        current.spawn() ? Ui.TEXT_FAINT : Ui.TEXT_OK);
-            }
+            row(f,"部署点",current==null?"请选择":current.label(),()->pick("选择部署目标",
+                    allSites.stream().map(site->new ChoiceScreen.Choice(site.id(),site.label()+" · "+site.kind(),"")).toList(),
+                    id->{selectSite(id);rebuild();}));
+            if(current!=null)f.caption(SquadRules.dynamic(current.kind())?"步兵增援 / 现有载具，不刷新新载具":"基地 / 已占领据点",Ui.TEXT_FAINT);
+        }
+        if(Client.state.has("blockedDeploySites"))for(var item:Client.state.getAsJsonArray("blockedDeploySites")){
+            var blocked=item.getAsJsonObject();f.caption(Engine.str(blocked,"label","")+"："+Engine.str(blocked,"reason",""),Ui.TEXT_WARN);
         }
 
         // --- vehicles. Aircraft are listed separately because they need a runway point, and mixing
@@ -417,9 +727,15 @@ final class BattleScreen extends FrontScreen {
         List<Deploy.Site> airSites = sitesFor('A');
 
         f.section("载具");
-        if (ground.isEmpty() && air.isEmpty()) {
+        if(!vehicleSpawnAllowed()){
+            vehicle="";
+            f.paragraph("当前为小队/信标步兵增援或登上现有载具，不生成新载具。",Ui.TEXT_DIM);
+            List<Deploy.Site> fixed=allSites.stream().filter(DeploymentRules::canSpawnNew).filter(s->s.allows('G')||s.allows('A')).toList();
+            row(f,"选择载具刷新点","基地 / 机场 / 允许刷新据点",!fixed.isEmpty(),()->pick("选择固定载具刷新点",fixed.stream().map(s->new ChoiceScreen.Choice(s.id(),s.label(),"")).toList(),id->{selectSite(id);rebuild();}));
+        } else if (ground.isEmpty() && air.isEmpty()) {
             f.caption("本图没有授权任何载具。管理员可在「武器/载具库」中开启。", Ui.TEXT_FAINT);
         } else {
+            row(f, "载具卡片", "图片选择", "", "", () -> minecraft.setScreen(new VehicleDeployScreen(this)));
             // One validation for both lists, through the same rule the tests pin. The two rows used to
             // validate separately — the ground row cleared `vehicle` whenever the pick was not in the
             // ground list, which is every aircraft, so choosing an aircraft set the field and the very
@@ -457,22 +773,32 @@ final class BattleScreen extends FrontScreen {
         char need = vehicle.isEmpty() ? 'G' : vehicleClass(vehicle);
         boolean siteKnown = allSites.stream().anyMatch(s -> s.id().equals(spawn));
         boolean siteFits = !siteKnown || (vehicle.isEmpty()
-                ? true
+                ? site(spawn)!=null&&(site(spawn).kind().equals("VEHICLE")||arena.deploymentArea(team(),"I",site(spawn).x(),site(spawn).z(),Engine.num(Client.state,"stage",0),arena.isStaged()))
                 : sitesFor(need).stream().anyMatch(s -> s.id().equals(spawn)));
         // Never promise a deploy the server will refuse. The server has two extra blockers the client
         // cannot see (the hull cap, and a site camped by the enemy), so this predicate stays strictly
         // narrower than the server's: it only removes cases the server would reject outright.
         boolean ready = VehicleDeploy.deployable(running, siteKnown, siteFits,
                 kit() != null, vehicleBlocked());
+        deployReady=ready;
         if (!vehicle.isEmpty() && !siteFits) {
             f.caption(need == 'A' ? "当前部署点不是飞机点位" : "当前部署点不提供载具刷新", Ui.TEXT_WARN);
         }
         if (alive()) {
-            primary(f, "重新部署（计一次阵亡）", ready, () -> send("redeploy"));
+            // A firing range has no deployment cycle, and redeploying would hand the player to the deploy
+            // observer, which teleports the body. Alive on a range means "edit your loadout", so the primary
+            // action is the instant re-arm instead.
+            boolean trainingRange = arena != null && arena.isTraining();
+            if (trainingRange) {
+                primary(f, "切换配装（立即生效）", true, this::rearm);
+            } else {
+                primary(f, "重新部署（计一次阵亡）", ready, () -> send("redeploy"));
+            }
         } else if (respawnRemaining() > 0) {
             primary(f, "重生等待 " + respawnRemaining() + "s", false, () -> { });
+            if(arena.allowRespawnSkip)row(f,"跳过部署等待","仍需选择部署点并确认部署",true,()->send("skipRespawn"));
         } else {
-            primary(f, "部署", ready, this::deploy);
+            f.caption(ready?"选择目标后，按空格确认入场":"请先选择有效的配装和部署点",ready?Ui.TEXT_OK:Ui.TEXT_WARN);
         }
         if (!running) {
             f.paragraph("你可以先配好装备，对局开始后一键部署。", Ui.TEXT_FAINT);
@@ -545,23 +871,184 @@ final class BattleScreen extends FrontScreen {
     private String first(Model.Kit kit, boolean main) {
         String chosen = main ? primary : secondary;
         if (chosen != null && !chosen.isEmpty()) return chosen;
-        return kit.options(main).stream().filter(id -> !id.isEmpty()).findFirst().orElse("");
+        return kit.options(main,team()).stream().filter(id -> !id.isEmpty()).findFirst().orElse("");
+    }
+
+    /** Class choices for the bottom-bar dropdown, so the class can be swapped without leaving the page. */
+    private List<ChoiceScreen.Choice> kitChoices() {
+        List<ChoiceScreen.Choice> list = new ArrayList<>();
+        if (arena == null) return list;
+        for (var kit : arena.kits) list.add(new ChoiceScreen.Choice(kit.id, kit.id, "role", kit.id));
+        return list;
+    }
+
+    /** Class picker, so the deploy screen can switch class without leaving the battlefield view. */
+    void pickClass() {
+        if(arena==null||arena.kits.isEmpty()){warn("当前地图没有可用兵种");return;}
+        List<ChoiceScreen.Choice> choices=new ArrayList<>();
+        for(var kit:arena.kits)choices.add(new ChoiceScreen.Choice(kit.id,kit.id,"role",kit.id));
+        pick("选择兵种",choices,id->{selectKit(id);rebuild();});
+    }
+
+    /** Squad picker, shared by the side panel and the fullscreen deploy bar. */
+    void pickSquad() {
+        int squad=Engine.num(me(),"squad",0);
+        List<ChoiceScreen.Choice> choices=new ArrayList<>();
+        choices.add(new ChoiceScreen.Choice("0","退出小队",""));
+        if(Client.state.has("squads"))for(var item:Client.state.getAsJsonArray("squads")){
+            var one=item.getAsJsonObject();int id=Engine.num(one,"id",0),count=Engine.num(one,"count",0);
+            if(count<SquadRules.CAPACITY||id==squad)choices.add(new ChoiceScreen.Choice(""+id,
+                    SquadRules.label(id)+" · "+count+"/4 · "+Engine.str(one,"members",""),""));
+        }
+        pick("加入小队（待部署时可切换）",choices,id->{var request=Client.request("squad",selected);request.addProperty("squad",Integer.parseInt(id));Client.send(request);});
+    }
+
+    /**
+     * Items this client knows are throwables, beyond whatever the kit author listed.
+     *
+     * <p>LRTactical grenades are addressed by their own bridge ids, and Superb Warfare ships ordinary items
+     * whose registry path is the only hint that they are thrown. Both are offered on a firing range so a
+     * player can test them without an operator editing the map.
+     */
+    List<String> detectedThrowables() {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (Client.catalog.has("lrtEntries")) {
+            for (var value : Client.catalog.getAsJsonArray("lrtEntries")) {
+                var e = value.getAsJsonObject();
+                if (Engine.str(e, "category", "").equals("throwable")) out.add(Engine.str(e, "id", ""));
+            }
+        }
+        for (ItemCatalog.Entry entry : ItemCatalog.all()) {
+            String id = entry.id();
+            if (!id.startsWith("superbwarfare:")) continue;
+            String path = id.substring(id.indexOf(':') + 1);
+            if (path.matches(".*(grenade|bomb|c4|rpg|rocket|missile|throwable|molotov|dynamite).*")) out.add(id);
+        }
+        out.remove("");
+        return List.copyOf(out);
+    }
+
+    /** Knives and other melee items LRTactical publishes, for the same reason as the throwables above. */
+    List<String> detectedMelee() {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        if (Client.catalog.has("lrtEntries")) {
+            for (var value : Client.catalog.getAsJsonArray("lrtEntries")) {
+                var e = value.getAsJsonObject();
+                if (Engine.str(e, "category", "").equals("melee")) out.add(Engine.str(e, "id", ""));
+            }
+        }
+        out.remove("");
+        return List.copyOf(out);
+    }
+
+    /** Throwable picker: whitelist entries plus, on a firing range, any item at all. */
+    private void pickThrowable() {
+        Model.Kit kit=kit();
+        if(kit==null)return;
+        boolean training=arena!=null&&arena.isTraining();
+        List<ChoiceScreen.Choice> choices=new ArrayList<>();
+        choices.add(new ChoiceScreen.Choice("","无 / 不装备","item"));
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for(String id:kit.throwableOptions(team())){
+            if(id.isEmpty()||!seen.add(id))continue;
+            choices.add(new ChoiceScreen.Choice(id, meleeName(id), "item", id));
+        }
+        if (training) {
+            for (String id : detectedThrowables()) {
+                if (seen.add(id)) choices.add(new ChoiceScreen.Choice(id, meleeName(id), "item", id));
+            }
+            choices.add(new ChoiceScreen.Choice("@item", "任意物品…", "item"));
+        }
+        if(choices.size()<=1){warn("当前兵种没有可用的投掷武器，请在编辑器中添加");return;}
+        pick("投掷武器", choices, id -> {
+            if("@item".equals(id)){
+                minecraft.setScreen(new ItemPickerScreen(this,true,chosen->{
+                    if(chosen==null||chosen.isEmpty())return;
+                    throwable=chosen;rememberLoadout();rebuild();
+                }));
+                return;
+            }
+            throwable=id;rememberLoadout();rebuild();
+        });
+    }
+
+    /** Tactical slots: the kit's whitelist, plus anything at all on a firing range. */
+    private void pickTactical(boolean second) {
+        Model.Kit kit = kit();
+        if (kit == null) return;
+        boolean training = arena != null && arena.isTraining();
+        List<ChoiceScreen.Choice> choices = new ArrayList<>();
+        choices.add(new ChoiceScreen.Choice("", "无 / 不装备", "item"));
+        for (String id : kit.tacticalChoices()) {
+            if (id.isEmpty()) continue;
+            choices.add(new ChoiceScreen.Choice(id, meleeName(id), "item", id));
+        }
+        if (training) choices.add(new ChoiceScreen.Choice("@item", "任意物品…", "item"));
+        pick(second ? "战术道具 2" : "战术道具 1", choices, id -> {
+            if ("@item".equals(id)) {
+                minecraft.setScreen(new ItemPickerScreen(this, true, chosen -> {
+                    if (chosen == null || chosen.isEmpty()) return;
+                    if (second) tactical2 = chosen; else tactical1 = chosen;
+                    rememberLoadout(); rebuild();
+                }));
+                return;
+            }
+            if (second) tactical2 = id; else tactical1 = id;
+            rememberLoadout(); rebuild();
+        });
     }
 
     private void weapon(Model.Kit kit, boolean main) {
-        List<ChoiceScreen.Choice> choices = kit.options(main).stream()
-                .filter(id -> !id.isEmpty())
+        // A firing range offers every scanned gun; a normal map still offers only the kit's list.
+        java.util.List<String> ids = arena != null && arena.isTraining()
+                ? allGuns()
+                : kit.options(main,team()).stream().filter(id -> !id.isEmpty()).toList();
+        // The catalog may not have arrived yet: fall back to the kit's own list rather than showing nothing.
+        if (ids.isEmpty()) ids = kit.options(main,team()).stream().filter(id -> !id.isEmpty()).toList();
+        List<ChoiceScreen.Choice> choices = ids.stream()
                 .map(id -> new ChoiceScreen.Choice(id, name(id), "gun"))
                 .toList();
         if (choices.isEmpty()) {
             warn("该兵种没有授权" + (main ? "主" : "副") + "武器，请在编辑器中添加");
             return;
         }
-        pick(main ? "主武器库" : "副武器库", choices, id -> {
+        pick((main ? "主武器库" : "副武器库") + (arena != null && arena.isTraining() ? "（靶场）" : ""), choices, id -> {
             if (main) primary = id;
             else secondary = id;
             rebuild();
         });
+    }
+
+    /** Melee display name: guns resolve through the synced name table, items through the registry. */
+    String meleeName(String id) {
+        if (id == null || id.isEmpty()) return "无";
+        if (Client.state.has("names") && Client.state.getAsJsonObject("names").has(id)) return name(id);
+        String n = KitItems.name(id);
+        return n == null || n.isEmpty() || n.equals(id) ? Catalog.prettify(id) : n;
+    }
+
+    private void pickMelee() {
+        Model.Kit kit=kit();if(kit==null)return;
+        var choices=new ArrayList<ChoiceScreen.Choice>();choices.add(new ChoiceScreen.Choice("","无 / 不装备","item"));
+        if(arena!=null&&arena.isTraining()){
+            // Firing range: any scanned gun or any item, not only the whitelist.
+            for(String id:allGuns())choices.add(new ChoiceScreen.Choice(id,name(id),"gun"));
+            // LRTactical publishes its knives as bridge ids, which never appear in a plain item list.
+            for(String id:detectedMelee())choices.add(new ChoiceScreen.Choice(id,meleeName(id),"item"));
+            choices.add(new ChoiceScreen.Choice("@item","任意物品…","item"));
+        } else {
+            for(String id:kit.meleeOptions(team()))choices.add(new ChoiceScreen.Choice(id,meleeName(id),ItemCatalog.isGun(id)?"gun":"item"));
+        }
+        minecraft.setScreen(new ChoiceScreen(this,"地图授权近身武器",choices,id->{
+            if("@item".equals(id)){
+                minecraft.setScreen(new ItemPickerScreen(this,true,chosen->{
+                    if(chosen==null||chosen.isEmpty())return;
+                    melee=chosen;rememberLoadout();rebuild();
+                }));
+                return;
+            }
+            melee=id;rememberLoadout();rebuild();
+        }));
     }
 
     private void vehicleFacts(Form f) {
@@ -629,6 +1116,22 @@ final class BattleScreen extends FrontScreen {
         });
     }
 
+    /** Firing-range live re-arm: send the current loadout and have the server re-issue it without a respawn. */
+    private void rearm() {
+        JsonObject request=Client.request("trainingLoadout",selected);
+        request.addProperty("kit",kitId);
+        request.addProperty("primary",first(kit(),true));
+        request.addProperty("secondary",first(kit(),false));
+        request.addProperty("melee",melee);
+        request.addProperty("throwable",throwable);
+            request.addProperty("tactical1",tactical1);
+            request.addProperty("tactical2",tactical2);
+        for (var entry : Client.deployedAmmo.entrySet()) request.addProperty("ammo_" + entry.getKey(), entry.getValue());
+        request.add("trainingItems",BattlefieldOps.GSON.toJsonTree(trainingItems));
+        Client.send(request);
+        say("正在切换配装…");
+    }
+
     private void deploy() {
         JsonObject request = Client.request("deploy", selected);
         request.addProperty("kit", kitId);
@@ -636,10 +1139,15 @@ final class BattleScreen extends FrontScreen {
         request.addProperty("vehicle", vehicle);
         request.addProperty("primary", first(kit(),true));
         request.addProperty("secondary", first(kit(),false));
+        request.addProperty("melee", melee);
+        request.addProperty("throwable", throwable);
+        request.addProperty("tactical1", tactical1);
+        request.addProperty("tactical2", tactical2);
         Model.Kit selectedKit=kit();
         request.add("primaryFittings",BattlefieldOps.GSON.toJsonTree(fitting("gun",first(selectedKit,true))));
         request.add("secondaryFittings",BattlefieldOps.GSON.toJsonTree(fitting("gun",first(selectedKit,false))));
         request.add("vehicleFittings",BattlefieldOps.GSON.toJsonTree(fitting("vehicle",vehicle)));
+        if (arena != null && arena.isTraining()) request.add("trainingItems", BattlefieldOps.GSON.toJsonTree(trainingItems));
         awaitingDeploy = true;
         say("正在部署…");
         Client.send(request);
@@ -664,6 +1172,7 @@ final class BattleScreen extends FrontScreen {
         fitMap();
 
         JsonArray maps = Client.state.has("maps") ? Client.state.getAsJsonArray("maps") : new JsonArray();
+        primary(f,"服务器游戏大厅",true,LobbyScreen::open);
         f.section("地图");
         if (maps.isEmpty()) {
             f.caption("服务器还没有地图。", Ui.TEXT_WARN);
@@ -677,7 +1186,7 @@ final class BattleScreen extends FrontScreen {
             String id = Engine.str(entry, "id", "");
             boolean room = entry.has("room") && entry.get("room").getAsBoolean();
             boolean running = entry.has("running") && entry.get("running").getAsBoolean();
-            String state = running ? "对局中" : room ? "已建房" : "未建房";
+            String state = Engine.str(entry,"modeName","")+" · "+(running ? "对局中" : room ? "已建房" : "未建房");
             row(f, (id.equals(selected) ? "● " : "") + Engine.str(entry, "name", id), state, () -> {
                 if (me() != null) {
                     warn("请先退出当前房间，再切换地图");
@@ -708,29 +1217,27 @@ final class BattleScreen extends FrontScreen {
         if (me() == null) {
             if (room) {
                 primary(f, "进入本图房间", true, () -> send("join"));
-                f.paragraph("每张地图只能有一个房间。进入后即可选择红蓝方。", Ui.TEXT_FAINT);
-            } else if (admin()) {
+                f.paragraph("每张地图只能有一个房间。进入后即可选择红机械轴心。", Ui.TEXT_FAINT);
+            } else {
                 primary(f, "创建本图房间", true, () -> send("createRoom"));
                 f.paragraph("每张地图只能创建一个房间；同一维度内边界重叠的地图也无法同时开局。",
                         Ui.TEXT_FAINT);
-            } else {
-                f.paragraph("这张地图还没有房间，请等待管理员创建。", Ui.TEXT_WARN);
             }
-            if (admin() && room) row(f, "关闭房间", "结束对局", () -> send("stop"));
+            if (flag("canManageRoom") && room) row(f, "关闭房间", "结束对局", () -> minecraft.setScreen(new ConfirmActionScreen(this,"关闭并结算房间？","将结束当前房间，结算其中所有玩家；其他房间不受影响。","关闭并结算",()->send("stop"))));
             return;
         }
 
         f.caption("当前阵营  " + teamName(), team() < 0 ? Ui.TEXT_WARN
                 : team() == 0 ? Ui.BLUE : Ui.RED);
         if (team() < 0) {
-            primary(f, "选择蓝方 / 进攻方", true, () -> chooseTeam(0));
-            primary(f, "选择红方 / 防守方", true, () -> chooseTeam(1));
+            primary(f, "选择机械轴心 / 进攻方", true, () -> chooseTeam(0));
+            primary(f, "选择格雷同盟 / 防守方", true, () -> chooseTeam(1));
         }
         if (inMatch()) primary(f, "前往部署", true, () -> { tab = 0; rebuild(); });
-        row(f, "退出房间", "恢复原背包", () -> send("leave"));
-        if (admin()) {
+        row(f,"退出房间","返回游戏大厅",LobbyScreen::open);
+        if (flag("canManageRoom")) {
             if (!running) row(f, "开始本局", "锁定阵营", () -> send("start"));
-            row(f, "关闭房间", "结束并结算", () -> send("stop"));
+            row(f, "关闭房间", "结束并结算", () -> minecraft.setScreen(new ConfirmActionScreen(this,"关闭并结算房间？","将结束当前房间，结算其中所有玩家；其他房间不受影响。","关闭并结算",()->send("stop"))));
         }
     }
 
@@ -738,47 +1245,51 @@ final class BattleScreen extends FrontScreen {
 
     private void buildStats() {
         rightTitle = "本局统计";
+        // A real control, not a painted rectangle. The out-of-match state needs a way to reach the full
+        // leaderboard from here, and drawing a button-shaped fill that does nothing is worse than
+        // drawing nothing: it is the single most common way a screen reads as broken. The button lives
+        // in the same content pane the summary text is painted into, anchored to its bottom-left so it
+        // never overlaps the rows.
+        leftForm = newForm(Ui.headerBody(layout.content));
+        leftForm.skip(Math.max(0, leftForm.free() - 18));
+        row(leftForm, "打开详细排行榜", "支持对局外查看 · 显示本服记录",
+                () -> NativeKillIcons.openScoreboard(this));
+        leftForm.finish();
     }
 
     private void paintStats(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         Ui.header(g, font, layout.content, "本局统计");
         Layout.Rect body = Ui.headerBody(layout.content);
-        if (!inMatch()) {
-            g.drawCenteredString(font, "只有在本局内的玩家可以查看计分板",
-                    body.cx(), body.cy() - 4, Ui.TEXT_DIM);
+        JsonArray scores = Client.state.has("scores") ? Client.state.getAsJsonArray("scores") : new JsonArray();
+        // Out of a match there is no live roster, but refusing to draw anything threw away the one thing
+        // this page is for. It now shows the same empty state the detailed leaderboard uses and points at it,
+        // instead of a dead "只有在本局内的玩家可以查看计分板" line that described a code path rather than a
+        // rule.
+        if (!inMatch() || scores.isEmpty()) {
+            // Text only. The button that opens the leaderboard is a real widget built by buildStats and
+            // painted by Form; a painted rectangle here would sit underneath it and do nothing.
+            String hint = inMatch()
+                    ? "本局暂未发布战绩。分数在有人得分后由服务器推送。"
+                    : "当前不在对局内。离开对局前推送的战绩会保留在详细排行榜里。";
+            int y = body.y() + 3;
+            for (var line : font.split(net.minecraft.network.chat.Component.literal(hint), Math.max(1, body.w() - 10))) {
+                if (y + 9 > body.bottom()) break;
+                g.drawString(font, line, body.x() + 5, y, Ui.TEXT_DIM, false);
+                y += 10;
+            }
             return;
         }
-        JsonArray scores = Client.state.has("scores") ? Client.state.getAsJsonArray("scores") : new JsonArray();
-        JsonArray tickets = Client.state.has("tickets") ? Client.state.getAsJsonArray("tickets") : new JsonArray();
-        JsonArray tracks = Client.state.has("tracksTickets")
-                ? Client.state.getAsJsonArray("tracksTickets") : new JsonArray();
-
-        int y = body.y() + 3;
-        StringBuilder head = new StringBuilder("兵力  蓝 " + (tickets.isEmpty() ? "—" : tickets.get(0).getAsInt()));
-        if (tracks.isEmpty() || tracks.get(1).getAsBoolean()) {
-            head.append("  /  红 ").append(tickets.isEmpty() ? "—" : tickets.get(1).getAsInt());
-        } else {
-            head.append("  （红方无兵力池）");
-        }
-        head.append("      阶段 ").append(Engine.num(Client.state, "stage", 0) + 1)
-                .append(" / ").append(Math.max(1, Engine.num(Client.state, "stages", 1)));
-        g.drawString(font, head.toString(), body.x() + 5, y, Ui.TEXT, false);
-        y += 12;
-
-        // Two force bars, blue over red, so the ticket balance is a shape rather than two numbers that
-        // have to be compared. Only drawn when both pools exist: a one-sided match has nothing to
-        // compare, and a full bar against nothing would read as a lopsided score.
-        if (!tickets.isEmpty() && tickets.size() >= 2
-                && (tracks.isEmpty() || tracks.get(1).getAsBoolean())) {
-            int blue = tickets.get(0).getAsInt();
-            int red = tickets.get(1).getAsInt();
-            int most = Math.max(1, Math.max(blue, red));
-            int half = Math.max(1, (body.w() - 12) / 2);
-            Ui.bar(g, new Layout.Rect(body.x() + 5, y, half, 3),
-                    blue / (double) most, Ui.BLUE, Ui.PANEL_SUNKEN);
-            Ui.bar(g, new Layout.Rect(body.x() + 7 + half, y, half, 3),
-                    red / (double) most, Ui.RED, Ui.PANEL_SUNKEN);
-            y += 6;
+        Model.Arena arena=BattlefieldOps.GSON.fromJson(Client.state.get("arena"),Model.Arena.class);
+        int y=body.y()+3;
+        g.drawString(font,Ui.clip(font,MatchScore.line(arena,Client.state),body.w()-10),body.x()+5,y,Ui.TEXT,false);
+        y+=12;
+        if(!arena.isStaged()){
+            int blue=MatchScore.value(arena,Client.state,0),red=MatchScore.value(arena,Client.state,1);
+            int most=arena.isDeathmatch()?MatchScore.maximum(arena):Math.max(1,Math.max(blue,red));
+            int half=Math.max(1,(body.w()-12)/2);
+            Ui.bar(g,new Layout.Rect(body.x()+5,y,half,3),blue/(double)most,Ui.BLUE,Ui.PANEL_SUNKEN);
+            Ui.bar(g,new Layout.Rect(body.x()+7+half,y,half,3),red/(double)most,Ui.RED,Ui.PANEL_SUNKEN);
+            y+=6;
         }
 
         String result = Engine.str(Client.state, "result", "");
@@ -835,6 +1346,12 @@ final class BattleScreen extends FrontScreen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+        if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
+        if(fullBattlefield()){
+            // Wheel zooms the overhead deploy camera: larger height = zoomed out.
+            if(vertical!=0)Client.overviewZoom=Math.max(0.25,Math.min(4.0,Client.overviewZoom*(vertical>0?0.88:1.14)));
+            return true;
+        }
         if (tab == 2 && inMatch()) {
             // Clamped against the page count the last paint computed, so scrolling past the end does
             // not silently swallow the wheel and need a second scroll to come back.
@@ -846,10 +1363,85 @@ final class BattleScreen extends FrontScreen {
         return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
     }
 
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if(fullBattlefield()&&button==0){
+            // Drag pans the overhead camera across the ground. At pitch +90/yaw 0 screen-right is world -X
+            // and screen-down is world -Z, so the offsets invert the drag on both axes.
+            double blocksPerPixel=0.5*Client.overviewZoom;
+            Client.overviewPanX-=dragX*blocksPerPixel;
+            Client.overviewPanZ-=dragY*blocksPerPixel;
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
     // ------------------------------------------------------------------ painting
 
     @Override
     protected void paint(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if(fullBattlefield()){
+            DeployMarkers.draw(graphics,minecraft);
+            // Top-left: the faction the player is on, with its flag.
+            int side=team();
+            String faction=side<0?"未选择阵营":Board.label(side);
+            int factionColor=side<0?Ui.TEXT_DIM:side==0?Ui.BLUE:Ui.RED;
+            graphics.fill(8,8,8+font.width(faction)+24,24,0x90101820);
+            graphics.fill(14,12,24,22,factionColor);
+            graphics.drawString(font,faction,28,14,factionColor,false);
+            // Top-right: map name in large type, mode underneath in dim small type.
+            if(arena!=null){
+                String mapName=arena.name,modeName=arena.modeName();
+                graphics.pose().pushPose();
+                try{
+                    float scale=2f;
+                    int textW=(int)(font.width(mapName)*scale);
+                    graphics.pose().translate(width-10-textW,4,200);
+                    graphics.pose().scale(scale,scale,1);
+                    graphics.drawString(font,mapName,0,0,Ui.TEXT,false);
+                }finally{graphics.pose().popPose();}
+                graphics.drawString(font,modeName,width-10-font.width(modeName),22,Ui.TEXT_DIM,false);
+            }
+            // Battlefield-style score strip along the top: both ticket counts and the round clock.
+            if(arena!=null){
+                int[] tickets={MatchScore.value(arena,Client.state,0),MatchScore.value(arena,Client.state,1)};
+                int friendly=team()==1?1:0,enemy=1-friendly;
+                long remaining=Math.max(0,arena.roundMinutes*60L-Engine.num(Client.state,"elapsed",0));
+                String clock=String.format(java.util.Locale.ROOT,"%02d:%02d",remaining/60,remaining%60);
+                int center=width/2,barWidth=Math.max(40,Math.min(100,width/2-110));
+                String left=String.valueOf(tickets[friendly]),right=String.valueOf(tickets[enemy]);
+                // Symmetric: [score][bar]  clock  [bar][score], both bars growing outward from the centre.
+                int leftBarX=center-66-barWidth,rightBarX=center+66;
+                graphics.fill(leftBarX-6,2,rightBarX+barWidth+6,20,0x90101820);
+                graphics.drawString(font,left,leftBarX-6-font.width(left),7,0xff9bc3ff,true);
+                CombatHud.scoreBar(graphics,leftBarX,9,barWidth,tickets[friendly]/(double)MatchScore.maximum(arena),Ui.BLUE,true,true);
+                graphics.drawCenteredString(font,clock,center,6,0xffe4edf2);
+                CombatHud.scoreBar(graphics,rightBarX,9,barWidth,tickets[enemy]/(double)MatchScore.maximum(arena),Ui.RED,false,true);
+                graphics.drawString(font,right,rightBarX+barWidth+6,7,0xffff9b9b,true);
+                graphics.drawCenteredString(font,"先达到 "+MatchScore.maximum(arena)+" 分获胜",center,21,0xffa8b0b8);
+            }
+            // Only a real countdown or an error is worth a status line; the deploy action is the button now.
+            String status=awaitingDeploy?"正在部署…":respawnRemaining()>0?"部署倒计时 "+respawnRemaining()+" 秒":!flag("roomRunning")?"等待房主开始对局":"";
+            boolean error=message.startsWith("操作失败");
+            if(error)status=message;
+            if(!status.isEmpty()){
+                graphics.fill(width/2-150,28,width/2+150,46,0xc010181f);
+                graphics.drawCenteredString(font,Ui.clip(font,status,300),width/2,32,error?Ui.TEXT_ERROR:Ui.TEXT);
+            }
+            // Battlefield keeps the squad list along the bottom-left of the deploy screen.
+            var roster=SquadRoster.rows(Client.state);
+            if(!roster.isEmpty()){
+                int squad=Client.state.has("me")?Engine.num(Client.state.getAsJsonObject("me"),"squad",0):0;
+                // Same clean row style as the HUD: no "· 你", no squad header; nothing when unassigned.
+                SquadRoster.drawAt(graphics,font,roster,10,height-104,squad);
+            }
+            if(overviewSquad!=null)overviewSquad.render(graphics,mouseX,mouseY,partialTick);
+            if(overviewLoadout!=null)overviewLoadout.render(graphics,mouseX,mouseY,partialTick);
+            if(overviewRight!=null)overviewRight.render(graphics,mouseX,mouseY,partialTick);
+            if(overviewLeave!=null)overviewLeave.render(graphics,mouseX,mouseY,partialTick);
+            if(overviewDeploy!=null)overviewDeploy.render(graphics,mouseX,mouseY,partialTick);
+            return;
+        }
         switch (tab) {
             case 0, 1 -> paintMapTab(graphics, mouseX, mouseY, partialTick, leftTitle);
             case 2 -> paintStats(graphics, mouseX, mouseY, partialTick);
@@ -862,18 +1454,44 @@ final class BattleScreen extends FrontScreen {
     private void paintMapTab(GuiGraphics graphics, int mouseX, int mouseY, float partialTick,
                              String header) {
         if (leftForm == null) return;
+
+        // In live-overview mode the world renders full-screen behind this screen, and the deploy markers
+        // are projected against that full-screen camera. They must therefore be drawn full-screen — before
+        // the opaque control column — rather than scissored to the right pane: scissoring to the pane
+        // clipped every marker that projected to the screen centre (which is between the two panes), while
+        // pickSpawn still hit-tested them against the full screen, producing markers that were clickable
+        // but invisible. Drawing them under the UI restores the invariant that a marker you can see is one
+        // you can click, and a marker you cannot see is covered by a panel.
+        if (worldBackdrop()) {
+            DeployMarkers.draw(graphics, minecraft);
+        }
+
         Ui.header(graphics, font, leftPanel, header);
         graphics.enableScissor(leftForm.area().x(), leftForm.area().y(),
                 leftForm.area().right(), leftForm.area().bottom());
         leftForm.render(graphics, mouseX, mouseY, partialTick);
         graphics.disableScissor();
 
-        Layout.Rect body = Ui.header(graphics, font, rightPanel, rightTitle);
+        Layout.Rect body;
+        if(tab==0 && DeploymentLock.room(Client.state) && !alive()) {
+            graphics.fill(rightPanel.x(),rightPanel.y(),rightPanel.right(),rightPanel.y()+20,0xe0101c28);
+            graphics.drawString(font,tacticalMap?"切换至实时俯视 ▸":"切换至战术地图 ▸",rightPanel.x()+8,rightPanel.y()+6,0xffd8dde0,false);
+        }
+        if(worldBackdrop()) {
+            graphics.drawString(font,"实时战场 · 选中目标后按空格",rightPanel.x()+6,rightPanel.y()+28,0xffd8dde0,true);
+            if(!Client.Events.overviewWarning.isEmpty())graphics.drawString(font,Client.Events.overviewWarning,rightPanel.x()+6,rightPanel.y()+40,Ui.TEXT_WARN,true);
+            return;
+        }
+        body = Ui.header(graphics, font, rightPanel, rightTitle);
         if (arena == null) {
             graphics.drawCenteredString(font, "暂无地图", body.cx(), body.cy() - 4, Ui.TEXT_FAINT);
             return;
         }
         drawMap(graphics, body);
+        if(tab==0 && DeploymentLock.room(Client.state) && !alive()) {
+            graphics.fill(rightPanel.x(),rightPanel.y(),rightPanel.right(),rightPanel.y()+20,0xe0101c28);
+            graphics.drawString(font,"切换至实时俯视 ▸",rightPanel.x()+8,rightPanel.y()+6,0xffd8dde0,false);
+        }
     }
 
     /**
@@ -889,6 +1507,7 @@ final class BattleScreen extends FrontScreen {
             selfX = position.get(0).getAsDouble();
             selfZ = position.get(2).getAsDouble();
         }
+        map.showGrid = false;
         map.highlightPoint = -1;
         map.highlightSector = -1;
         map.highlightSpawn = -1;
@@ -905,6 +1524,7 @@ final class BattleScreen extends FrontScreen {
                 }
             }
         }
+        map.deploymentSelection=tab==0&&!alive()?spawn:"";
         map.draw(graphics, font, body, arena, Client.state, team(), selfX, selfZ, yaw);
         if (tab == 0 && !spawns().isEmpty()) {
             // A chip rather than bare text: the hint sits on top of the terrain overlay, and plain
@@ -927,6 +1547,26 @@ final class BattleScreen extends FrontScreen {
 
     /** Bottom bar: real widgets in their own form, so hit-testing cannot drift from the paint. */
     private Form barForm;
+    private boolean deployReady;
+    private boolean spaceArmed;
+    @Override public void tick(){
+        super.tick();
+        if(!com.mojang.blaze3d.platform.InputConstants.isKeyDown(minecraft.getWindow().getWindow(),org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE))spaceArmed=true;
+    }
+    @Override public boolean keyReleased(int key,int scan,int modifiers){
+        if(key==org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE)spaceArmed=true;
+        return super.keyReleased(key,scan,modifiers);
+    }
+    @Override public boolean keyPressed(int key,int scan,int modifiers){if(dropdownOpen())return super.keyPressed(key,scan,modifiers);
+        if(key==org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE && tab==0 && inMatch()
+                && !(getFocused() instanceof net.minecraft.client.gui.components.EditBox)){
+            if(spaceArmed&&!alive()&&deployReady&&respawnRemaining()==0&&!awaitingDeploy)deploy();
+            spaceArmed=false;
+            return true;
+        }
+        return super.keyPressed(key,scan,modifiers);
+    }
+
 
     private void buildBar() {
         Layout.Rect bar = layout.bar;
@@ -935,27 +1575,50 @@ final class BattleScreen extends FrontScreen {
             return;
         }
         barForm = newForm(bar.inset(2));
-        Layout.Rect[] cells = Layout.columns(bar.inset(2), 4, 3);
+        // A firing range gets a dedicated re-arm action in the always-visible bottom bar, so it can be
+        // found without scrolling the side panel.
+        boolean training = tab == 0 && arena != null && arena.isTraining();
+        Layout.Rect[] cells = Layout.columns(bar.inset(2), training ? 4 : 3, 3);
+        int cell = 0;
+        if (training) place(barForm, cells[cell++], "切换配装（靶场）", "", "", "", true, this::rearm);
         barForm.skip(0);
-        place(barForm, cells[0], "关闭", "", "", "", true, this::onClose);
-        place(barForm, cells[1], "刷新", "", "", "", true, () -> send("state"));
-        place(barForm, cells[2], "编辑器", "", "", "", admin(),
+        place(barForm, cells[cell++], DeploymentLock.required(Client.state)?"离开房间":"关闭", "", "", "", true,
+                ()->{if(DeploymentLock.required(Client.state))send("leave");else onClose();});
+        place(barForm, cells[cell++], "刷新", "", "", "", true, () -> send("state"));
+        place(barForm, cells[cell++], "编辑器", "", "", "", admin(),
                 () -> minecraft.setScreen(new OpsScreen()));
-        place(barForm, cells[3], "部署", "", "", "", tab != 0 || me() == null, () -> {
-            tab = 0;
-            rebuild();
-        });
         barForm.finish();
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {if(dropdownOpen())return super.mouseClicked(mouseX,mouseY,button);
+        if(fullBattlefield()){
+            if(super.mouseClicked(mouseX,mouseY,button))return true;
+            if(button==0&&mouseY>layout.title.bottom()+34&&mouseY<height-42){
+                String picked=pickSpawn(new Layout.Rect(0,0,width,height),mouseX,mouseY);
+                if(picked!=null){selectSite(picked);rebuild();return true;}
+            }
+            return false;
+        }
+        if(button==0 && tab==0 && DeploymentLock.room(Client.state) && !alive() && rightPanel!=null
+                && mouseX>=rightPanel.x() && mouseX<rightPanel.right()
+                && mouseY>=rightPanel.y() && mouseY<rightPanel.y()+20) {
+            tacticalMap=!tacticalMap;
+            return true;
+        }
         if (button == 0 && tab == 0 && arena != null) {
-            Layout.Rect body = Ui.headerBody(rightPanel);
-            if (body.inside(mouseX, mouseY)) {
+            // In live-overview mode the markers are drawn full-screen (the world is full-screen), so the
+            // clickable area is everything right of the control column — not just the right pane. Scoping
+            // to the right pane here would reproduce the very inconsistency this round fixed: a marker you
+            // can see but cannot click.
+            boolean clickable = worldBackdrop()
+                    ? (mouseX >= leftPanel.right() && mouseY >= leftPanel.y() && mouseY < leftPanel.bottom())
+                    : Ui.headerBody(rightPanel).inside(mouseX, mouseY);
+            if (clickable) {
+                Layout.Rect body = Ui.headerBody(rightPanel);
                 String picked = pickSpawn(body, mouseX, mouseY);
                 if (picked != null) {
-                    spawn = picked;
+                    selectSite(picked);
                     rebuild();
                     return true;
                 }
@@ -974,11 +1637,16 @@ final class BattleScreen extends FrontScreen {
     private String pickSpawn(Layout.Rect body, double mouseX, double mouseY) {
         if (arena == null) return null;
         List<Deploy.Site> sites = sites();
+        // The tactical map may be rotated; hit-test in north-up coordinates. The live-overview path is a
+        // full-screen 3D projection, not a rotated 2D map, so its mouse position stays raw.
+        double[] um = worldBackdrop() ? new double[]{mouseX, mouseY} : map.unrotate(body, mouseX, mouseY);
         String best = null;
         double bestDistance = 16;
         for (Deploy.Site site : sites) {
-            double distance = Math.hypot(map.sx(body, site.x()) - mouseX,
-                    map.sz(body, site.z()) - mouseY);
+            var at=worldBackdrop()?Projector.project(minecraft,Projector.camera(minecraft),site.x(),site.y()+2,site.z(),1):null;
+            if(worldBackdrop()&&at==null)continue;
+            double distance = Math.hypot((worldBackdrop()?at.x():map.sx(body, site.x())) - um[0],
+                    (worldBackdrop()?at.y():map.sz(body, site.z())) - um[1]);
             if (distance < bestDistance) {
                 bestDistance = distance;
                 best = site.id();

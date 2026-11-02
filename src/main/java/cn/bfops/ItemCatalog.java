@@ -37,7 +37,7 @@ final class ItemCatalog {
      * @param name   display name in the client's own language
      * @param source namespace, so {@code @minecraft} can filter by mod
      */
-    record Entry(String id, String name, String source) {}
+    record Entry(String id,String name,String source,String kind){Entry(String id,String name,String source){this(id,name,source,"item");}}
 
     /**
      * Every registered item, sorted by id.
@@ -59,11 +59,38 @@ final class ItemCatalog {
             if (name == null || name.isBlank()) name = key.toString();
             out.add(new Entry(key.toString(), name, key.getNamespace()));
         }
+        for(var kind:SupportRules.Kind.values())out.add(new Entry(kind.key(),kind.label,"battlefield_ops"));
         out.sort(Comparator.comparing(Entry::id));
         cache = List.copyOf(out);
         return cache;
     }
 
+    static boolean isGun(String id){
+        if(Client.catalog.has("gunTypes")&&Client.catalog.getAsJsonObject("gunTypes").has(id))return true;
+        try{return ((java.util.Optional<?>)Class.forName("com.tacz.guns.api.TimelessAPI").getMethod("getCommonGunIndex",ResourceLocation.class).invoke(null,ResourceLocation.parse(id))).isPresent();}catch(ReflectiveOperationException|LinkageError|RuntimeException ex){return false;}
+    }
+    private static String weaponSource(String id,String system){return LibrarySource.searchable(id,"gun")+" "+system+" tacz 刀包 近战 近身武器 "+switch(id.split(":")[0]){case "katana"->"影武";case "delta_wt"->"三角洲 DeltaForce Melee Pack";default->"";};}
+    private static void lrtEntry(java.util.Map<String,Entry> entries,String selection,String resource,String key,String category){
+        String source=LibrarySource.searchable(resource,"item")+" lrtactical tacz LRTactical "+LrtEquipment.label(category)+" "+resource;
+        if(category.equals("melee"))source+=" 刀包 近身武器 "+(resource.startsWith("katana:")?"影武":resource.startsWith("delta_wt:")?"三角洲 DeltaForce Melee Pack":"");
+        entries.put(selection,new Entry(selection,net.minecraft.network.chat.Component.translatable(key).getString(),source));
+    }
+    static List<Entry> withWeapons(){
+        var values=new java.util.LinkedHashMap<String,Entry>();for(var e:all())values.put(e.id(),e);
+        // The server's loaded indices are authoritative, even if client reflection is unavailable.
+        if(Client.catalog.has("entries"))for(var value:Client.catalog.getAsJsonArray("entries")){
+            var e=value.getAsJsonObject();if(!Engine.str(e,"kind","").equals("gun"))continue;
+            String id=Engine.str(e,"id",""),key=Engine.str(e,"name",id);values.put(id,new Entry(id,net.minecraft.network.chat.Component.translatable(key).getString(),weaponSource(id,"tacz"),"gun"));
+        }
+        if(Client.catalog.has("lrtEntries"))for(var value:Client.catalog.getAsJsonArray("lrtEntries")){
+            var e=value.getAsJsonObject();lrtEntry(values,Engine.str(e,"id",""),Engine.str(e,"resource",""),Engine.str(e,"name",""),Engine.str(e,"category",""));
+        }
+        try{for(Object value:(java.util.Set<?>)Class.forName("com.tacz.guns.api.TimelessAPI").getMethod("getAllCommonGunIndex").invoke(null)){
+            var e=(java.util.Map.Entry<?,?>)value;String id=e.getKey().toString();Object pojo=e.getValue().getClass().getMethod("getPojo").invoke(e.getValue());String key=String.valueOf(pojo.getClass().getMethod("getName").invoke(pojo));values.put(id,new Entry(id,net.minecraft.network.chat.Component.translatable(key).getString(),weaponSource(id,"tacz"),"gun"));
+        }}catch(ReflectiveOperationException|LinkageError ex){BattlefieldOps.LOG.debug("Local TaCZ catalogue unavailable; using synchronized entries",ex);}
+        for(var e:LrtEquipment.entries())lrtEntry(values,e.get("id"),e.get("resource"),e.get("name"),e.get("category"));
+        return values.values().stream().sorted(java.util.Comparator.comparing(Entry::name)).toList();
+    }
     /** Drops the cached list, e.g. on logout so a resource-pack reload is picked up next session. */
     static synchronized void clear() {
         cache = null;
@@ -80,7 +107,7 @@ final class ItemCatalog {
         if (needle.isEmpty()) return entries;
         List<Entry> out = new ArrayList<>();
         for (Entry entry : entries) {
-            if (LibrarySearch.matches(needle, entry.id(), entry.name(), entry.source())) out.add(entry);
+            if (LibrarySearch.matches(needle, entry.id(), entry.name()+" "+entry.source(), entry.source())) out.add(entry);
         }
         return out;
     }

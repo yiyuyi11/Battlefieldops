@@ -21,12 +21,16 @@ import java.util.function.Consumer;
 final class ChoiceScreen extends FrontScreen {
     record Choice(String id,String name,String kind,String icon){Choice(String id,String name,String kind){this(id,name,kind,id);}}
 
+    interface DetailPreview {void draw(GuiGraphics graphics,Layout.Rect body,Choice choice);}
+    private DetailPreview details;
     private final Screen parent;
     private final List<Choice> choices;
     private final Consumer<String> chosen;
     private final String prompt;
 
     private String query = "";
+    private String category="全部类别";
+    private boolean categorized(){return choices.stream().anyMatch(c->c.kind.equals("gun")||c.kind.equals("vehicle")||LrtEquipment.explicit(c.id));}
     private Choice preview;
 
     private Form listForm;
@@ -44,10 +48,12 @@ final class ChoiceScreen extends FrontScreen {
         if (!choices.isEmpty()) preview = choices.getFirst();
     }
 
+    ChoiceScreen(Screen parent,String title,List<Choice> choices,Consumer<String> chosen,DetailPreview details){this(parent,title,choices,chosen);this.details=details;}
+
     private List<Choice> filtered() {
         String needle = query.trim().toLowerCase(Locale.ROOT);
-        if (needle.isEmpty()) return choices;
         return choices.stream()
+                .filter(c->c.id.isEmpty()||c.id.startsWith("@")||category.equals("全部类别")||EquipmentCategories.of(c.kind,c.id).equals(category))
                 .filter(c -> LibrarySearch.matches(needle,c.id,c.name,LibrarySource.searchable(c.icon,c.kind)))
                 .toList();
     }
@@ -58,7 +64,7 @@ final class ChoiceScreen extends FrontScreen {
     }
 
     @Override
-    protected void rebuild() {
+    protected void rebuildContent() {
         boolean focused = search != null && search.isFocused();
         int cursor = search == null ? 0 : search.getCursorPosition();
         clearWidgets();
@@ -70,6 +76,11 @@ final class ChoiceScreen extends FrontScreen {
         });
         search.setHint(net.minecraft.network.chat.Component.literal("名称 / @模组名"));
         listForm.add(search);
+        if(categorized()){
+            var types=new java.util.TreeSet<String>();for(var c:choices)if(!c.id.isEmpty())types.add(EquipmentCategories.of(c.kind,c.id));
+            var options=new java.util.ArrayList<Choice>();options.add(new Choice("全部类别","全部类别",""));for(var type:types)options.add(new Choice(type,type,""));
+            dropdown(listForm,"类别",category,options,value->{category=value;preview=null;hovered=0;rebuild();});
+        }
         if(focused){setFocused(search);search.setFocused(true);search.setCursorPosition(Math.min(cursor,query.length()));}
 
         List<Choice> all = filtered();
@@ -104,8 +115,9 @@ final class ChoiceScreen extends FrontScreen {
         place(barForm, cells[0], "返回", "", "", "", true, this::onClose);
         place(barForm, cells[2], "确认选择", "", "", "", preview != null, () -> {
             if (preview == null) return;
-            chosen.accept(preview.id);
+            String selected=preview.id;
             onClose();
+            chosen.accept(selected);
         });
         barForm.finish();
         this.barForm = barForm;
@@ -127,7 +139,7 @@ final class ChoiceScreen extends FrontScreen {
             graphics.drawCenteredString(font, "没有可预览的条目", previewBody.cx(), previewBody.cy() - 4,
                     Ui.TEXT_FAINT);
         } else {
-            previewPanel(graphics, previewBody.pad().inset(2), preview);
+            if(details==null)previewPanel(graphics, previewBody.pad().inset(2), preview);else details.draw(graphics,previewBody.pad().inset(2),preview);
         }
         if (barForm != null) barForm.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -149,7 +161,7 @@ final class ChoiceScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
         if(vertical==0)return false;
         if (listForm != null && listForm.wheel(mouseX, mouseY, vertical)) return true;
         // Otherwise page the selection, which is the useful thing when the wheel is over the preview.
@@ -163,7 +175,7 @@ final class ChoiceScreen extends FrontScreen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {if(dropdownOpen())return super.keyPressed(keyCode,scanCode,modifiers);
         // The list is driven from the preview, so the arrow keys walk it directly. Without this the
         // picker was mouse-only, which is a real limitation for an inventory-sized catalogue.
         if (layout != null && (keyCode == 265 || keyCode == 264)) {

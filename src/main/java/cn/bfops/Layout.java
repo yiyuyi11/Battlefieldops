@@ -100,6 +100,10 @@ final class Layout {
         this.footer = footer;
     }
 
+    static Layout room(int width,int height){
+        int half=Math.max(1,(width-24)/2),top=38,bottom=Math.max(top+1,height-42);
+        return new Layout(width,height,new Rect(8,4,width-16,22),new Rect(0,0,0,0),new Rect(8,top,width-16,bottom-top),new Rect(8,top,half,bottom-top),new Rect(16+half,top,width-24-half,bottom-top),new Rect(8,height-38,width-16,20),new Rect(8,height-16,width-16,12));
+    }
     static Layout of(int width, int height) {
         int margin = width < 340 || height < 260 ? 2 : 4;
         int tabHeight = height < 210 ? 12 : (height < 300 ? 15 : 18);

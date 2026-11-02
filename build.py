@@ -7,6 +7,8 @@ MC=LIB/'net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.14443
 NEO=LIB/'net/neoforged/neoforge/21.1.233/neoforge-21.1.233-universal.jar'
 cached=(ROOT.parent/'.port/compile-cp.txt').read_text('utf-8-sig').strip().split(';')
 cp=[str(MC),str(NEO)]+[p for p in cached if Path(p).is_file() and 'artifacts\\neoforge-' not in p and 'artifacts/neoforge-' not in p]
+cp += [str(p) for p in Path('D:/USTBL/.minecraft/versions/Mechanomania-test-new/mods').glob('geckolib*.jar')]
+cp += [str(p) for p in Path('D:/USTBL/.minecraft/versions/Mechanomania-航空学/mods').glob('tacz-neoforge*.jar')]
 classes=ROOT/'build/classes'
 assert classes.resolve() == (ROOT.resolve()/'build'/'classes')
 if classes.exists(): shutil.rmtree(classes)
@@ -16,7 +18,7 @@ args=['--release','21','-encoding','UTF-8','-proc:none','-classpath',';'.join(cp
 (ROOT/'build/javac.args').write_text('\n'.join('"'+s.replace('\\','/')+'"' for s in args),'utf-8')
 result=subprocess.run([str(JAVA/'javac.exe'),'@'+str(ROOT/'build/javac.args')],cwd=ROOT)
 if result.returncode:raise SystemExit(result.returncode)
-out=ROOT/'build/libs/battlefield-ops-0.6.3-neoforge-1.21.1.jar';out.parent.mkdir(exist_ok=True)
+out=ROOT/'build/libs/battlefield-ops-0.8.30-neoforge-1.21.1.jar';out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
     for folder in [classes,ROOT/'src/main/resources']:
         for f in folder.rglob('*'):

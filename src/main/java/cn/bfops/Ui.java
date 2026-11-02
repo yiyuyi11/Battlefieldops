@@ -3,40 +3,41 @@ package cn.bfops;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
-/**
- * One visual language for every screen in this mod.
- *
- * <p>Two problems motivated this file. First, panels were drawn with heavy alpha
- * ({@code 0xe9...}, {@code 0x80...}) so the world showed through by a different amount in each
- * region: the left control column, the right map and the status text each looked like they belonged
- * to a different layer. Second, thin one-pixel translucent strokes over terrain read as blur rather
- * than as a map. Both are fixed by painting opaque surfaces, then crisp 1px accents on top.
- *
- * <p>Colours are deliberately few: navy for surfaces, slate for frames, one accent per meaning
- * (blue/red for teams, amber for "needs attention", green for "fine"). Anything drawn here is a
- * solid {@code fill}, so text on top never fights the background for contrast.
- */
+/** Shared 656-style translucent surfaces, flat controls and semantic tactical colours. */
 final class Ui {
     // ---------------------------------------------------------------- palette
-    static final int BACKDROP = 0xf20b1013;
-    static final int PANEL = 0xff16202a;
-    static final int PANEL_ALT = 0xff1d2a35;
-    static final int PANEL_SUNKEN = 0xff101820;
-    static final int FRAME = 0xff38505f;
-    static final int FRAME_LIGHT = 0xff5a7c8c;
-    static final int ACCENT = 0xff7fd4ff;
-    static final int ACCENT_DIM = 0xff2b4d5e;
+    // Palette: a desaturated Battlefield-style military scheme — charcoal panels, a muted sand accent and
+    // muted team colours. The previous saturated gold on a saturated blue read as a warning stripe rather
+    // than as chrome, and was hard on the eyes over dark maps.
+    static final int BACKDROP = 0x80101418;
+    static final int PANEL = 0xe01c2024;
+    static final int PANEL_ALT = 0x90262b30;
+    static final int PANEL_SUNKEN = 0xd0121618;
+    static final int FRAME = 0x60707880;
+    static final int FRAME_LIGHT = 0x909aa4ac;
+    static final int ACCENT = 0xffd9a566;
+    static final int ACCENT_DIM = 0x809a7448;
+    /**
+     * The lit edge above a raised surface.
+     *
+     * <p>Every panel used to be a flat fill inside a single-colour frame, so a stack of panels read as
+     * one grey mass with lines through it. A one-pixel lighter rule on the top inside edge (and a darker
+     * one on the bottom) is what makes each pane look like a raised plate rather than a hole cut in the
+     * backdrop — the same trick classic toolkits use, and it costs two fills.
+     */
+    static final int BEVEL_HI = 0x30889098;
+    static final int BEVEL_LO = 0x0010181f;
 
     static final int TEXT = 0xffe6eef2;
     static final int TEXT_DIM = 0xff9db0bb;
-    static final int TEXT_FAINT = 0xff6b7f8a;
+    static final int TEXT_FAINT = 0xff8a9aa6;
     static final int TEXT_WARN = 0xffffc24d;
     static final int TEXT_ERROR = 0xffff7a6b;
     static final int TEXT_OK = 0xff7ee08a;
 
-    static final int BLUE = 0xff6fb6ff;
-    static final int RED = 0xffff8888;
-    static final int GOLD = 0xffffd479;
+    static final int BLUE = 0xff5c8fc7;
+    static final int RED = 0xffc56a6a;
+    static final int GOLD = 0xffd9a566;
 
     private Ui() {}
 
@@ -46,7 +47,19 @@ final class Ui {
     static void panel(GuiGraphics g, Layout.Rect r) {
         if (r.w() <= 0 || r.h() <= 0) return;
         g.fill(r.x(), r.y(), r.right(), r.bottom(), PANEL);
-        frame(g, r, FRAME);
+        g.fill(r.x(),r.y(),r.right(),r.y()+1,FRAME);
+
+    }
+
+    /**
+     * One-pixel lit top edge and shadowed bottom edge — what turns a fill into a raised plate.
+     *
+     * <p>Skipped on surfaces too small to have an inside; a 3px-tall rect would otherwise be all bevel
+     * and no body.
+     */
+    static void bevel(GuiGraphics g, Layout.Rect r) {
+        // Flat surfaces follow the source UI; no raised black bevels.
+
     }
 
     static void inset(GuiGraphics g, Layout.Rect r) {
@@ -82,20 +95,31 @@ final class Ui {
         panel(g, r);
         int stripHeight = Math.min(r.h(), 14);
         g.fill(r.x() + 1, r.y() + 1, r.right() - 1, r.y() + stripHeight, PANEL_ALT);
+        // Accent tick at the start of the title, then the rule. Without the tick the strip was a band of
+        // slightly-lighter grey with a word in it; the 2px bar is what makes the eye find the title.
+        if (stripHeight >= 10 && !title.isEmpty()) {
+            g.fill(r.x() + 1, r.y() + 2, r.x() + 3, r.y() + stripHeight - 1, ACCENT);
+        }
         g.fill(r.x() + 1, r.y() + stripHeight, r.right() - 1, r.y() + stripHeight + 1, ACCENT_DIM);
         if (!title.isEmpty() && stripHeight >= 10) {
-            g.drawString(font, clip(font, title, r.w() - 10), r.x() + 5, r.y() + (stripHeight - 8) / 2,
+            g.drawString(font, UiFont.text(clip(font, title, r.w() - 12)), r.x() + 7, r.y() + (stripHeight - 8) / 2,
                     TEXT, false);
         }
         return headerBody(r);
     }
 
-    /** Small tag used for state words ("已加入", "未开局"); tinted background, no border. */
+    /**
+     * Small tag used for state words ("已加入", "未开局"); tinted background, no border.
+     *
+     * <p>The tint is derived from the text colour and capped well below opaque: a chip must read as a
+     * *mark* on the panel, not as a hole in it. Deriving it means a new meaning cannot accidentally ship
+     * with an unreadable colour pair, which is what happened when these were passed by hand.
+     */
     static void chip(GuiGraphics g, Font font, int x, int y, String text, int color) {
         int w = font.width(text) + 6;
-        g.fill(x, y, x + w, y + 10, mix(color, 0xff000000, 0.72));
+        g.fill(x, y, x + w, y + 10, mix(color, PANEL_SUNKEN, 0.82));
         g.fill(x, y + 10, x + w, y + 11, color);
-        g.drawString(font, text, x + 3, y + 1, color, false);
+        g.drawString(font, UiFont.text(text), x + 3, y + 1, color, false);
         return;
     }
 
@@ -131,18 +155,19 @@ final class Ui {
 
     /** Left-aligned label that never overflows its pane. */
     static void text(GuiGraphics g, Font font, int x, int y, int width, String text, int color) {
-        g.drawString(font, clip(font, text, width), x, y, color, false);
+        g.drawString(font, UiFont.text(clip(font, text, width)), x, y, color, false);
     }
 
     static void textCentered(GuiGraphics g, Font font, int cx, int y, int width, String text, int color) {
-        g.drawString(font, clip(font, text, width), cx - font.width(clip(font, text, width)) / 2, y, color, false);
+        String clipped = clip(font, text, width);
+        g.drawString(font, UiFont.text(clipped), cx - font.width(clipped) / 2, y, color, false);
     }
 
     /** Label / value pair: the label is dim and fixed width so the values line up in a column. */
     static void fact(GuiGraphics g, Font font, int x, int y, int labelWidth, int totalWidth,
                      String label, String value, int color) {
-        g.drawString(font, clip(font, label, labelWidth - 4), x, y, TEXT_FAINT, false);
-        g.drawString(font, clip(font, value, totalWidth - labelWidth), x + labelWidth, y, color, false);
+        g.drawString(font, UiFont.text(clip(font, label, labelWidth - 4)), x, y, TEXT_FAINT, false);
+        g.drawString(font, UiFont.text(clip(font, value, totalWidth - labelWidth)), x + labelWidth, y, color, false);
     }
 
     /** Same pair, with the value right-aligned against {@code right} so numbers line up. */
@@ -249,10 +274,21 @@ final class Ui {
 
     /** A tab strip button: selected tabs get a filled body and an accent underline. */
     static void tab(GuiGraphics g, Font font, Layout.Rect r, String label, boolean selected, boolean hovered) {
-        int body = selected ? PANEL_ALT : (hovered ? 0xff1a2630 : PANEL_SUNKEN);
+        int body = selected ? PANEL_ALT : (hovered ? 0x8a444444 : PANEL_ALT);
         g.fill(r.x(), r.y(), r.right(), r.bottom(), body);
-        g.fill(r.x(), r.right() > r.x() ? r.bottom() - 1 : r.bottom(), r.right(), r.bottom(),
-                selected ? ACCENT : (hovered ? FRAME_LIGHT : FRAME));
+        // A selected tab is joined to the pane below it: lit top edge, no bottom rule, and a full-width
+        // accent. An unselected one keeps a dark rule so the strip reads as separate buttons. This is the
+        // difference between "tabs" and "a row of words with a line under one of them".
+        if (selected) {
+            g.fill(r.x(), r.y(), r.right(), r.y() + 1, FRAME_LIGHT);
+            g.fill(r.x(), r.bottom() - 1, r.right(), r.bottom(), ACCENT);
+        } else {
+            g.fill(r.x(), r.bottom() - 1, r.right(), r.bottom(), hovered ? FRAME_LIGHT : FRAME);
+        }
+        // A hairline between adjacent tabs, so two unselected neighbours do not merge into one block.
+        if (r.w() > 2) {
+            g.fill(r.x(), r.y() + 3, r.x() + 1, r.bottom() - 3, BEVEL_LO);
+        }
         int color = selected ? TEXT : (hovered ? TEXT_DIM : TEXT_FAINT);
         textCentered(g, font, r.cx(), r.y() + (r.h() - 8) / 2, r.w() - 4, label, color);
     }

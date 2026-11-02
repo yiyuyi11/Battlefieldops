@@ -35,7 +35,11 @@ final class TerrainPreview implements AutoCloseable {
         // an empty dimension. Treating that as "not this world" would leave the canvas showing the
         // placeholder checkerboard forever; assuming the current dimension is what the operator means.
         String target=dim==null || dim.isEmpty() ? level.dimension().location().toString() : dim;
-        int nw=Math.min(1024,width),nh=Math.min(1024,height);
+        // Overscan a stable world window. Drawing follows the player every frame; sampling does not restart on subpixel motion.
+        double requestedX=cx,requestedZ=cz,requestedSpan=span;
+        double step=Math.max(2,span/8);
+        cx=Math.floor(cx/step)*step;cz=Math.floor(cz/step)*step;span*=1.5;
+        int nw=Math.min(1024,(int)Math.ceil(width*1.5)),nh=Math.min(1024,(int)Math.ceil(height*1.5));
         boolean resized=texture==null || nw!=tw || nh!=th;
         int[] oldColors=colors;int oldW=tw,oldH=th;
         double oldX=centerX,oldZ=centerZ,oldScale=scale,oldAspect=aspect;
@@ -47,7 +51,9 @@ final class TerrainPreview implements AutoCloseable {
         }
         double ratio=height/(double)width;
         if(resized || cx!=centerX || cz!=centerZ || span!=scale || ratio!=aspect || !target.equals(dimension)){
-            centerX=cx;centerZ=cz;scale=span;aspect=ratio;dimension=target;cursor=0;nextRefresh=0;
+            boolean sameGrid=!resized&&target.equals(dimension)&&span==scale&&ratio==aspect;
+            centerX=cx;centerZ=cz;scale=span;aspect=ratio;dimension=target;
+            if(!sameGrid)cursor=0;nextRefresh=0;
             colors=new int[tw*th];
             for(int z=0;z<th;z++)for(int x=0;x<tw;x++){
                 int color=unknown(x,z);
@@ -98,7 +104,10 @@ final class TerrainPreview implements AutoCloseable {
             }
             texture.upload();if(cursor==tw*th)nextRefresh=now+1000;
         }
-        g.blit(location,left,top,width,height,0,0,tw,th,tw,th);
+        float u=(float)(((requestedX-centerX-requestedSpan/2)/scale+.5)*tw);
+        float v=(float)(((requestedZ-centerZ-requestedSpan*aspect/2)/(scale*aspect)+.5)*th);
+        int sourceW=Math.max(1,(int)Math.round(requestedSpan/scale*tw)),sourceH=Math.max(1,(int)Math.round(requestedSpan/scale*th));
+        g.blit(location,left,top,width,height,u,v,sourceW,sourceH,tw,th);
     }
     private static int unknown(int x,int z){return ((x/16+z/16)&1)==0?0xff3c3226:0xff4c4236;}
     @Override public void close(){

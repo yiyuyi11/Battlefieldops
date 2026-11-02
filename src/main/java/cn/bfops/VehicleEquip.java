@@ -216,13 +216,6 @@ final class VehicleEquip {
      * how many rounds the vehicle is carrying.
      */
     /** Heals a player standing in a supply pad. Returns true when health actually changed. */
-    static boolean resupplyPlayer(net.minecraft.world.entity.player.Player player, VehicleSupply.Supply pad) {
-        if (player == null || pad == null || !pad.health()) return false;
-        if (player.getHealth() >= player.getMaxHealth()) return false;
-        player.setHealth(player.getMaxHealth());
-        player.getFoodData().setFoodLevel(20);
-        return true;
-    }
 
     // ------------------------------------------------------------------ reads
 
