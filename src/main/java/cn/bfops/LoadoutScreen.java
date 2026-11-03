@@ -44,6 +44,7 @@ final class LoadoutScreen extends FrontScreen {
         this.parent = parent;
     }
 
+    @Override protected boolean bf1Style(){return true;}
     @Override
     protected String subtitle() {
         return (parent.arena == null ? "未选择地图" : parent.arena.name) + " · 卡片视图";
@@ -113,13 +114,12 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
             row(rightForm,"配件卡片","隐藏属性",()->{propertyVisible=false;rebuild();});
             row(rightForm,propertyMain?"主武器属性":"副武器属性","切换主／副武器",()->{propertyMain=!propertyMain;rebuild();});
             String weapon=shown(kit(),propertyMain);
-            rightForm.paint(48,(g,r)->{AssetIcons.draw(g,"gun",weapon,r.x()+4,r.y()+2,r.w()-8,30);g.drawString(font,Ui.clip(font,parent.name(weapon),r.w()-8),r.x()+4,r.y()+36,Ui.TEXT,true);});
+            rightForm.paint(48,(g,r)->{if(!GunPreview.render(g,weapon,parent.fitting("gun",weapon),r.x()+2,r.y(),r.w()-4,30,22,-14))AssetIcons.draw(g,"gun",weapon,r.x()+4,r.y()+2,r.w()-8,30);g.drawString(font,Ui.clip(font,parent.name(weapon),r.w()-8),r.x()+4,r.y()+36,Ui.TEXT,true);});
             var report=EquipmentStatistics.read("gun",weapon,parent.fitting("gun",weapon));
             rightForm.section(report.source().isEmpty()?"装备属性":report.source());
             for(var value:report.rows())rightForm.paint(16,(g,r)->EquipmentStatPanel.diagram(g,font,r,value));
             if(report.rows().isEmpty())rightForm.paragraph(report.warning(),Ui.TEXT_WARN);
             rightForm.paragraph("条形为基础值和当前配件修正；伤害已计入服务端平衡设置。",Ui.TEXT_DIM);
-            row(rightForm,"改装当前武器","选择配件",()->customize("gun",weapon));
             rightForm.scrollTo(scroll);rightForm.finish();return;
         }
         int overviewTop = rightForm.area().y() + Layout.PAD + 1;
@@ -198,8 +198,8 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
         g.fill(r.x(), r.y(), r.right(), r.bottom(), CARD_BG);
         g.fill(r.x(), r.y(), r.right(), r.y() + 1, CARD_BORDER);
         g.drawString(font, title, r.x() + 8, r.y() + 6, TITLE, false);
-        g.drawString(font, clip(parent.name(id), r.w() - 16), r.x() + 8, r.y() + 20, NAME, false);
-        g.drawString(font, clip(id.isEmpty() ? "未选择" : "@" + LibrarySource.name(id) + " · " + id, r.w() - 16),
+        g.drawString(font, clip(parent.name(id), r.w() - Math.min(64,Math.max(24,r.w()/5)) - 24), r.x() + 8, r.y() + 20, NAME, false);
+        g.drawString(font, clip(id.isEmpty() ? "未选择" : "@" + LibrarySource.name(id) + " · " + id, r.w() - Math.min(64,Math.max(24,r.w()/5)) - 24),
                 r.x() + 8, r.y() + 32, ENTRY, false);
         int count = id.isEmpty() ? 0 : parent.fitting("gun", id).size();
         String stats = GunStats.summary(id);
@@ -210,11 +210,11 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
                 : stats + (count > 0 ? " · 已装 " + count + " 项" : "");
         g.drawString(font, clip(summary, r.w() - 16), r.x() + 8, r.y() + 118, SUMMARY, false);
         if (!id.isEmpty()) {
-            // A weapon artwork strip along the card's right edge. The reference pack's card carries the gun
-            // image; without it a card is three lines of text in a box, and "which of my two weapons is
-            // this" is answered by reading rather than by looking.
-            int artW = Math.min(84, Math.max(48, r.w() / 5));
-            AssetIcons.draw(g, "gun", id, r.right() - artW - 8, r.y() + 44, artW, 68);
+            // The attachment grid owns y=42..108. Keep weapon art in the header above it.
+            int artW = Math.min(64, Math.max(24,r.w()/5));
+            GuiClip.push(g,r.right()-artW-8,r.y()+4,artW,32);
+            try{AssetIcons.draw(g,"gun",id,r.right()-artW-8,r.y()+4,artW,32);}
+            finally{GuiClip.pop(g);}
         }
     }
 
@@ -282,7 +282,7 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
             warn("请先选择装备");
             return;
         }
-        minecraft.setScreen(new FittingScreen(this, parent.selected, id, kind, parent.fitting(kind, id),kit()==null?"":kit().id));
+        minecraft.setScreen(FittingScreen.open(this, parent.selected, id, kind, parent.fitting(kind, id),kit()==null?"":kit().id));
     }
 
     private void buildBar() {

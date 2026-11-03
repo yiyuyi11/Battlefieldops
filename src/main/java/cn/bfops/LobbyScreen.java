@@ -15,11 +15,13 @@ final class LobbyScreen extends FrontScreen {
     private long actionAt;
     @Override protected boolean actionIcons(){return false;}
     private FrontButton roomRow(String label,String value,Runnable action){return place(rooms,rooms.take(17,1),label,value,"","",true,action);}
-    @Override protected Layout layoutFor(int width,int height){return Layout.room(width,height);}
+    @Override protected Layout layoutFor(int width,int height){return Layout.bf1Lobby(width,height);}
+    @Override protected boolean horizontalTabs(){return true;}
+    @Override protected void paintBackdrop(GuiGraphics g){Bf1Ui.lobbyBackground(g,width,height);}
     private String lastDirectory="";
     private final Set<String> collapsed=new HashSet<>();
     LobbyScreen(){
-        super("battlefieldops · 游戏大厅");
+        super("多人游戏 · 服务器大厅");
         String notice=Engine.str(Client.lobby,"message","");
         if(notice.startsWith("操作失败"))fail(notice);else if(!notice.isEmpty())ok(notice);
     }
@@ -82,26 +84,27 @@ final class LobbyScreen extends FrontScreen {
         if(++poll>=24){poll=0;request("lobby");}
         if(pendingJoin&&System.currentTimeMillis()-actionAt>5000){pendingJoin=false;warn("服务器尚未确认加入，请刷新后重试");rebuild();}
     }
+    private int bannerHeight(){return layout.right.h()>=200&&layout.right.w()>=190?64:0;}
     protected void rebuildContent(){
         int leftScroll=rooms==null?0:rooms.scroll(),rightScroll=details==null?0:details.scroll();
         boolean focused=search!=null&&search.isFocused();int cursor=search==null?0:search.getCursorPosition();
-        clearWidgets();rooms=newForm(layout.left.inset(4));details=newForm(new Layout.Rect(layout.right.x()+6,layout.right.y()+6,layout.right.w()-12,Math.max(24,layout.right.h()-40)));joinActions=newForm(new Layout.Rect(layout.right.x()+4,layout.right.bottom()-28,layout.right.w()-8,28));
-        rooms.text("搜索地图 / ID / 模式",Ui.TEXT_FAINT);
+        clearWidgets();rooms=newForm(layout.left.inset(4));details=newForm(new Layout.Rect(layout.right.x()+6,layout.right.y()+6+bannerHeight(),layout.right.w()-12,Math.max(24,layout.right.h()-40-bannerHeight())));joinActions=newForm(new Layout.Rect(layout.right.x()+4,layout.right.bottom()-28,layout.right.w()-8,28));
+        if(layout.left.h()>=120)rooms.text("搜索地图 / ID / 模式",Ui.TEXT_FAINT);
         search=edit(rooms.take(16,3),query,80,value->{query=value;filterDirty=true;});rooms.add(search);
         dropdown(rooms,"筛选",status,List.of("全部状态","可加入","等待开始","对局进行中").stream().map(v->new ChoiceScreen.Choice(v,v,"")).toList(),v->{status=v;rebuild();});
         List<JsonObject> list=entries();
         if(list.stream().noneMatch(o->Engine.str(o,"id","").equals(selected)))selected=list.isEmpty()?"":Engine.str(list.getFirst(),"id","");
-        if(!list.isEmpty())rooms.fact("房间","人数",Ui.TEXT_DIM);
+        if(!list.isEmpty()&&layout.left.h()>=120)rooms.fact("房间","人数",Ui.TEXT_DIM);
         String group="";JsonObject chosen=null;
         for(var entry:list){
             String id=Engine.str(entry,"id","");String mode=Engine.str(entry,"modeName","");
-            if(!mode.equals(group)){
+            if(!mode.equals(group)&&layout.left.h()>=100){
                 group=mode;boolean shut=collapsed.contains(mode)&&query.isBlank();
                 long count=list.stream().filter(e->Engine.str(e,"modeName","").equals(mode)).count();
                 FrontButton groupEntry=roomRow((shut?"▶ ":"▼ ")+modeFullName(mode),count+" 张地图",()->{if(!collapsed.remove(mode))collapsed.add(mode);rebuild();});
                 groupEntry.header=true;
             }
-            if(collapsed.contains(mode)&&query.isBlank())continue;
+            if(layout.left.h()>=100&&collapsed.contains(mode)&&query.isBlank())continue;
             FrontButton roomEntry=roomRow((id.equals(selected)?"":"")+id+"  "+Engine.str(entry,"name",id),Engine.num(entry,"players",0)+"/"+Engine.num(entry,"capacity",64),()->{selected=id;if(details!=null)details.resetScroll();rebuild();});
             roomEntry.selected=id.equals(selected);
             if(id.equals(selected))chosen=entry;
@@ -115,7 +118,7 @@ final class LobbyScreen extends FrontScreen {
             details.fact("模式",Engine.str(chosen,"modeName",""),Ui.ACCENT);
             details.fact("状态",running?"对局进行中":exists?"等待开始":"尚未创建房间",running?Ui.ACCENT:Ui.TEXT_WARN);
             details.fact("人数",Engine.num(chosen,"players",0)+" / "+Engine.num(chosen,"capacity",64),Ui.TEXT);
-            details.fact("机械轴心 / 格雷同盟",Engine.num(chosen,"blue",0)+" / "+Engine.num(chosen,"red",0),Ui.TEXT);
+            details.fact(Engine.str(chosen,"blueFactionName","机械轴心")+" / "+Engine.str(chosen,"redFactionName","格雷同盟"),Engine.num(chosen,"blue",0)+" / "+Engine.num(chosen,"red",0),Ui.TEXT);
             details.fact("尚未选队",""+Engine.num(chosen,"waiting",0),Ui.TEXT_DIM);
             
             String blocker=exists?RoomPolicy.joinBlocker(!membership().isEmpty(),true,Engine.num(chosen,"players",0),Engine.num(chosen,"capacity",64)):"";
@@ -156,11 +159,13 @@ final class LobbyScreen extends FrontScreen {
         // faint text out; the content band is now opaque enough to read against any map.
         int top=layout.title.h()>0?layout.title.bottom():layout.tabs.bottom();
         int bottom=showBottomBar()&&layout.bar.h()>0?layout.bar.y():height;
-        if(bottom>top)g.fill(0,top,width,bottom,0xe0101820);
-        g.fill(layout.left.x(),layout.left.y(),layout.left.right(),layout.left.bottom(),0xf018222c);
-        g.fill(layout.right.x(),layout.right.y(),layout.right.right(),layout.right.bottom(),0xf01a242e);
-        Ui.frame(g,layout.left,0x998a9aa8);Ui.frame(g,layout.right,0x998a9aa8);
+        if(bottom>top)g.fill(0,top,width,bottom,0x30101418);
+        g.fill(layout.left.x(),layout.left.y(),layout.left.right(),layout.left.bottom(),0xb0101418);
+        g.fill(layout.right.x(),layout.right.y(),layout.right.right(),layout.right.bottom(),0x90101418);
+        g.fill(layout.left.x(),layout.left.y(),layout.left.right(),layout.left.y()+1,0x60ffffff);
+        g.fill(layout.right.x(),layout.right.y(),layout.right.right(),layout.right.y()+1,0x60ffffff);
         g.drawString(font,"房间选择",layout.left.x(),layout.left.y()-10,Ui.ACCENT,false);
+        if(bannerHeight()>0)AssetIcons.draw(g,"bf1","server_browser_card",layout.right.x()+6,layout.right.y()+4,layout.right.w()-12,bannerHeight()-4);
         rooms.render(g,x,y,dt);details.render(g,x,y,dt);actions.render(g,x,y,dt);joinActions.render(g,x,y,dt);
     }
     public boolean mouseScrolled(double x,double y,double horizontal,double vertical){if(dropdownOpen())return super.mouseScrolled(x,y,horizontal,vertical);

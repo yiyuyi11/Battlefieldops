@@ -14,7 +14,7 @@ final class MapIcons {
     /** How long a vanished enemy stays on the map as a fading outline. */
     private static final long GHOST_MS = 2500L;
 
-    private record Ghost(int x, int y, long at) { }
+    private record Ghost(double x, double z, long at) { }
 
     /** Drops every after-image, so a new match or a map change never inherits old contacts. */
     static void clearGhosts() {
@@ -37,6 +37,28 @@ final class MapIcons {
     }
     static void nativeMarker(GuiGraphics g,float x,float y,float alpha,float shape,float scale,MarkerVisualType visual,String role){
         if(scale<=.01f||shape<=.01f)return;
+        String art=switch(visual){
+            case AMMO_BOX, AMMO_BAG, NEED_AMMO_ALLY, NEED_AMMO_SQUAD -> "pickups_ammobag_default_default";
+            case MEDICAL_BOX, MEDICAL_BAG -> "pickups_medbag_default_default";
+            case DOWNED_ALLY, DOWNED_SQUAD, RESCUE_ALLY, RESCUE_SQUAD -> "death_hud_default";
+            case ALLY_PERSISTENT, SQUAD_PERSISTENT -> switch(role){
+                case "assault" -> "kit_assault_hud_default";
+                case "support" -> "kit_medic_hud_default";
+                case "engineer" -> "kit_support_hud_default";
+                case "recon" -> "kit_scout_hud_default";
+                default -> "player_hud_default";
+            };
+            case ENEMY_GROUND, ENEMY_TRACKED, AUTO_ENEMY -> "player_map_enemy";
+            default -> null;
+        };
+        if(art!=null){
+            boolean squad=visual==MarkerVisualType.SQUAD_PERSISTENT||visual==MarkerVisualType.DOWNED_SQUAD||visual==MarkerVisualType.RESCUE_SQUAD;
+            int color=squad?TacticalColors.MATE:visual==MarkerVisualType.ENEMY_TRACKED||visual==MarkerVisualType.ENEMY_GROUND||visual==MarkerVisualType.AUTO_ENEMY?TacticalColors.ENEMY:TacticalColors.FRIEND;
+            int size=Math.max(8,Math.round((art.startsWith("kit_")?22:18)*scale));
+            g.setColor((color>>16&255)/255f,(color>>8&255)/255f,(color&255)/255f,alpha);
+            try{Bf1Ui.icon(g,art,Math.round(x-size/2f),Math.round(y-size/2f),size);}finally{g.setColor(1,1,1,1);}
+            return;
+        }
         g.flush();RenderSystem.setShaderColor(1,1,1,1);
         try {TacticalMarkerRenderer.drawMarker(g,x,y,alpha,shape,0,false,visual,scale,-1,role,false);}
         finally {g.flush();RenderSystem.defaultBlendFunc();RenderSystem.enableDepthTest();RenderSystem.enableCull();RenderSystem.setShaderColor(1,1,1,1);}
@@ -64,14 +86,16 @@ final class MapIcons {
                 case "TEAMMATE" -> nativeMarker(g,x,y,1,.95f,.65f,MarkerVisualType.SQUAD_PERSISTENT,"");
                 case "VEHICLE" -> vehicle(g,font,x,y,true,selected);
                 case "OBJECTIVE", "POINT", "CAPTURE" -> {} // already rendered with its ownership/progress
-                default -> DeployIcon.spawn(g,font,"▼",x,y,6.5f,1,TacticalColors.FRIEND,selected,false);
+                default -> DeployIcon.base(g,font,x,y,6.5f,Client.state.has("me")?Engine.num(Client.state.getAsJsonObject("me"),"team",-1):-1,TacticalColors.FRIEND,selected);
             }
         });
     }
     private static void vehicle(GuiGraphics g,Font font,int x,int y,boolean friendly,boolean selected){
         int rgb=(friendly?TacticalColors.FRIEND:TacticalColors.ENEMY)&0xffffff;
         g.flush();RenderSystem.setShaderColor(1,1,1,1);
-        try {CaptureDiamondRenderer.drawVehicleIconInHud(g,font,"V",x,y,6,1,0x13212d,rgb,rgb,.68f,selected,false);}
+        try {g.setColor((rgb>>16&255)/255f,(rgb>>8&255)/255f,(rgb&255)/255f,1);
+            Bf1Ui.icon(g,"vehicles_tank_default_default",x-7,y-7,14);g.setColor(1,1,1,1);
+            if(selected)SelectionReticle.draw(g,x,y,9);}
         finally {g.flush();RenderSystem.defaultBlendFunc();RenderSystem.enableDepthTest();RenderSystem.enableCull();RenderSystem.setShaderColor(1,1,1,1);}
     }
     static void contacts(GuiGraphics g,Font font,JsonObject state,DoubleToIntFunction sx,DoubleToIntFunction sy,double rotation){contacts(g,font,state,sx,sy,rotation,null);}
@@ -79,6 +103,9 @@ final class MapIcons {
         contacts(g,font,state,(wx,wz)->new int[]{sx.applyAsInt(wx),sy.applyAsInt(wz)},rotation,options);
     }
     static void contacts(GuiGraphics g,Font font,JsonObject state,java.util.function.BiFunction<Double,Double,int[]> project,double rotation,MinimapOptions options){
+        contacts(g,font,state,project,rotation,options,0);
+    }
+    static void contacts(GuiGraphics g,Font font,JsonObject state,java.util.function.BiFunction<Double,Double,int[]> project,double rotation,MinimapOptions options,float headingOffset){
         for(var e:array(state,"hazards")){var row=e.getAsJsonObject();if(!position(row))continue;int[] at=project.apply(row.get("x").getAsDouble(),row.get("z").getAsDouble());if(at!=null)marker(g,at[0],at[1],rotation,MarkerVisualType.GRENADE_HOSTILE,"",.95f);}
         if(options==null||options.objectives)for(var e:array(state,"elitePoints")){
             var row=e.getAsJsonObject();int[] at=project.apply(row.get("x").getAsDouble(),row.get("z").getAsDouble());if(at==null)continue;int x=at[0],y=at[1];
@@ -113,9 +140,10 @@ final class MapIcons {
                 // forgets instantly plays worse than one that keeps a fading trace for a couple of seconds.
                 String key=Engine.str(row,"target",Engine.str(row,"name",px+":"+py));
                 liveEnemies.add(key);
-                GHOSTS.put(key,new Ghost(px,py,System.currentTimeMillis()));
+                GHOSTS.put(key,new Ghost(row.get("x").getAsDouble(),row.get("z").getAsDouble(),System.currentTimeMillis()));
             }
-            TacticalColors.dot(g,px,py,enemy?1:2,enemy?0xffa64b50:TacticalColors.withAlpha(TacticalColors.FRIEND,Minimap.fade(row)));
+            if(enemy)marker(g,px,py,rotation,MarkerVisualType.ENEMY_TRACKED,"",Minimap.fade(row));
+            else TacticalColors.dot(g,px,py,2,TacticalColors.withAlpha(TacticalColors.FRIEND,Minimap.fade(row)));
         }
         long now=System.currentTimeMillis();
         GHOSTS.entrySet().removeIf(entry->now-entry.getValue().at()>GHOST_MS);
@@ -125,11 +153,12 @@ final class MapIcons {
             double left=1.0-(now-ghost.at())/(double)GHOST_MS;
             if(left<=0.02)continue;
             // Hollow, dimmer square: clearly "no longer there", not a second live contact.
+            int[] ghostAt=project.apply(ghost.x(),ghost.z());if(ghostAt==null)continue;
             int colour=TacticalColors.withAlpha(0xffa64b50,(float)(left*0.55));
-            g.fill(ghost.x()-1,ghost.y()-1,ghost.x()+2,ghost.y(),colour);
-            g.fill(ghost.x()-1,ghost.y()+1,ghost.x()+2,ghost.y()+2,colour);
-            g.fill(ghost.x()-1,ghost.y(),ghost.x(),ghost.y()+1,colour);
-            g.fill(ghost.x()+1,ghost.y(),ghost.x()+2,ghost.y()+1,colour);
+            g.fill(ghostAt[0]-1,ghostAt[1]-1,ghostAt[0]+2,ghostAt[1],colour);
+            g.fill(ghostAt[0]-1,ghostAt[1]+1,ghostAt[0]+2,ghostAt[1]+2,colour);
+            g.fill(ghostAt[0]-1,ghostAt[1],ghostAt[0],ghostAt[1]+1,colour);
+            g.fill(ghostAt[0]+1,ghostAt[1],ghostAt[0]+2,ghostAt[1]+1,colour);
         }
         for(var e:array(state,"pads")){
             if(!e.isJsonObject())continue;var row=e.getAsJsonObject();if(!position(row))continue;
@@ -148,7 +177,10 @@ final class MapIcons {
             int[] at=project.apply(row.get("x").getAsDouble(),row.get("z").getAsDouble());if(at==null)continue;int x=at[0],y=at[1];
             String elite=Engine.str(row,"elite","");
             if(!bool(row,"hostile")&&!down&&EliteRules.Kind.of(elite)!=null)upright(g,x,y,rotation,()->HeroIcons.draw(g,elite,x,y,11,1));
-            else marker(g,x,y,rotation,type,role==null?"":role,1);
+            else if(!down){float yaw=row.has("yaw")?row.get("yaw").getAsFloat():0;
+                // The map pose already carries its rotation, so preserve world heading for player masks.
+                Bf1Players.draw(g,x,y,yaw+headingOffset,false,squad,1,PlayerMarkerSize.ALLY);
+            }else marker(g,x,y,rotation,type,role==null?"":role,1);
             if(options!=null&&options.names&&!bool(row,"hostile"))upright(g,x,y,rotation,()->TacticalColors.label(g,font,Engine.str(row,"name",""),x,y+11,squad?TacticalColors.SELF:TacticalColors.FRIEND));
         }
     }

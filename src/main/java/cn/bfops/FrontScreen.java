@@ -22,8 +22,10 @@ abstract class FrontScreen extends Screen {
     protected FrontButton dropdown(Form form,String label,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){return dropdown(form,form.take(Layout.ROW),label,current,options,chosen);}
     protected FrontButton dropdown(Form form,Layout.Rect rect,String label,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){
         String value=options.stream().filter(c->c.id().equals(current)).map(ChoiceScreen.Choice::name).findFirst().orElse(current);
+        var selectedIcon=options.stream().filter(c->c.id().equals(current)).findFirst().orElse(null);
+        boolean hasIcon=selectedIcon!=null&&selectedIcon.kind()!=null&&!selectedIcon.kind().isBlank()&&selectedIcon.icon()!=null&&!selectedIcon.icon().isBlank();
         FrontButton[] holder=new FrontButton[1];
-        holder[0]=place(form,rect,label,value+"  ▾","","",!options.isEmpty(),()->{dropdown=new DropdownMenu(holder[0],options,current,chosen);setFocused(holder[0]);});
+        holder[0]=place(form,rect,label,value+"  ▾",hasIcon?selectedIcon.kind():"",hasIcon?selectedIcon.icon():"",!options.isEmpty(),()->{dropdown=new DropdownMenu(holder[0],options,current,chosen);setFocused(holder[0]);});
         return holder[0];
     }
     protected void openChoice(String title,String current,java.util.List<ChoiceScreen.Choice> options,Consumer<String> chosen){
@@ -64,7 +66,9 @@ abstract class FrontScreen extends Screen {
     protected final void rebuild(){
         if(dropdownOpen()){rebuildPending=true;return;}
         rebuildPending=false;
+        long started=System.nanoTime();
         rebuildContent();
+        PerfProbe.mark("rebuild:"+windowTitle,System.nanoTime()-started);
     }
 
     /** Paint the working area. Widgets are drawn by their owning {@link Form}. */
@@ -93,7 +97,24 @@ abstract class FrontScreen extends Screen {
     /** One line of context drawn next to the window title, e.g. the selected map. */
     protected boolean worldBackdrop() { return minecraft != null && minecraft.level != null; }
 
+    /**
+     * Draws this page in the BF1 reference style: translucent plates, white glyph icons, black-on-white
+     * selection. Item icons become white silhouettes, which is what makes a list of coloured weapon
+     * renders read like the reference screen.
+     */
+    protected boolean bf1Style(){return false;}
     protected boolean actionIcons(){return true;}
+    protected boolean horizontalTabs(){return false;}
+    private boolean expandedTabs(){return horizontalTabs()&&layout.tabs.w()/Math.max(1,tabs().length)>=56;}
+    protected void paintBackdrop(GuiGraphics g) {
+        // Pages with their own full-screen content (the deploy map) only get the dimming veil: an image
+        // under a map that fills the window is invisible, and any mistake in its alpha hides the map.
+        if (!showChrome()) {
+            Ui.backdrop(g, width, height);
+            return;
+        }
+        Bf1Ui.screenBackdrop(g, width, height);
+    }
     protected Layout layoutFor(int width,int height){return Layout.of(width,height);}
     protected boolean showBottomBar(){return true;}
     protected boolean showFooter(){return true;}
@@ -183,7 +204,7 @@ abstract class FrontScreen extends Screen {
 
     @Override
     public final void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        if (!worldBackdrop()) Ui.backdrop(graphics, width, height);
+        paintBackdrop(graphics);
         chrome(graphics, mouseX, mouseY);
         Layout.Rect bar = layout.bar;
         if (showBottomBar() && bar.h() > 0) {
@@ -192,10 +213,16 @@ abstract class FrontScreen extends Screen {
         }
         // Same reasoning for painting: a bad frame should cost one frame, not the session. The error is logged
         // once per distinct message so a per-frame failure cannot flood the log.
+        long started=System.nanoTime();
+        boolean style=bf1Style(),previousStyle=Ui.bf1(),previousWhite=AssetIcons.whiteIcons();
+        Ui.bf1(style);AssetIcons.whiteIcons(style);
         try {
             paint(graphics, mouseX, mouseY, partialTick);
         } catch (RuntimeException | LinkageError ex) {
             reportPaintFailure(ex);
+        } finally {
+            Ui.bf1(previousStyle);AssetIcons.whiteIcons(previousWhite);
+            PerfProbe.mark("paint:"+windowTitle,System.nanoTime()-started);
         }
         if(showFooter())foot(graphics);
         // The menu drop-down is drawn AFTER the page content: it is a pop-up, so the panes must not cover it.
@@ -221,7 +248,15 @@ abstract class FrontScreen extends Screen {
         // A full-screen page (the deploy map) carries its own chrome; the window title/tab band must not
         // be drawn underneath it, or the leftover band shows through at the top.
         if (!showChrome()) return;
-        if (tabs().length > 0) {
+        if (expandedTabs() && tabs().length > 0) {
+            Layout.Rect[] cells=tabRects();
+            for(int i=0;i<cells.length;i++){
+                var r=cells[i]; boolean active=i==activeTab(),hover=r.inside(mouseX,mouseY);
+                if(active||hover) graphics.fill(r.x(),r.y(),r.right(),r.bottom(),active?0x30ffffff:0x18ffffff);
+                graphics.drawString(font,Ui.clip(font,tabs()[i],r.w()-12),r.x()+6,r.y()+(r.h()-8)/2,active?0xffffffff:Ui.TEXT_DIM,false);
+                if(active)graphics.fill(r.x(),r.bottom()-2,r.right(),r.bottom(),0xffffffff);
+            }
+        } else if (tabs().length > 0) {
             // The tab strip is collapsed into one small menu button; the tabs open as a dropdown under it.
             Layout.Rect toggle = menuButton();
             boolean hovered = toggle.inside(mouseX, mouseY);
@@ -285,7 +320,10 @@ abstract class FrontScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if(dropdown!=null){if(button==0){dropdown.layout(width,height);chooseDropdown(dropdown.click(mouseX,mouseY));}else dropdown=null;return true;}
-        if (button == 0 && tabs().length > 0) {
+        if (button == 0 && showChrome() && expandedTabs() && tabs().length > 0) {
+            var cells=tabRects();for(int i=0;i<cells.length;i++)if(cells[i].inside(mouseX,mouseY)){if(i!=activeTab())onTab(i);return true;}
+        }
+        if (button == 0 && showChrome() && !expandedTabs() && tabs().length > 0) {
             Layout.Rect toggle = menuButton();
             if (toggle.inside(mouseX, mouseY)) { tabsOpen = !tabsOpen; return true; }
             if (tabsOpen) {

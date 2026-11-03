@@ -13,7 +13,9 @@ public final class FrontVoiceCueEmitter {
         if (sourcePlayer == null || sourcePlayer.server == null) {
             return;
         }
-        if(cue==VoiceCue.DOWNED_HELP){if(cn.bfops.BattlefieldOps.engine!=null)cn.bfops.BattlefieldOps.engine.callRescue(sourcePlayer);return;}
+        if(cue==VoiceCue.DOWNED_HELP&&cn.bfops.BattlefieldOps.engine!=null&&cn.bfops.BattlefieldOps.engine.isDowned(sourcePlayer)){
+            cn.bfops.BattlefieldOps.engine.callRescue(sourcePlayer);return;
+        }
         CampType camp = GdcqCompat.resolveCamp(sourcePlayer);
         FrontVoiceAudioEmitter.broadcastCueForEntity(cue, camp, sourcePlayer, 1.0F, 1.0F, 32.0F);
     }

@@ -20,6 +20,24 @@ final class MinimapSettingsScreen extends FrontScreen {
     private void toggle(String name,boolean value,Runnable action,Form form){row(form,name,value?"开":"关",()->{action.run();rebuild();});}
     protected void rebuildContent(){
         int l=left==null?0:left.scroll(),r=right==null?0:right.scroll();clearWidgets();left=newForm(Ui.headerBody(layout.left));right=newForm(Ui.headerBody(layout.right));
+        {
+            String current = ClientPrefs.screenBackground();
+            String label = current.isBlank() ? "内置（BF1）" : current;
+            row(left, "界面背景图", label, () -> {
+                java.util.List<String> options = new java.util.ArrayList<>();
+                options.add("");
+                options.addAll(ScreenBackground.names());
+                int index = options.indexOf(current);
+                ClientPrefs.setScreenBackground(options.get((index + 1) % options.size()));
+                rebuild();
+            });
+            row(left, "重新扫描背景文件夹", "config/battlefield_ops/backgrounds", () -> {
+                ScreenBackground.refresh();
+                ClientPrefs.setScreenBackground("");
+                rebuild();
+            });
+        }
+        toggle("倒地显示死亡界面", ClientPrefs.deathOverDowned(), () -> ClientPrefs.toggleDeathOverDowned(), left);
         toggle("显示小地图",!hidden,()->hidden=!hidden,left);
         if(nativeSettings.ready){
             left.section("Xaero 当前配置档");

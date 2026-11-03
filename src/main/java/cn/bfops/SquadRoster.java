@@ -14,7 +14,7 @@ final class SquadRoster {
             if(!name.isEmpty()&&result.stream().noneMatch(r->r.name.equals(name)))result.add(new Row(name,name.equals(self),bool(entry,"alive"),bool(entry,"downed"),Engine.str(entry,"kit",""),bool(entry,"leader")));
         }
         if(!self.isEmpty()&&result.stream().noneMatch(Row::self))result.addFirst(new Row(self,true,bool(me,"alive"),bool(me,"downed"),Engine.str(me,"kit",""),false));
-        result.sort(Comparator.comparing(Row::self).reversed().thenComparing(Row::name));return result.stream().limit(4).toList();
+        result.sort(Comparator.comparing(Row::self).reversed().thenComparing(Row::name));return result.stream().limit(SquadRules.CAPACITY).toList();
     }
 
     /** Battlefield squad row: yellow circle for yourself, green for mates, light-gray id, star for the leader. */
@@ -23,12 +23,16 @@ final class SquadRoster {
         for(var row:rows){
             int cy=y+6;
             // The circle carries the relationship: yellow is you, green is a squadmate.
-            dot(g,x+6,cy,6,row.self()?0xf0ffd23f:0xc02f8f57);
-            AssetIcons.draw(g,"role",row.kit(),x+1,cy-5,10,10);
-            int color=row.downed()?TacticalColors.ENEMY:0xffe8eef2;
+            if(row.alive()&&!row.downed()){
+                dot(g,x+6,cy,6,row.self()?0xf0ffd23f:0xc02f8f57);
+                AssetIcons.whiteIcons(true);
+                try{AssetIcons.draw(g,"role",row.kit(),x,cy-7,14,14);}
+                finally{AssetIcons.whiteIcons(false);}
+            }else Bf1Ui.icon(g,"death_hud_default",x,cy-7,14);
+            int color=row.alive()&&!row.downed()?0xffe8eef2:0xffb8c2c7;
             String clipped=Ui.clip(font,row.name(),100);
             g.drawString(font,clipped,x+16,y+2,color,true);
-            if(row.leader())g.drawString(font,"★",x+18+font.width(clipped),y+2,0xffffd23f,true);
+            if(row.leader())Bf1Ui.icon(g,"squadleader_hud_default",x+18+font.width(clipped),y+1,10);
             y+=14;
         }
     }
@@ -49,7 +53,7 @@ final class SquadRoster {
         g.drawString(font,squad>0?SquadRules.label(squad):"个人",x+2,y+2,TacticalColors.MATE,true);int line=y+13;
         for(var row:rows){int color=row.downed?TacticalColors.ENEMY:row.self?TacticalColors.SELF:row.alive?TacticalColors.MATE:0xff7293a3;
             String status=row.downed?"倒地":row.alive?"":"待部署";String suffix=(row.self?" · 你":"")+(status.isEmpty()?"":" · "+status);
-            AssetIcons.draw(g,"role",row.kit,x+2,line-1,11,11);
+            AssetIcons.draw(g,"role",row.kit,x+2,line-1,12,12);
             g.drawString(font,Ui.clip(font,row.name+suffix,Math.max(8,width-21)),x+17,line,color,true);
             line+=13;
         }

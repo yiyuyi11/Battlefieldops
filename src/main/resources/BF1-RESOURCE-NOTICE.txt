@@ -1,0 +1,6 @@
+BF1 UI resources in this local build were extracted from the user's Battlefield 1 installation.
+Original Battlefield 1 art, icons, fonts and frontend scripts are EA/DICE resources, not original Battlefield Ops artwork.
+The project's MIT code license does not extend to those extracted resources.
+See assets/battlefield_ops/bf1_asset_manifest.json for imported artwork and provenance.
+The full local extraction inventory is D:/GTMchange/bf1-ui/.
+Extraction tooling: NicknineTheEagle/Frostbite-Scripts; texture definitions verified against CadeEvs/FrostyToolsuite 1.0.6.3.

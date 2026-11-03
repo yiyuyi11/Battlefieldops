@@ -29,7 +29,7 @@ final class BattleScreen extends FrontScreen {
     }
     private void customize(String kind,String id){
         Model.require(!id.isEmpty(),"请先选择装备");
-        minecraft.setScreen(new FittingScreen(this,selected,id,kind,fitting(kind,id),kit()==null?"":kit().id));
+        minecraft.setScreen(FittingScreen.open(this,selected,id,kind,fitting(kind,id),kit()==null?"":kit().id));
     }
     private boolean tacticalMap;
     private boolean overviewOnly=true;
@@ -43,6 +43,7 @@ final class BattleScreen extends FrontScreen {
     boolean fullBattlefield(){return overviewOnly && tab==0 && DeploymentLock.room(Client.state) && !alive() && !tacticalMap;}
     Layout.Rect overviewViewport(){return fullBattlefield()?new Layout.Rect(0,0,width,height):Ui.headerBody(layout.right);}
 
+    @Override protected boolean horizontalTabs(){return true;}
     @Override protected boolean showBottomBar(){return !fullBattlefield();}
     @Override protected boolean showFooter(){return !fullBattlefield();}
     @Override protected boolean showChrome(){return !fullBattlefield();}
@@ -249,11 +250,7 @@ final class BattleScreen extends FrontScreen {
     }
 
     private String teamName() {
-        return switch (team()) {
-            case 0 -> "机械轴心";
-            case 1 -> "格雷同盟";
-            default -> "未选队";
-        };
+        return Factions.name(arena,team());
     }
 
     private void chooseVehicle(List<String> options,String title){
@@ -265,6 +262,7 @@ final class BattleScreen extends FrontScreen {
     }
 
     /** Sets the vehicle pick and keeps the spawn usable for it, so the two rows never disagree. */
+    String selectedSite(){return spawn;}
     boolean vehicleSpawnAllowed(){return DeploymentRules.canSpawnNew(site(spawn));}
     void selectSite(String id){
         Deploy.Site target=site(id);Model.require(target!=null,"部署目标已失效");
@@ -303,11 +301,13 @@ final class BattleScreen extends FrontScreen {
 
     /** True when the id may be taken in this slot: any gun at a firing range, otherwise the kit's list. */
     boolean gunAllowed(Model.Kit kit, boolean main, String id) {
+        if(kit==null)return false;
         if (arena != null && arena.isTraining()) return allGuns().contains(id);
         return kit.options(main,team()).contains(id);
     }
 
     boolean meleeAllowed(Model.Kit kit, String id) {
+        if(kit==null)return false;
         if (arena != null && arena.isTraining()) return !id.isEmpty();
         return kit.meleeOptions(team()).contains(id);
     }
@@ -325,7 +325,7 @@ final class BattleScreen extends FrontScreen {
      * refuses (or miss ones it allows). The local computation survives only as a fallback for the
      * handful of ticks before the first snapshot arrives.
      */
-    private List<Deploy.Site> sites() {
+    List<Deploy.Site> sites() {
         return Deploy.fromState(Client.state, arena, team());
     }
 
@@ -398,6 +398,7 @@ final class BattleScreen extends FrontScreen {
         return true;
     }
 
+    @Override protected boolean bf1Style(){return true;}
     @Override
     protected String subtitle() {
         String mapName = arena == null ? "未选择地图" : arena.name;
@@ -432,6 +433,7 @@ final class BattleScreen extends FrontScreen {
     }
 
     /** Called by {@link Client} whenever a server snapshot arrives. */
+    private JsonObject lastControls;
     void updated() {
         String msg = Engine.str(Client.state, "message", "");
         if (!msg.isEmpty()) {
@@ -444,13 +446,15 @@ final class BattleScreen extends FrontScreen {
             return;
         }
         if (msg.startsWith("操作失败")) awaitingDeploy = false;
+        JsonObject controls=UiSnapshot.controls(Client.state);
+        if(controls.equals(lastControls))return;
+        lastControls=controls;
         sync();
     }
 
     private void sync() {
         selected = Engine.str(Client.state, "selected", "");
-        arena = Client.state.has("arena")
-                ? BattlefieldOps.GSON.fromJson(Client.state.get("arena"), Model.Arena.class) : null;
+        arena = FactionArt.arena();
         if (arena != null) {
             if(!selectionMap.equals(selected)){
                 selectionMap=selected;
@@ -521,49 +525,44 @@ final class BattleScreen extends FrontScreen {
         if(fullBattlefield()){
             clearWidgets(); // Hidden controls must not remain clickable or keyboard-focusable.
             // Battlefield layout: squad by the squad list, loadout options stacked on the right above
-            // Deploy, and the leave action tucked into the top-left where it cannot be hit by accident.
-            var squadRect=new Layout.Rect(8,height-142,112,22);
+            // Deploy, and the leave action at bottom-left, separated from deployment.
+            var bfLayout=new Bf1Layout(width,height);
+            var squadRect=bfLayout.squad;
             overviewSquad=newForm(squadRect);
             place(overviewSquad,squadRect.inset(2),"小队 "+SquadRules.label(Engine.num(me(),"squad",0)),"","","",!alive(),()->minecraft.setScreen(new SquadSelectScreen(this)));
             overviewSquad.finish();
-            int rightW=136,rx=Math.max(8,width-rightW-8),btnH=24,gap=2,deployTop=height-38;
-            // A firing range gets one extra action: re-arm with the current loadout, live, without dying.
+            overviewRight=newForm(bfLayout.options);
             boolean training=arena!=null&&arena.isTraining();
-            int rows=training?5:4;
-            int by=deployTop-6-rows*(btnH+gap);
-            overviewRight=newForm(new Layout.Rect(rx,by,rightW,rows*(btnH+gap)));
-            int row=0;
-            if(training)place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"切换配装","","","",!alive(),this::rearm);
-            
-            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"兵种配装","","","",kit()!=null,()->minecraft.setScreen(new LoadoutScreen(this)));
-            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"部署选项","","","",true,()->{overviewOnly=false;rebuild();});
-            place(overviewRight,new Layout.Rect(rx,by+(row++)*(btnH+gap),rightW,btnH),"战术地图","","","",true,()->{tacticalMap=true;overviewOnly=false;rebuild();});
-        if (hasAmmoChoice()) ammoRows(overviewRight);
+            if(training)row(overviewRight,"切换配装","",!alive(),this::rearm);
+            row(overviewRight,"兵种配装","",kit()!=null,()->minecraft.setScreen(new LoadoutScreen(this)));
+            row(overviewRight,"部署选项","",()->{overviewOnly=false;rebuild();});
+            row(overviewRight,"战术地图","",()->{tacticalMap=true;overviewOnly=false;rebuild();});
+            if(hasAmmoChoice())ammoRows(overviewRight);
             overviewRight.finish();
-            // Leave room: top-left, far from the deploy action.
-            var leaveRect=new Layout.Rect(8,44,96,20);
+            // Leave room: bottom-left, far from the deploy action.
+            var leaveRect=new Layout.Rect(8,height-30,100,20);
             overviewLeave=newForm(leaveRect);
             place(overviewLeave,leaveRect.inset(2),"离开房间","","","",true,()->minecraft.setScreen(new ConfirmActionScreen(this,"退出当前房间？","退出后返回大厅并恢复原背包。","退出房间",()->send("lobbyReturn"))));
             overviewLeave.finish();
             // Fullscreen weapon strip: class dropdown at the left, then the five weapon slots, like
             // Battlefield's bottom bar.
-            int stripW=Math.max(340,Math.min(600,width-360));
-            var stripRect=new Layout.Rect((width-stripW)/2,height-68,stripW,26);
+            var stripRect=bfLayout.loadout;
             overviewLoadout=newForm(stripRect);
-            var stripCells=Layout.columns(stripRect.inset(2),8,3);
+            var stripCells=new Layout.Rect[8];
+            for(int i=0;i<8;i++)stripCells[i]=bfLayout.slot(i);
             dropdown(overviewLoadout,stripCells[0],"兵种",kit()==null?"":kit().id,kitChoices(),id->{selectKit(id);rebuild();});
-            place(overviewLoadout,stripCells[1],"主 "+name(first(kit(),true)),"","","",kit()!=null,()->weapon(kit(),true));
-            place(overviewLoadout,stripCells[2],"副 "+name(first(kit(),false)),"","","",kit()!=null,()->weapon(kit(),false));
-            place(overviewLoadout,stripCells[3],"近身 "+meleeName(melee),"","","",kit()!=null,this::pickMelee);
-            place(overviewLoadout,stripCells[4],"投掷 "+meleeName(throwable)+countSuffix(throwable),"","","",kit()!=null,this::pickThrowable);
-            place(overviewLoadout,stripCells[5],"战术1 "+meleeName(tactical1)+countSuffix(tactical1),"","","",kit()!=null,()->pickTactical(false));
-        place(overviewLoadout,stripCells[6],"战术2 "+meleeName(tactical2)+countSuffix(tactical2),"","","",kit()!=null,()->pickTactical(true));
+            place(overviewLoadout,stripCells[1],"主 "+name(first(kit(),true)),"",AssetIcons.silhouetteKind(first(kit(),true)),first(kit(),true),kit()!=null,()->weapon(kit(),true)).preview=true;
+            place(overviewLoadout,stripCells[2],"副 "+name(first(kit(),false)),"",AssetIcons.silhouetteKind(first(kit(),false)),first(kit(),false),kit()!=null,()->weapon(kit(),false)).preview=true;
+            place(overviewLoadout,stripCells[3],"近身 "+meleeName(melee),"",AssetIcons.silhouetteKind(melee),melee,kit()!=null,this::pickMelee).preview=true;
+            place(overviewLoadout,stripCells[4],"投掷 "+meleeName(throwable)+countSuffix(throwable),"",AssetIcons.silhouetteKind(throwable),throwable,kit()!=null,this::pickThrowable).preview=true;
+            place(overviewLoadout,stripCells[5],"战术1 "+meleeName(tactical1)+countSuffix(tactical1),"",AssetIcons.silhouetteKind(tactical1),tactical1,kit()!=null,()->pickTactical(false)).preview=true;
+        place(overviewLoadout,stripCells[6],"战术2 "+meleeName(tactical2)+countSuffix(tactical2),"",AssetIcons.silhouetteKind(tactical2),tactical2,kit()!=null,()->pickTactical(true)).preview=true;
         place(overviewLoadout,stripCells[7],"全部配装","","","",true,()->minecraft.setScreen(new LoadoutScreen(this)));
         // Ammunition choice needs its own strip: the loadout bar above is a single row of cells, and the
         // left panel does not exist yet on this page (it is built for the list view).
             overviewLoadout.finish();
             // Battlefield pins the primary Deploy action to the bottom-right, apart from the smaller controls.
-            var deployRect=new Layout.Rect(Math.max(width-144,8),height-38,136,30);
+            var deployRect=bfLayout.deploy;
             overviewDeploy=newForm(deployRect);
             var deployButton=place(overviewDeploy,deployRect.inset(2),"部署","","","",deployReady,this::deploy);
             deployButton.primary=true;
@@ -627,8 +626,8 @@ final class BattleScreen extends FrontScreen {
         if (team() < 0) {
             f.paragraph("房间已加入，但还没有选择阵营。阵营决定出生点、队伍颜色和计分板归属。", Ui.TEXT_WARN);
             f.skip(2);
-            primary(f, "选择机械轴心 / 进攻方", true, () -> chooseTeam(0));
-            primary(f, "选择格雷同盟 / 防守方", true, () -> chooseTeam(1));
+            primary(f, "选择 "+Factions.name(arena,0)+" / 进攻方", true, () -> chooseTeam(0));
+            primary(f, "选择 "+Factions.name(arena,1)+" / 防守方", true, () -> chooseTeam(1));
             f.skip(2);
             row(f,"退出房间","返回游戏大厅",LobbyScreen::open);
             return;
@@ -869,6 +868,7 @@ final class BattleScreen extends FrontScreen {
 
     /** Icon id for a weapon row: the current pick, or the first authorised option. */
     private String first(Model.Kit kit, boolean main) {
+        if(kit==null)return "";
         String chosen = main ? primary : secondary;
         if (chosen != null && !chosen.isEmpty()) return chosen;
         return kit.options(main,team()).stream().filter(id -> !id.isEmpty()).findFirst().orElse("");
@@ -999,6 +999,7 @@ final class BattleScreen extends FrontScreen {
     }
 
     private void weapon(Model.Kit kit, boolean main) {
+        if(kit==null){warn("兵种数据尚未就绪，请先选择兵种");return;}
         // A firing range offers every scanned gun; a normal map still offers only the kit's list.
         java.util.List<String> ids = arena != null && arena.isTraining()
                 ? allGuns()
@@ -1230,8 +1231,8 @@ final class BattleScreen extends FrontScreen {
         f.caption("当前阵营  " + teamName(), team() < 0 ? Ui.TEXT_WARN
                 : team() == 0 ? Ui.BLUE : Ui.RED);
         if (team() < 0) {
-            primary(f, "选择机械轴心 / 进攻方", true, () -> chooseTeam(0));
-            primary(f, "选择格雷同盟 / 防守方", true, () -> chooseTeam(1));
+            primary(f, "选择 "+Factions.name(arena,0)+" / 进攻方", true, () -> chooseTeam(0));
+            primary(f, "选择 "+Factions.name(arena,1)+" / 防守方", true, () -> chooseTeam(1));
         }
         if (inMatch()) primary(f, "前往部署", true, () -> { tab = 0; rebuild(); });
         row(f,"退出房间","返回游戏大厅",LobbyScreen::open);
@@ -1279,7 +1280,7 @@ final class BattleScreen extends FrontScreen {
             }
             return;
         }
-        Model.Arena arena=BattlefieldOps.GSON.fromJson(Client.state.get("arena"),Model.Arena.class);
+        Model.Arena arena=FactionArt.arena();
         int y=body.y()+3;
         g.drawString(font,Ui.clip(font,MatchScore.line(arena,Client.state),body.w()-10),body.x()+5,y,Ui.TEXT,false);
         y+=12;
@@ -1348,6 +1349,7 @@ final class BattleScreen extends FrontScreen {
     public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
         if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
         if(fullBattlefield()){
+            if(overviewRight!=null&&overviewRight.wheel(mouseX,mouseY,vertical))return true;
             // Wheel zooms the overhead deploy camera: larger height = zoomed out.
             if(vertical!=0)Client.overviewZoom=Math.max(0.25,Math.min(4.0,Client.overviewZoom*(vertical>0?0.88:1.14)));
             return true;
@@ -1366,6 +1368,8 @@ final class BattleScreen extends FrontScreen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if(fullBattlefield()&&button==0){
+            var geometry=new Bf1Layout(width,height);
+            if(geometry.weapon.inside(mouseX,mouseY)||geometry.loadout.inside(mouseX,mouseY)||geometry.options.inside(mouseX,mouseY)||geometry.squad.inside(mouseX,mouseY)||geometry.deploy.inside(mouseX,mouseY))return super.mouseDragged(mouseX,mouseY,button,dragX,dragY);
             // Drag pans the overhead camera across the ground. At pitch +90/yaw 0 screen-right is world -X
             // and screen-down is world -Z, so the offsets invert the drag on both axes.
             double blocksPerPixel=0.5*Client.overviewZoom;
@@ -1382,19 +1386,21 @@ final class BattleScreen extends FrontScreen {
     protected void paint(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if(fullBattlefield()){
             DeployMarkers.draw(graphics,minecraft);
+            Bf1Ui.deployShade(graphics,width,height);
             // Top-left: the faction the player is on, with its flag.
             int side=team();
-            String faction=side<0?"未选择阵营":Board.label(side);
+            String faction=Ui.clip(font,side<0?"未选择阵营":Factions.name(arena,side),Math.max(40,width/4-30));
             int factionColor=side<0?Ui.TEXT_DIM:side==0?Ui.BLUE:Ui.RED;
             graphics.fill(8,8,8+font.width(faction)+24,24,0x90101820);
-            graphics.fill(14,12,24,22,factionColor);
+            Bf1Ui.icon(graphics,FactionArt.icon(side),12,9,16);
             graphics.drawString(font,faction,28,14,factionColor,false);
             // Top-right: map name in large type, mode underneath in dim small type.
             if(arena!=null){
-                String mapName=arena.name,modeName=arena.modeName();
+                float mapScale=width>=620?1.6f:1f;
+                String mapName=Ui.clip(font,arena.name,Math.max(40,(int)((width/4-16)/mapScale))),modeName=arena.modeName();
                 graphics.pose().pushPose();
                 try{
-                    float scale=2f;
+                    float scale=mapScale;
                     int textW=(int)(font.width(mapName)*scale);
                     graphics.pose().translate(width-10-textW,4,200);
                     graphics.pose().scale(scale,scale,1);
@@ -1408,32 +1414,36 @@ final class BattleScreen extends FrontScreen {
                 int friendly=team()==1?1:0,enemy=1-friendly;
                 long remaining=Math.max(0,arena.roundMinutes*60L-Engine.num(Client.state,"elapsed",0));
                 String clock=String.format(java.util.Locale.ROOT,"%02d:%02d",remaining/60,remaining%60);
-                int center=width/2,barWidth=Math.max(40,Math.min(100,width/2-110));
+                int center=width/2,barWidth=Math.max(24,Math.min(72,width/10)),scoreY=width<620?30:4;
                 String left=String.valueOf(tickets[friendly]),right=String.valueOf(tickets[enemy]);
                 // Symmetric: [score][bar]  clock  [bar][score], both bars growing outward from the centre.
-                int leftBarX=center-66-barWidth,rightBarX=center+66;
-                graphics.fill(leftBarX-6,2,rightBarX+barWidth+6,20,0x90101820);
-                graphics.drawString(font,left,leftBarX-6-font.width(left),7,0xff9bc3ff,true);
-                CombatHud.scoreBar(graphics,leftBarX,9,barWidth,tickets[friendly]/(double)MatchScore.maximum(arena),Ui.BLUE,true,true);
-                graphics.drawCenteredString(font,clock,center,6,0xffe4edf2);
-                CombatHud.scoreBar(graphics,rightBarX,9,barWidth,tickets[enemy]/(double)MatchScore.maximum(arena),Ui.RED,false,true);
-                graphics.drawString(font,right,rightBarX+barWidth+6,7,0xffff9b9b,true);
-                graphics.drawCenteredString(font,"先达到 "+MatchScore.maximum(arena)+" 分获胜",center,21,0xffa8b0b8);
+                int leftBarX=center-24-barWidth,rightBarX=center+24;
+                graphics.fill(leftBarX-6,scoreY-2,rightBarX+barWidth+6,scoreY+16,0x90101820);
+                graphics.drawString(font,left,leftBarX-6-font.width(left),scoreY+3,0xff9bc3ff,true);
+                CombatHud.scoreBar(graphics,leftBarX,scoreY+5,barWidth,tickets[friendly]/(double)MatchScore.maximum(arena),Ui.BLUE,true,true);
+                graphics.drawCenteredString(font,clock,center,scoreY+2,0xffe4edf2);
+                CombatHud.scoreBar(graphics,rightBarX,scoreY+5,barWidth,tickets[enemy]/(double)MatchScore.maximum(arena),Ui.RED,false,true);
+                graphics.drawString(font,right,rightBarX+barWidth+6,scoreY+3,0xffff9b9b,true);
+                if(width>=620)graphics.drawCenteredString(font,"先达到 "+MatchScore.maximum(arena)+" 分获胜",center,21,0xffa8b0b8);
             }
             // Only a real countdown or an error is worth a status line; the deploy action is the button now.
             String status=awaitingDeploy?"正在部署…":respawnRemaining()>0?"部署倒计时 "+respawnRemaining()+" 秒":!flag("roomRunning")?"等待房主开始对局":"";
             boolean error=message.startsWith("操作失败");
             if(error)status=message;
             if(!status.isEmpty()){
-                graphics.fill(width/2-150,28,width/2+150,46,0xc010181f);
-                graphics.drawCenteredString(font,Ui.clip(font,status,300),width/2,32,error?Ui.TEXT_ERROR:Ui.TEXT);
+                int statusY=width<620?48:28;
+                graphics.fill(width/2-150,statusY,width/2+150,statusY+16,0xc010181f);
+                graphics.drawCenteredString(font,Ui.clip(font,status,292),width/2,statusY+4,error?Ui.TEXT_ERROR:Ui.TEXT);
             }
             // Battlefield keeps the squad list along the bottom-left of the deploy screen.
             var roster=SquadRoster.rows(Client.state);
             if(!roster.isEmpty()){
                 int squad=Client.state.has("me")?Engine.num(Client.state.getAsJsonObject("me"),"squad",0):0;
                 // Same clean row style as the HUD: no "· 你", no squad header; nothing when unassigned.
-                SquadRoster.drawAt(graphics,font,roster,10,height-104,squad);
+                var geometry=new Bf1Layout(width,height);
+                int rosterY=geometry.squad.bottom()+4;
+                int visibleRows=Math.max(0,Math.min(roster.size(),(geometry.loadout.y()-rosterY-2)/14));
+                SquadRoster.drawAt(graphics,font,roster.subList(0,visibleRows),10,rosterY,squad);
             }
             if(overviewSquad!=null)overviewSquad.render(graphics,mouseX,mouseY,partialTick);
             if(overviewLoadout!=null)overviewLoadout.render(graphics,mouseX,mouseY,partialTick);
@@ -1594,6 +1604,10 @@ final class BattleScreen extends FrontScreen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {if(dropdownOpen())return super.mouseClicked(mouseX,mouseY,button);
         if(fullBattlefield()){
             if(super.mouseClicked(mouseX,mouseY,button))return true;
+            var geometry=new Bf1Layout(width,height);
+            // Disabled widgets and spaces between controls must not select a marker behind the UI.
+            if(geometry.weapon.inside(mouseX,mouseY)||geometry.loadout.inside(mouseX,mouseY)||geometry.options.inside(mouseX,mouseY)
+                    ||geometry.squad.inside(mouseX,mouseY)||geometry.deploy.inside(mouseX,mouseY))return true;
             if(button==0&&mouseY>layout.title.bottom()+34&&mouseY<height-42){
                 String picked=pickSpawn(new Layout.Rect(0,0,width,height),mouseX,mouseY);
                 if(picked!=null){selectSite(picked);rebuild();return true;}

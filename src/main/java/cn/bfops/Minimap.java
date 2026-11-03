@@ -509,26 +509,7 @@ final class Minimap {
      * heading convention as {@code TacticalColors.viewCone}, so the two always agree.
      */
     private static void selfArrow(GuiGraphics g, int x, int y, float yawDegrees, int colour) {
-        float size = ClientPrefs.selfArrowSize();
-        double heading = Math.toRadians(yawDegrees);
-        double dirX = -Math.sin(heading), dirY = Math.cos(heading);
-        double sideX = dirY, sideY = -dirX;
-        // All proportions hang off one number, so the configured size scales the whole shape evenly.
-        double tip = size * 0.72, back = size * 0.39, half = size * 0.44, haloScale = 1.32;
-        float tipX = (float) (x + dirX * tip), tipY = (float) (y + dirY * tip);
-        float backX = (float) (x - dirX * back), backY = (float) (y - dirY * back);
-        float leftX = (float) (backX + sideX * half), leftY = (float) (backY + sideY * half);
-        float rightX = (float) (backX - sideX * half), rightY = (float) (backY - sideY * half);
-        // White halo first: the marker has to stay readable over both dark terrain and bright sand.
-        int halo = 0xd8ffffff;
-        TacticalColors.triangle(g,
-                x + (int) Math.round(dirX * tip * haloScale), y + (int) Math.round(dirY * tip * haloScale),
-                x + (int) Math.round(-dirX * back * haloScale + sideX * half * haloScale),
-                y + (int) Math.round(-dirY * back * haloScale + sideY * half * haloScale),
-                x + (int) Math.round(-dirX * back * haloScale - sideX * half * haloScale),
-                y + (int) Math.round(-dirY * back * haloScale - sideY * half * haloScale),
-                halo);
-        TacticalColors.triangle(g, (int) tipX, (int) tipY, (int) leftX, (int) leftY, (int) rightX, (int) rightY, colour);
+        Bf1Players.draw(g,x,y,yawDegrees,true,false,1,PlayerMarkerSize.self(ClientPrefs.selfArrowSize()));
     }
 
 }

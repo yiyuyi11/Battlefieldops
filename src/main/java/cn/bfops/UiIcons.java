@@ -102,6 +102,14 @@ public final class UiIcons {
      */
     public static void draw(GuiGraphics g, int icon, int x, int y, int size) {
         if (icon < 0 || icon >= COUNT || size <= 0) return;
+        String nativeIcon=switch(icon){
+            case MARKER_FRIEND -> "player_map_default";
+            case MARKER_HOSTILE -> "player_map_enemy";
+            case VEHICLE_GROUND -> "vehicles_tank_default_default";
+            case VEHICLE_AIR -> "vehicles_jet_default_default";
+            default -> null;
+        };
+        if(nativeIcon!=null){Bf1Ui.icon(g,nativeIcon,x,y,size);return;}
         int u = icon * CELL;
         if (size >= CELL) {
             // Integer multiples only: 32, 48... anything else reintroduces the fractional-scale blur.

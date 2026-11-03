@@ -92,7 +92,6 @@ public class ExternalTextureManager {
    }
 
    public static void init() {
-      ensureAllPresetsTextureFiles(false);
       reload();
    }
 
@@ -101,54 +100,20 @@ public class ExternalTextureManager {
       clearCache();
       ClientMessageLogger.chatInfo("battlefield_ops.client.texture.reloading");
       String currentPresetId = ConfigManager.getCurrentPresetId();
-      int loadedCount = loadTexturesForPreset(currentPresetId);
-      ClientMessageLogger.chatSuccess("battlefield_ops.client.texture.reload_success", currentPresetId, loadedCount);
+      // getTexture already resolves individual images on demand. Avoid decoding the whole preset at startup.
+      ClientMessageLogger.info("Texture cache cleared for %s; images load when displayed.", currentPresetId);
    }
 
    public static void reloadAsync() {
       TEXTURE_THREAD_POOL.submit(() -> {
          try {
-            ClientMessageLogger.info("Async texture reload started.");
             ensureAllPresetsTextureFiles(false);
-            String currentPresetId = ConfigManager.getCurrentPresetId();
-            Path presetDir = CONFIG_ASSETS_DIR.resolve(currentPresetId).resolve("textures");
-            Map<String, NativeImage> loadedImages = new HashMap<>();
-
-            for (String path : DEFAULT_TEXTURES) {
-               Path file = presetDir.resolve(path);
-               if (Files.exists(file)) {
-                  try (InputStream stream = new FileInputStream(file.toFile())) {
-                     NativeImage image = NativeImage.read(stream);
-                     loadedImages.put(path, image);
-                  } catch (IOException var13) {
-                     ClientMessageLogger.error("battlefield_ops.client.texture.load_fail", currentPresetId, path, var13.getMessage());
-                  }
-               }
-            }
-
             Minecraft.getInstance().execute(() -> {
                clearCache();
-               int successCount = 0;
-
-               for (Entry<String, NativeImage> entry : loadedImages.entrySet()) {
-                  String pathx = entry.getKey();
-                  NativeImage imagex = entry.getValue();
-
-                  try {
-                     DynamicTexture texture = new DynamicTexture(imagex);
-                     String dynamicName = "battlefield_ops_external_" + currentPresetId + "_" + pathx.replace("/", "_").replace(".", "_");
-                     ResourceLocation dynamicLoc = Minecraft.getInstance().getTextureManager().register(dynamicName, texture);
-                     TEXTURE_CACHE.put(currentPresetId + ":" + pathx, dynamicLoc);
-                     successCount++;
-                  } catch (Exception var10) {
-                     imagex.close();
-                  }
-               }
-
-               ClientMessageLogger.info("Async texture reload success for preset %s: %d loaded.", currentPresetId, successCount);
+               ClientMessageLogger.info("Texture cache cleared; images load when displayed.");
             });
-         } catch (Exception var14) {
-            ClientMessageLogger.error("Async texture reload failed: %s", var14.getMessage());
+         } catch (Exception error) {
+            ClientMessageLogger.error("Async texture reload failed: %s", error.getMessage());
          }
       });
    }
@@ -1193,37 +1158,19 @@ public class ExternalTextureManager {
 
    private static ExternalTextureManager.TextureDimensions readTextureDimensions(Path texturePath) {
       if (texturePath != null && Files.exists(texturePath)) {
-         try {
-            ExternalTextureManager.TextureDimensions var3;
-            try (InputStream stream = new FileInputStream(texturePath.toFile())) {
-               NativeImage image = NativeImage.read(stream);
-
+         try (InputStream stream = Files.newInputStream(texturePath);
+              var input = new javax.imageio.stream.MemoryCacheImageInputStream(stream)) {
+            var readers = javax.imageio.ImageIO.getImageReaders(input);
+            if (readers.hasNext()) {
+               var reader = readers.next();
                try {
-                  var3 = new ExternalTextureManager.TextureDimensions(image.getWidth(), image.getHeight());
-               } catch (Throwable var7) {
-                  if (image != null) {
-                     try {
-                        image.close();
-                     } catch (Throwable var6) {
-                        var7.addSuppressed(var6);
-                     }
-                  }
-
-                  throw var7;
-               }
-
-               if (image != null) {
-                  image.close();
-               }
+                  reader.setInput(input, true, true);
+                  return new ExternalTextureManager.TextureDimensions(reader.getWidth(0), reader.getHeight(0));
+               } finally { reader.dispose(); }
             }
-
-            return var3;
-         } catch (IOException var9) {
-            return new ExternalTextureManager.TextureDimensions(0, 0);
-         }
-      } else {
-         return new ExternalTextureManager.TextureDimensions(0, 0);
+         } catch (IOException ignored) {}
       }
+      return new ExternalTextureManager.TextureDimensions(0, 0);
    }
 
    private static void invalidateTextureState(String presetId, String textureName) {

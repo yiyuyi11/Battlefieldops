@@ -57,7 +57,7 @@ final class CombatHud {
     static void draw(GuiGraphics g,TerrainPreview terrain,double swayX,double swayY){
         var mc=Minecraft.getInstance();JsonObject state=Client.state,me=state.getAsJsonObject("me");
         EliteHud.draw(g,mc,state);
-        Model.Arena arena=BattlefieldOps.GSON.fromJson(state.get("arena"),Model.Arena.class);
+        Model.Arena arena=FactionArt.arena();
         int width=g.guiWidth(),height=g.guiHeight(),bar=Math.min(260,width-16),x=(width-bar)/2;
         int[] tickets={MatchScore.value(arena,state,0),MatchScore.value(arena,state,1)};
         boolean breakthrough=arena.isStaged();
@@ -83,14 +83,14 @@ final class CombatHud {
         // even before the numbers are legible.
         // Flags and names sit outside the two bars and are mirrored about the timer, so the whole row stays
         // symmetric: [name][flag][bar] timer [bar][flag][name].
-        String friendlyName=Board.label(friendly),enemyName=Board.label(enemy);
+        String friendlyName=FactionArt.name(friendly),enemyName=FactionArt.name(enemy);
         int leftBarStart=leftStart-7-barWidth,rightBarEnd=rightEnd+7+barWidth;
         int friendlyFlagX=Math.max(2,leftBarStart-11);
-        g.fill(friendlyFlagX,22,friendlyFlagX+7,28,friendlyColor);
+        Bf1Ui.icon(g,FactionArt.icon(friendly),friendlyFlagX-2,19,12);
         int friendlyLabelX=Math.max(2,friendlyFlagX-3-mc.font.width(friendlyName));
         g.drawString(mc.font,friendlyName,friendlyLabelX,21,0xff82b5ed,true);
         int enemyFlagX=Math.min(width-9,rightBarEnd+4);
-        g.fill(enemyFlagX,22,enemyFlagX+7,28,enemyColor);
+        Bf1Ui.icon(g,FactionArt.icon(enemy),enemyFlagX-2,19,12);
         int enemyLabelX=Math.min(width-mc.font.width(enemyName)-2,enemyFlagX+10);
         g.drawString(mc.font,enemyName,enemyLabelX,21,0xffe78a8a,true);
         if(arena.isDeathmatch())g.drawCenteredString(mc.font,"团队死斗 · 目标 "+arena.targetKills+" 击杀",width/2,33,0xffd8dde0);
@@ -163,7 +163,7 @@ final class CombatHud {
             }
         }
         // Downed state: show the bleed-out clock without obscuring crawling or aiming.
-        if(me.has("downed")&&me.get("downed").getAsBoolean()){
+        if(!ClientPrefs.deathOverDowned()&&me.has("downed")&&me.get("downed").getAsBoolean()){
             int left=Engine.num(state,"downLeft",0);
             g.drawCenteredString(mc.font,"你倒下了",width/2,height-111,0xffff6b6b);
             g.drawCenteredString(mc.font,"出血 "+left+"s · 标记键呼救 · 小队／支援兵空手右键救援",
@@ -176,7 +176,7 @@ final class CombatHud {
             g.fill(width/2-barW/2,height-88,width/2+barW/2,height-84,0xff000000);
             g.fill(width/2-barW/2,height-88,width/2-barW/2+filled,height-84,0xffff6b6b);
         }
-        if (me.has("downed") && me.get("downed").getAsBoolean()) {
+        if (!ClientPrefs.deathOverDowned() && me.has("downed") && me.get("downed").getAsBoolean()) {
             double fraction = Medic.fraction(Engine.num(state,"reviveProgress",0), Medic.reviveTicks(arena.reviveSeconds));
             if (fraction > 0) {
                 int px=width/2-60, py=height-81;

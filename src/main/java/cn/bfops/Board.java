@@ -91,6 +91,9 @@ final class Board {
      * can" rule, and vanilla already implements it per viewer 鈥?unlike glowing, which is global.
      */
     void apply(ServerPlayer player, String map, int team, boolean friendlyFire, boolean hideEnemyNametags) {
+        apply(player,map,team,friendlyFire,hideEnemyNametags,label(team));
+    }
+    void apply(ServerPlayer player,String map,int team,boolean friendlyFire,boolean hideEnemyNametags,String factionName){
         Scoreboard scoreboard = board();
         String name = player.getScoreboardName();
         String wanted = teamName(map, team);
@@ -112,8 +115,8 @@ final class Board {
         PlayerTeam target = scoreboard.getPlayerTeam(wanted);
         if (target == null) target = scoreboard.addPlayerTeam(wanted);
         target.setColor(color(team));
-        target.setDisplayName(Component.literal(label(team) + " 路 " + map));
-        target.setPlayerPrefix(Component.literal("[" + label(team) + "] ").withStyle(color(team)));
+        target.setDisplayName(Component.literal(factionName + " · " + map));
+        target.setPlayerPrefix(Component.literal("[" + factionName + "] ").withStyle(color(team)));
         target.setAllowFriendlyFire(friendlyFire);
         target.setNameTagVisibility(Team.Visibility.HIDE_FOR_OTHER_TEAMS);
         target.setCollisionRule(Team.CollisionRule.ALWAYS);

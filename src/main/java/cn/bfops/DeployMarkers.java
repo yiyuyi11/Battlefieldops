@@ -157,7 +157,8 @@ final class DeployMarkers {
                 if(state.has("deploySites"))for(var row:state.getAsJsonArray("deploySites")){
                     var site=row.getAsJsonObject();if(Engine.str(site,"id","").equals(element.label())){deploymentKind=Engine.str(site,"kind","BASE");break;}
                 }
-                DeployIcon.spawn(graphics,mc.font,"BEACON".equals(deploymentKind)?"●":"▼",at.x(),at.y(),"BEACON".equals(deploymentKind)?5.2f:7.5f,1,color,selected,false);
+                if("BASE".equals(deploymentKind))DeployIcon.base(graphics,mc.font,at.x(),at.y(),7.5f,element.team(),color,selected);
+                else DeployIcon.spawn(graphics,mc.font,"BEACON".equals(deploymentKind)?"●":"▼",at.x(),at.y(),"BEACON".equals(deploymentKind)?5.2f:7.5f,1,color,selected,false);
             } else if(element.kind().equals("TEAMMATE")&&MateMarker.find(state,element.label())!=null&&!Engine.str(MateMarker.find(state,element.label()),"elite","").isEmpty()){
                 HeroIcons.draw(graphics,Engine.str(MateMarker.find(state,element.label()),"elite",""),at.x(),at.y(),16,1);
             } else glyph(graphics, element.kind(), Math.round(at.x()), Math.round(at.y()), size, color,
@@ -219,7 +220,7 @@ final class DeployMarkers {
     private static void rebuild(JsonObject state, JsonObject me) {
         ELEMENTS.clear();markData.clear();
         int selfTeam = Engine.num(me, "team", -1);
-        Model.Arena arena = state.has("arena") ? BattlefieldOps.GSON.fromJson(state.get("arena"), Model.Arena.class) : null;
+        Model.Arena arena = FactionArt.arena();
         if (arena == null) return;
 
         double height = arena.maxY > arena.minY ? (arena.minY + arena.maxY) / 2.0 : 64.0;

@@ -46,14 +46,10 @@ final class EquipmentStatPanel {
 
     /** Draws the gun (with its selected attachments) through TaCZ's own item renderer, scaled into the box. */
     private static void drawGunModel(GuiGraphics g,String id,int x,int y,int w,int h,float yaw,float pitch,Map<String,String> choices){
-        ItemStack gun=buildGun(id);
+        ItemStack gun=GunPreview.assembled(id,choices);
         if(gun.isEmpty()){AssetIcons.draw(g,"gun",id,x,y,w,h);return;}
         // Attachments are written onto the display stack so the bench shows the configured gun, and the item
         // renderer supplies the correct model and texture (the Bedrock path was drawing it untextured/red).
-        try{
-            var level=net.minecraft.client.Minecraft.getInstance().level;
-            if(level!=null&&choices!=null&&!choices.isEmpty())Fittings.applyGun(gun,choices,level.registryAccess());
-        }catch(Throwable ignored){}
         float scale=Math.min(w,h)/16f;
         g.pose().pushPose();
         try{

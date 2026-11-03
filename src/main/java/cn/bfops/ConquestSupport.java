@@ -62,6 +62,10 @@ final long expires;final SupportRules.Budget budget;
             if(kind!=SupportRules.Kind.RADIO_BEACON)engine.refills.used(giver,kind,tick);
             if(cooldownTicks>0)cd.put(kind,tick+cooldownTicks);giver.getInventory().setChanged();
             engine.supportRefresh(giver);
+            if(kind==SupportRules.Kind.MEDIC_BAG||kind==SupportRules.Kind.MED_BOX)
+                cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(giver,cn.bfops.voice.common.audio.VoiceCue.THROW_MEDKIT);
+            else if(kind==SupportRules.Kind.AMMO_BAG||kind==SupportRules.Kind.AMMO_BOX)
+                cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(giver,cn.bfops.voice.common.audio.VoiceCue.THROW_AMMO);
             cue(giver,kind==SupportRules.Kind.GROUND_SENSOR?"sensor_fire":kind==SupportRules.Kind.RADIO_BEACON?"beacon_deploy":"ammo_throw");
             giver.displayClientMessage(Component.literal("§b已使用 "+kind.label),true);
         }catch(Exception ex){giver.displayClientMessage(Component.literal("§c"+(ex.getMessage()==null?"装备使用失败":ex.getMessage())),true);}

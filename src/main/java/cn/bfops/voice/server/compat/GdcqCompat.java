@@ -23,7 +23,8 @@ public final class GdcqCompat {
     }
 
     public static CampType resolveCamp(ServerPlayer player) {
-        return CampType.CN;
+        var engine=cn.bfops.BattlefieldOps.engine;
+        return engine==null?CampType.CN:engine.voiceCamp(player);
     }
 
     public static boolean isSameCamp(ServerPlayer left, ServerPlayer right) {

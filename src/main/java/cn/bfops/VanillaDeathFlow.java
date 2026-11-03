@@ -1,0 +1,57 @@
+package cn.bfops;
+import com.google.gson.JsonObject;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.DeathScreen;
+import net.minecraft.client.gui.screens.Screen;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+
+/** Ordinary single-player/PvE deaths also get the camera, then return to vanilla respawn controls. */
+@EventBusSubscriber(modid="battlefield_ops",value=Dist.CLIENT)
+public final class VanillaDeathFlow {
+    private static boolean restoring;
+    static boolean active(){return Minecraft.getInstance().screen instanceof View;}
+    @SubscribeEvent
+    public static void opening(ScreenEvent.Opening event){
+        if(!restoring && event.getNewScreen() instanceof DeathScreen original && !DeploymentLock.room(Client.state))
+            event.setNewScreen(new View(original));
+    }
+    private static final class View extends Screen {
+        private final Screen original;
+        private final JsonObject snapshot=new JsonObject();
+        private long started;
+        View(Screen original){
+            super(net.minecraft.network.chat.Component.literal("阵亡"));this.original=original;
+            var me=new JsonObject();me.addProperty("alive",false);me.addProperty("downed",false);
+            snapshot.add("me",me);snapshot.addProperty("inMatch",true);
+        }
+        @Override protected void init(){
+            if(started!=0)return;
+            started=System.currentTimeMillis();
+            DeathCard.reset();DeathCard.show(new JsonObject());
+            var player=minecraft.player;
+            if(player!=null){
+                Cinematic.clear();Cinematic.startDeath(player.getX(),player.getEyeY(),player.getZ(),player.getYRot(),player.getXRot());
+                MusicDirector.death();
+            }
+        }
+        @Override public void tick(){
+            if(minecraft.player==null||minecraft.player.isAlive()){finish(null);return;}
+            if(System.currentTimeMillis()-started>=2600)finish(original);
+        }
+        private void finish(Screen next){
+            Cinematic.clear();DeathCard.reset();
+            restoring=true;
+            try{minecraft.setScreen(next);}finally{restoring=false;}
+        }
+        @Override public void render(GuiGraphics g,int mx,int my,float dt){DeathCard.drawLocal(g,minecraft,snapshot);}
+        @Override public void renderBackground(GuiGraphics g,int mx,int my,float dt){}
+        @Override public boolean isPauseScreen(){return false;}
+        @Override public boolean shouldCloseOnEsc(){return false;}
+        @Override public void onClose(){}
+        @Override public void removed(){Cinematic.clear();DeathCard.reset();}
+    }
+}

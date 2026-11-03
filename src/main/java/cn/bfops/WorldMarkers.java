@@ -33,7 +33,7 @@ final class WorldMarkers {
         JsonObject state=Client.state;
         if(state==null||!state.has("inMatch")||!state.get("inMatch").getAsBoolean()||!state.has("arena")||!state.has("me"))return;
         if(state.has("hud")&&state.getAsJsonObject("hud").has("markers")&&!state.getAsJsonObject("hud").get("markers").getAsBoolean())return;
-        Model.Arena arena=BattlefieldOps.GSON.fromJson(state.get("arena"),Model.Arena.class);
+        Model.Arena arena=FactionArt.arena();
         Camera camera=Projector.camera(mc);if(arena==null||camera==null)return;
         int self=Engine.num(state.getAsJsonObject("me"),"team",-1),stage=Engine.num(state,"stage",0);
         if(self<0)return;

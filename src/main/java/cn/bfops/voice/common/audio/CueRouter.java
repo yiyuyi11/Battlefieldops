@@ -130,6 +130,11 @@ public final class CueRouter {
 
     @Nullable
     public static String resolveThirdPerson(VoiceCue cue, CampType camp) {
+        if(camp==CampType.NONE&&!mechanical(cue))return null;
+        String nativeEvent=cue==null?null:cn.bfops.NativeAudioBank.voice(camp==null?"COMMON":camp.name(),cue.name());
+        if(nativeEvent!=null)return nativeEvent;
+        if(nativeLanguage(camp)&&!neutral(cue))return null;
+
         if (!initialized) init();
         String explicitEventId = resolveExplicitEventId("tp", cue, camp);
         if (explicitEventId != null) {
@@ -143,6 +148,11 @@ public final class CueRouter {
     }
 
     public static List<String> resolveFirstPersonLayers(VoiceCue cue, CampType camp) {
+        if(camp==CampType.NONE&&!mechanical(cue))return List.of();
+        String nativeEvent=cue==null?null:cn.bfops.NativeAudioBank.voice(camp==null?"COMMON":camp.name(),cue.name());
+        if(nativeEvent!=null)return List.of(nativeEvent);
+        if(nativeLanguage(camp)&&!neutral(cue))return List.of();
+
         if (!initialized) init();
         if (cue == null) {
             return List.of();
@@ -175,6 +185,9 @@ public final class CueRouter {
         return List.copyOf(resolved);
     }
 
+    private static boolean nativeLanguage(CampType camp){return camp!=null&&switch(camp){case UK,US,DE,FR,IT,RU,TK->true;default->false;};}
+    private static boolean neutral(VoiceCue cue){return mechanical(cue)||cue==VoiceCue.DEATH||cue==VoiceCue.FINAL_DEATH;}
+    private static boolean mechanical(VoiceCue cue){return cue!=null&&switch(cue){case REVIVE_ASSAULT_START,REVIVE_ASSAULT_CHARGE,REVIVE_ASSAULT_FINISH,REVIVE_NORMAL_START,REVIVE_NORMAL_FINISH->true;default->false;};}
     @Nullable
     private static String resolveExplicitEventId(String category, VoiceCue cue, CampType camp) {
         if (cue == null) {
@@ -201,7 +214,7 @@ public final class CueRouter {
             case CN -> category + ".cn." + key;
             case US -> category + ".us." + key;
             case RU -> category + ".ru." + key;
-            case COMMON -> null;
+            default -> null;
         };
     }
 

@@ -17,6 +17,18 @@ final class FittingScreen extends FrontScreen {
     private long sentAt;
     /** Drag-controlled rotation for the gun model on the bench. */
     private float modelYaw=30,modelPitch=-15;
+
+    /**
+     * Opens the bench for this kind.
+     *
+     * <p>Guns get the BF1 MODIFY layout; vehicles keep the slot list, because their stations are not
+     * attachment slots and the reference screen has nothing to say about them.
+     */
+    static Screen open(Screen parent,String map,String id,String kind,Map<String,String> target,String kit){
+        boolean gun="gun".equals(kind);
+        if(gun){try{if(net.neoforged.fml.ModList.get().isLoaded("tacz"))return new GunModifyScreen(parent,map,id,target,kit);}catch(LinkageError|RuntimeException ignored){}}
+        return new FittingScreen(parent,map,id,kind,target,kit);
+    }
     FittingScreen(Screen parent,String map,String id,String kind,Map<String,String> target){
         this(parent,map,id,kind,target,Client.state.has("me")?Engine.str(Client.state.getAsJsonObject("me"),"kit",""):"");
     }
@@ -24,6 +36,7 @@ final class FittingScreen extends FrontScreen {
         super(kind.equals("gun")?"武器改装台":"载具弹药配置");this.parent=parent;this.map=map;this.id=id;this.kind=kind;this.kit=kit;
         this.target=target;working=new LinkedHashMap<>(target);
     }
+    @Override protected boolean bf1Style(){return true;}
     protected String subtitle(){return "兼容项自动筛选 · 部署时应用";}
     private void fetch(){
         requested=true;sentAt=System.currentTimeMillis();

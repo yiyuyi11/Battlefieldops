@@ -1,0 +1,923 @@
+[
+  {
+    "target": "textures/gui/bf1/bases_austrohungarianempire_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_austrohungarianempire_deploy_default.png",
+    "sha256": "a91fec7e2bf5ffc42889719e517e2b7443077a807020d76cb3fee6461ad52f01"
+  },
+  {
+    "target": "textures/gui/bf1/bases_austrohungarianempire_hud_default.png",
+    "source": "SharedIconsWin32 / bases_austrohungarianempire_hud_default.png",
+    "sha256": "a91fec7e2bf5ffc42889719e517e2b7443077a807020d76cb3fee6461ad52f01"
+  },
+  {
+    "target": "textures/gui/bf1/bases_austrohungarianempire_map_default.png",
+    "source": "SharedIconsWin32 / bases_austrohungarianempire_map_default.png",
+    "sha256": "a91fec7e2bf5ffc42889719e517e2b7443077a807020d76cb3fee6461ad52f01"
+  },
+  {
+    "target": "textures/gui/bf1/bases_germanempire_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_germanempire_deploy_default.png",
+    "sha256": "34414d484b5a0cd854c385c0047f18120e0ab3b237e4286808e73080856cb56a"
+  },
+  {
+    "target": "textures/gui/bf1/bases_germanempire_hud_default.png",
+    "source": "SharedIconsWin32 / bases_germanempire_hud_default.png",
+    "sha256": "34414d484b5a0cd854c385c0047f18120e0ab3b237e4286808e73080856cb56a"
+  },
+  {
+    "target": "textures/gui/bf1/bases_germanempire_map_default.png",
+    "source": "SharedIconsWin32 / bases_germanempire_map_default.png",
+    "sha256": "34414d484b5a0cd854c385c0047f18120e0ab3b237e4286808e73080856cb56a"
+  },
+  {
+    "target": "textures/gui/bf1/bases_kingdomofitaly_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_kingdomofitaly_deploy_default.png",
+    "sha256": "dc820c148e9876df2f718754bfb8c4f139994399c9512bbdc950150535eeeb7b"
+  },
+  {
+    "target": "textures/gui/bf1/bases_kingdomofitaly_hud_default.png",
+    "source": "SharedIconsWin32 / bases_kingdomofitaly_hud_default.png",
+    "sha256": "dc820c148e9876df2f718754bfb8c4f139994399c9512bbdc950150535eeeb7b"
+  },
+  {
+    "target": "textures/gui/bf1/bases_kingdomofitaly_map_default.png",
+    "source": "SharedIconsWin32 / bases_kingdomofitaly_map_default.png",
+    "sha256": "dc820c148e9876df2f718754bfb8c4f139994399c9512bbdc950150535eeeb7b"
+  },
+  {
+    "target": "textures/gui/bf1/bases_ottomanempire_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_ottomanempire_deploy_default.png",
+    "sha256": "e47defa253c326b79b927e89489af253aa414dbed952cbd208c510f087db1f5d"
+  },
+  {
+    "target": "textures/gui/bf1/bases_ottomanempire_hud_default.png",
+    "source": "SharedIconsWin32 / bases_ottomanempire_hud_default.png",
+    "sha256": "e47defa253c326b79b927e89489af253aa414dbed952cbd208c510f087db1f5d"
+  },
+  {
+    "target": "textures/gui/bf1/bases_ottomanempire_map_default.png",
+    "source": "SharedIconsWin32 / bases_ottomanempire_map_default.png",
+    "sha256": "e47defa253c326b79b927e89489af253aa414dbed952cbd208c510f087db1f5d"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedkingdom_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_unitedkingdom_deploy_default.png",
+    "sha256": "8205af92a7c564fa0df0f70582e2de2c65b8ca43f2024afdce7fc7ef79c5b354"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedkingdom_hud_default.png",
+    "source": "SharedIconsWin32 / bases_unitedkingdom_hud_default.png",
+    "sha256": "8205af92a7c564fa0df0f70582e2de2c65b8ca43f2024afdce7fc7ef79c5b354"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedkingdom_map_default.png",
+    "source": "SharedIconsWin32 / bases_unitedkingdom_map_default.png",
+    "sha256": "8205af92a7c564fa0df0f70582e2de2c65b8ca43f2024afdce7fc7ef79c5b354"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedstatesofamerica_deploy_default.png",
+    "source": "SharedIconsWin32 / bases_unitedstatesofamerica_deploy_default.png",
+    "sha256": "298cb495278f476c2b3457e0d371404f69de2b209cf5c6ffe155149b37a0bee2"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedstatesofamerica_hud_default.png",
+    "source": "SharedIconsWin32 / bases_unitedstatesofamerica_hud_default.png",
+    "sha256": "298cb495278f476c2b3457e0d371404f69de2b209cf5c6ffe155149b37a0bee2"
+  },
+  {
+    "target": "textures/gui/bf1/bases_unitedstatesofamerica_map_default.png",
+    "source": "SharedIconsWin32 / bases_unitedstatesofamerica_map_default.png",
+    "sha256": "298cb495278f476c2b3457e0d371404f69de2b209cf5c6ffe155149b37a0bee2"
+  },
+  {
+    "target": "textures/gui/bf1/base_hud_default.png",
+    "source": "SharedIconsWin32 / base_hud_default.png",
+    "sha256": "0a59333871e86948c19ce826a15a215a6f7dbe20432ffbf916fa66ed44a9436e"
+  },
+  {
+    "target": "textures/gui/bf1/base_map_default.png",
+    "source": "SharedIconsWin32 / base_map_default.png",
+    "sha256": "22284e2d143ef30f292d5f6980b9d842a049ddfc77c3934c13ca8b1a948914a2"
+  },
+  {
+    "target": "textures/gui/bf1/breakthrough_attackerflag_default_default.png",
+    "source": "SharedIconsWin32 / breakthrough_attackerflag_default_default.png",
+    "sha256": "bedda0cd61a9db711cc14078a9078a39efc0b4d1cacbc230e7969227f2fb7727"
+  },
+  {
+    "target": "textures/gui/bf1/breakthrough_attackerflag_map_default.png",
+    "source": "SharedIconsWin32 / breakthrough_attackerflag_map_default.png",
+    "sha256": "5f9ed21044f0964b37fc9a32312db1a197090b087bb2e50b4b2bb285ecdf41f6"
+  },
+  {
+    "target": "textures/gui/bf1/breakthrough_defenderflag_default_default.png",
+    "source": "SharedIconsWin32 / breakthrough_defenderflag_default_default.png",
+    "sha256": "d111e63123cd41b8e7e6d2f2a9cbcfa2d95f521dfbfe324b51ce0b17b34911ba"
+  },
+  {
+    "target": "textures/gui/bf1/breakthrough_defenderflag_map_default.png",
+    "source": "SharedIconsWin32 / breakthrough_defenderflag_map_default.png",
+    "sha256": "6d1acb466d4c0bb71a3b934f715602106908033dc31747616c3a0150b8f875ab"
+  },
+  {
+    "target": "textures/gui/bf1/death_default_default.png",
+    "source": "SharedIconsWin32 / death_default_default.png",
+    "sha256": "67f6bb7efd9845f2bc3c07fee67e2fbe8042eb44c3dd8da8e97211b76109d016"
+  },
+  {
+    "target": "textures/gui/bf1/death_hud_default.png",
+    "source": "SharedIconsWin32 / death_hud_default.png",
+    "sha256": "67f6bb7efd9845f2bc3c07fee67e2fbe8042eb44c3dd8da8e97211b76109d016"
+  },
+  {
+    "target": "textures/gui/bf1/decoy_hud_default.png",
+    "source": "SharedIconsWin32 / decoy_hud_default.png",
+    "sha256": "c6d63a6ee74a75f6406d8d4f94a3e759d810ebffe6629fddc42a556ce2ad83d7"
+  },
+  {
+    "target": "textures/gui/bf1/decoy_map_default.png",
+    "source": "SharedIconsWin32 / decoy_map_default.png",
+    "sha256": "c3788f6f450bb725cdcd4d2c52736e16ff3a18af420a7508759b32a2dae3eb29"
+  },
+  {
+    "target": "textures/gui/bf1/explosives_hud_default.png",
+    "source": "SharedIconsWin32 / explosives_hud_default.png",
+    "sha256": "fb5efee6b01bf1c24c6b37517c44b614a4191fc0f7781e82912db734ccdaf8a2"
+  },
+  {
+    "target": "textures/gui/bf1/explosives_map_default.png",
+    "source": "SharedIconsWin32 / explosives_map_default.png",
+    "sha256": "e583a6e0b34eda685b2348daedd7bac8f6fdf9cc2a18bf22f19d31158f8f574f"
+  },
+  {
+    "target": "textures/gui/bf1/grenade1_default_default.png",
+    "source": "SharedIconsWin32 / grenade1_default_default.png",
+    "sha256": "44ab4c47721019d523bc2f7c06bbcfc894e1975a73770b958b39bb4863fb81ca"
+  },
+  {
+    "target": "textures/gui/bf1/grenade2_hud_default.png",
+    "source": "SharedIconsWin32 / grenade2_hud_default.png",
+    "sha256": "f3f93737cb52bc207a74a2769e28cbbb05c56132309ee7d2e91b7215c491a0c1"
+  },
+  {
+    "target": "textures/gui/bf1/grenade2_map_default.png",
+    "source": "SharedIconsWin32 / grenade2_map_default.png",
+    "sha256": "f519d4733fa5558e8b1073038f28a9a49dbb0a6c87b96b632bc024a40701f63f"
+  },
+  {
+    "target": "textures/gui/bf1/grenade3_default_default.png",
+    "source": "SharedIconsWin32 / grenade3_default_default.png",
+    "sha256": "9e66b3d15b30e9a89ae670c58c85b0023ed621ade4847aebace5cebb3da9feab"
+  },
+  {
+    "target": "textures/gui/bf1/grenade4_default_default.png",
+    "source": "SharedIconsWin32 / grenade4_default_default.png",
+    "sha256": "b756b2bb411aa559f95059cf86a000f39eeaa6573b34b01309d6d789f2c9eee5"
+  },
+  {
+    "target": "textures/gui/bf1/grenade5_hud_default.png",
+    "source": "SharedIconsWin32 / grenade5_hud_default.png",
+    "sha256": "be1f2445e180bdf1c34d5dc12f679db1c9aee36737ce8af297c38ec5f190c3bc"
+  },
+  {
+    "target": "textures/gui/bf1/grenade6_hud_default.png",
+    "source": "SharedIconsWin32 / grenade6_hud_default.png",
+    "sha256": "c79d28fa48222158b01ba578936f294418f908a941ef174adad15d52c0f80307"
+  },
+  {
+    "target": "textures/gui/bf1/grenade6_map_default.png",
+    "source": "SharedIconsWin32 / grenade6_map_default.png",
+    "sha256": "f8a493b357a0f97498416dc40edb0e3b6d25d8a33474d511f408ace255b6e477"
+  },
+  {
+    "target": "textures/gui/bf1/grenade7_default_default.png",
+    "source": "SharedIconsWin32 / grenade7_default_default.png",
+    "sha256": "7b5cfd21ab548a3d2f5777cdc46aa966211869ae9bdbbcaff1c7dbd21fcb50b6"
+  },
+  {
+    "target": "textures/gui/bf1/grenade8_default_default.png",
+    "source": "SharedIconsWin32 / grenade8_default_default.png",
+    "sha256": "d2bfa3f9771cd8025c86155f417f506484bc556af5e7d655f884ab01e78a86b3"
+  },
+  {
+    "target": "textures/gui/bf1/grenadepulse_default_default.png",
+    "source": "SharedIconsWin32 / grenadepulse_default_default.png",
+    "sha256": "d8f53c781efda62755f9e9051d6ccbb74750e833698244bfc9736555ce4fd2da"
+  },
+  {
+    "target": "textures/gui/bf1/grenade_dir_default_default.png",
+    "source": "SharedIconsWin32 / grenade_dir_default_default.png",
+    "sha256": "d11580828020375e7455ee0b41c65347d4f9193181e5bd74949f20e60e02f30f"
+  },
+  {
+    "target": "textures/gui/bf1/interaction_default_hud_default.png",
+    "source": "SharedIconsWin32 / interaction_default_hud_default.png",
+    "sha256": "e7b8e905ceec5d51dee3d7329e5b85ca3ceb15ed710b272e45b9ef1276b7c6ae"
+  },
+  {
+    "target": "textures/gui/bf1/interaction_objective_hud_default.png",
+    "source": "SharedIconsWin32 / interaction_objective_hud_default.png",
+    "sha256": "25053ff2a828082d59fc78452c2d98dbd30eb110cf15ec5ddbf891b4af18d5ff"
+  },
+  {
+    "target": "textures/gui/bf1/kit_antitank_hud_default.png",
+    "source": "SharedIconsWin32 / kit_antitank_hud_default.png",
+    "sha256": "731a233f9df2d7fdf92974ff11f1e42c992b39005dd15ffa33727dcd1ac96403"
+  },
+  {
+    "target": "textures/gui/bf1/kit_antitank_map_default.png",
+    "source": "SharedIconsWin32 / kit_antitank_map_default.png",
+    "sha256": "731a233f9df2d7fdf92974ff11f1e42c992b39005dd15ffa33727dcd1ac96403"
+  },
+  {
+    "target": "textures/gui/bf1/kit_assault_hud_default.png",
+    "source": "SharedIconsWin32 / kit_assault_hud_default.png",
+    "sha256": "f9fc63c4d20af713d14df8ed931500b54cf379f6148c26f2437955181456b9a3"
+  },
+  {
+    "target": "textures/gui/bf1/kit_assault_map_default.png",
+    "source": "SharedIconsWin32 / kit_assault_map_default.png",
+    "sha256": "f9fc63c4d20af713d14df8ed931500b54cf379f6148c26f2437955181456b9a3"
+  },
+  {
+    "target": "textures/gui/bf1/kit_cavalry_hud_default.png",
+    "source": "SharedIconsWin32 / kit_cavalry_hud_default.png",
+    "sha256": "084448a7d6b3cba7ddd0ef98d5ccfdd41fce8ed72a34d05e3725842064846ab6"
+  },
+  {
+    "target": "textures/gui/bf1/kit_cavalry_map_default.png",
+    "source": "SharedIconsWin32 / kit_cavalry_map_default.png",
+    "sha256": "084448a7d6b3cba7ddd0ef98d5ccfdd41fce8ed72a34d05e3725842064846ab6"
+  },
+  {
+    "target": "textures/gui/bf1/kit_flamethrower_hud_default.png",
+    "source": "SharedIconsWin32 / kit_flamethrower_hud_default.png",
+    "sha256": "f6d646943410a60c01d3463bad14c949176bd5d6238867d6cd0d4da9adb23020"
+  },
+  {
+    "target": "textures/gui/bf1/kit_flamethrower_map_default.png",
+    "source": "SharedIconsWin32 / kit_flamethrower_map_default.png",
+    "sha256": "f6d646943410a60c01d3463bad14c949176bd5d6238867d6cd0d4da9adb23020"
+  },
+  {
+    "target": "textures/gui/bf1/kit_medic_hud_default.png",
+    "source": "SharedIconsWin32 / kit_medic_hud_default.png",
+    "sha256": "e6df04833ba930ba4c2e078fcd005bf47265307131d1285c94fa84f9a4a7a020"
+  },
+  {
+    "target": "textures/gui/bf1/kit_medic_map_default.png",
+    "source": "SharedIconsWin32 / kit_medic_map_default.png",
+    "sha256": "e6df04833ba930ba4c2e078fcd005bf47265307131d1285c94fa84f9a4a7a020"
+  },
+  {
+    "target": "textures/gui/bf1/kit_pilot_hud_default.png",
+    "source": "SharedIconsWin32 / kit_pilot_hud_default.png",
+    "sha256": "97a70052713b994c4c80cb4261030ea3b9a692cd08972749ae8d43b243f7a886"
+  },
+  {
+    "target": "textures/gui/bf1/kit_pilot_map_default.png",
+    "source": "SharedIconsWin32 / kit_pilot_map_default.png",
+    "sha256": "97a70052713b994c4c80cb4261030ea3b9a692cd08972749ae8d43b243f7a886"
+  },
+  {
+    "target": "textures/gui/bf1/kit_rifleman_hud_default.png",
+    "source": "SharedIconsWin32 / kit_rifleman_hud_default.png",
+    "sha256": "c6d63a6ee74a75f6406d8d4f94a3e759d810ebffe6629fddc42a556ce2ad83d7"
+  },
+  {
+    "target": "textures/gui/bf1/kit_rifleman_map_default.png",
+    "source": "SharedIconsWin32 / kit_rifleman_map_default.png",
+    "sha256": "c6d63a6ee74a75f6406d8d4f94a3e759d810ebffe6629fddc42a556ce2ad83d7"
+  },
+  {
+    "target": "textures/gui/bf1/kit_scout_hud_default.png",
+    "source": "SharedIconsWin32 / kit_scout_hud_default.png",
+    "sha256": "090763efe40d07cbf409f27394eb76c870727709b7c3fbbca004d865cf413699"
+  },
+  {
+    "target": "textures/gui/bf1/kit_scout_map_default.png",
+    "source": "SharedIconsWin32 / kit_scout_map_default.png",
+    "sha256": "090763efe40d07cbf409f27394eb76c870727709b7c3fbbca004d865cf413699"
+  },
+  {
+    "target": "textures/gui/bf1/kit_sentry_hud_default.png",
+    "source": "SharedIconsWin32 / kit_sentry_hud_default.png",
+    "sha256": "924ebd36ca6efb4317faf1a2f620bf8cb22080dc03c64a1fc78a782ceeaea322"
+  },
+  {
+    "target": "textures/gui/bf1/kit_sentry_map_default.png",
+    "source": "SharedIconsWin32 / kit_sentry_map_default.png",
+    "sha256": "924ebd36ca6efb4317faf1a2f620bf8cb22080dc03c64a1fc78a782ceeaea322"
+  },
+  {
+    "target": "textures/gui/bf1/kit_support_hud_default.png",
+    "source": "SharedIconsWin32 / kit_support_hud_default.png",
+    "sha256": "085f70176f0f38394ccdd997cef8b846235f077d00fd0baba119908197e83ea1"
+  },
+  {
+    "target": "textures/gui/bf1/kit_support_map_default.png",
+    "source": "SharedIconsWin32 / kit_support_map_default.png",
+    "sha256": "085f70176f0f38394ccdd997cef8b846235f077d00fd0baba119908197e83ea1"
+  },
+  {
+    "target": "textures/gui/bf1/kit_tanker_hud_default.png",
+    "source": "SharedIconsWin32 / kit_tanker_hud_default.png",
+    "sha256": "aba72b7887b6e6f316b80eeb9f0f408dfb01077eef3c7f1bd40bfe2cd4380234"
+  },
+  {
+    "target": "textures/gui/bf1/kit_tanker_map_default.png",
+    "source": "SharedIconsWin32 / kit_tanker_map_default.png",
+    "sha256": "aba72b7887b6e6f316b80eeb9f0f408dfb01077eef3c7f1bd40bfe2cd4380234"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_anchor_default_default.png",
+    "source": "SharedIconsWin32 / nametag_anchor_default_default.png",
+    "sha256": "8f3b5460da4b4149170e2ede874e790eceff6979d708db4c503e4bfe2cfa9d3a"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_anchor_default_enemy.png",
+    "source": "SharedIconsWin32 / nametag_anchor_default_enemy.png",
+    "sha256": "a6a8ffe524cc6ab7dfb6f5feb11021958717e7df8f6b9e84cce5a09f9fc90688"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_progressbg_default_default.png",
+    "source": "SharedIconsWin32 / nametag_progressbg_default_default.png",
+    "sha256": "06681ac2e393a9d3c65c2a9250bbfa164888ab95d2dc21af534a364a666f2f1f"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_progressfg_default_default.png",
+    "source": "SharedIconsWin32 / nametag_progressfg_default_default.png",
+    "sha256": "3bf31d439681a95d12c25765705b26111406cf6c121e8a6948fc173070525771"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_revivable_default_default.png",
+    "source": "SharedIconsWin32 / nametag_revivable_default_default.png",
+    "sha256": "fc5de2915abcb5eeb84d8e5e20cdb548e88cd418b784a65b223d66077f0b572b"
+  },
+  {
+    "target": "textures/gui/bf1/nametag_squadleader_hud_default.png",
+    "source": "SharedIconsWin32 / nametag_squadleader_hud_default.png",
+    "sha256": "4587e15d00bbd7f0cfd3596fd6770385931e7ad8dea6a6bbe571aedf51e42e02"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_a_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_a_hud_default.png",
+    "sha256": "02f82514965be3d4973372ca166596fde342e6df4dda500b374292a3f5ab14fc"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_a_map_default.png",
+    "source": "SharedIconsWin32 / objectives_a_map_default.png",
+    "sha256": "6d1ec16e70eea4be2dcb81ddc0ad97811f846d557a70d3e27bc5fda475737cf7"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_b_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_b_hud_default.png",
+    "sha256": "aa62fa30ae932939a6055c08806219233ecf9a36574179f776955d25051c4c5b"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_b_map_default.png",
+    "source": "SharedIconsWin32 / objectives_b_map_default.png",
+    "sha256": "ba8f524cefe29d72f04b6e165b8a8a6d5fdde296cd7037944b56a871a11a7f58"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepointfortified_hud_enemy.png",
+    "source": "SharedIconsWin32 / objectives_capturepointfortified_hud_enemy.png",
+    "sha256": "1003ed4889752ab3017426865f382870183be08f70124bc7dfae4084289cda9d"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepointfortified_hud_friendly.png",
+    "source": "SharedIconsWin32 / objectives_capturepointfortified_hud_friendly.png",
+    "sha256": "b87606784b218946cc3f6ab2f8c34819589081dbf989b822e3c5680cb1aa223e"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepointsolid_hud_enemy.png",
+    "source": "SharedIconsWin32 / objectives_capturepointsolid_hud_enemy.png",
+    "sha256": "559e11b2c5abd0e524827f9b32d52c5bb1cc3a39ec2294b44c4b8f5eb52ede21"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepointsolid_hud_friendly.png",
+    "source": "SharedIconsWin32 / objectives_capturepointsolid_hud_friendly.png",
+    "sha256": "497c5a54340692fe10d0427c2fdcec05e28505b9e838c34f745ea3515d2e48cf"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_default_default.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_default_default.png",
+    "sha256": "b24286b4a4589f02ac7c27a637b65d02e44c28905ec98e3bd8c5c4c7e3115e6e"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_default_enemy.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_default_enemy.png",
+    "sha256": "8c0e8382725f56cf82f19e9a70df760b3fb870c8cde16dcf36ee56b913a3cb65"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_default_friendly.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_default_friendly.png",
+    "sha256": "27d57ba5dabd04b9b54f5751db4d5759f7923bbb5e954de09e8fe46415430ad1"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_map_default.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_map_default.png",
+    "sha256": "6463edd00a5425884fe57d3fab637865cba0cf1f16fb61d1b9b96c3e4a5e4d9f"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_map_enemy.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_map_enemy.png",
+    "sha256": "b19da473dfa8001f0ea174089127416cee12cb5a283518b5b6711379d6dd87cc"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_capturepoint_map_friendly.png",
+    "source": "SharedIconsWin32 / objectives_capturepoint_map_friendly.png",
+    "sha256": "e7b8e905ceec5d51dee3d7329e5b85ca3ceb15ed710b272e45b9ef1276b7c6ae"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_c_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_c_hud_default.png",
+    "sha256": "42288b675e8beaa2219a2e4026d8dbaab2a953ee241fc66eb0f5750052535dbc"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_c_map_default.png",
+    "source": "SharedIconsWin32 / objectives_c_map_default.png",
+    "sha256": "50e067eab3ce9e4dcdcb855712cc8f85ad2b21a5e9fcbcfcd5e959b5454625f9"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_direction_default_default.png",
+    "source": "SharedIconsWin32 / objectives_direction_default_default.png",
+    "sha256": "06284c5774757bd63b6c9391219e62fc8ac8c7fb816d9ae8ed4fd4d85c1f4181"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_d_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_d_hud_default.png",
+    "sha256": "513c637a03b2100ae7fb90fe07bcf2f7402cd8c138723526b5f8ff88d5230cd3"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_d_map_default.png",
+    "source": "SharedIconsWin32 / objectives_d_map_default.png",
+    "sha256": "5147cda6abeb3b66efffbcb2f67d427229452bb581db5dfe6e2e81f62efb497a"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_e_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_e_hud_default.png",
+    "sha256": "59a0fa0b38b119d6ddebd723628c1b60edcc647ff4080a08c06738f466fefbac"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_e_map_default.png",
+    "source": "SharedIconsWin32 / objectives_e_map_default.png",
+    "sha256": "c5e20b69e840b618eef89d95d6f9ec7697d7bc5fe73aa38eafe48d5708708750"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_f_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_f_hud_default.png",
+    "sha256": "71fe20b7286af554d762ab03d806c3a430ef013760db84dd27d97ac022c2c9c7"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_f_map_default.png",
+    "source": "SharedIconsWin32 / objectives_f_map_default.png",
+    "sha256": "5298e5bb10e36032211efa2a547a303a992b47ca60def23c0ce0a819cc25d090"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_g_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_g_hud_default.png",
+    "sha256": "ac5c46df62745087960f1b6863fc4ed84d4a98bd807c59fa1515d61593229682"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_g_map_default.png",
+    "source": "SharedIconsWin32 / objectives_g_map_default.png",
+    "sha256": "0456e12a230eb1248d076c0a30fe10c8d1e4884779a6f8036ea696c3df510b5b"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_hotzone_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_hotzone_hud_default.png",
+    "sha256": "f59a59de1502565c0dbb12168a7223f616130f6ea44cee08b123e2c347519954"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_hotzone_hud_enemy.png",
+    "source": "SharedIconsWin32 / objectives_hotzone_hud_enemy.png",
+    "sha256": "f59a59de1502565c0dbb12168a7223f616130f6ea44cee08b123e2c347519954"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_hotzone_hud_friendly.png",
+    "source": "SharedIconsWin32 / objectives_hotzone_hud_friendly.png",
+    "sha256": "f59a59de1502565c0dbb12168a7223f616130f6ea44cee08b123e2c347519954"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_h_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_h_hud_default.png",
+    "sha256": "fabb07a3d5a449b56a86b142054e9b05db3344693fc805b345487113f1a5cfe8"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_h_map_default.png",
+    "source": "SharedIconsWin32 / objectives_h_map_default.png",
+    "sha256": "f08e5a6ab0ae1bdbfca85ef8f04a2f5b88e6e4825868022e18d98f54fe6d9206"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_metercapbg_default_default.png",
+    "source": "SharedIconsWin32 / objectives_metercapbg_default_default.png",
+    "sha256": "29f7cfecca75c1fb12dace8e1a99b33f293a4d0cc7e8377edf0f7051291b8fa7"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_metercapfg_default_default.png",
+    "source": "SharedIconsWin32 / objectives_metercapfg_default_default.png",
+    "sha256": "511ad8e698fe8b3b4ab177d3d2eb1cb76300b91e04cce8d717657903b2c9c3ff"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_order_default_default.png",
+    "source": "SharedIconsWin32 / objectives_order_default_default.png",
+    "sha256": "1ee3524e859e1be70a254f1f8fbbd367688bb35cea092cccff6ef7839a694eca"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_order_default_friendly.png",
+    "source": "SharedIconsWin32 / objectives_order_default_friendly.png",
+    "sha256": "8762463ded1bd54ee62b0b05260822eef298f1664dabf6e3ea579e5d252a1647"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_order_map_default.png",
+    "source": "SharedIconsWin32 / objectives_order_map_default.png",
+    "sha256": "811ebf6990dd74aff4456d3930c8a10053c664c59709363b870af12331b250de"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_order_map_friendly.png",
+    "source": "SharedIconsWin32 / objectives_order_map_friendly.png",
+    "sha256": "0f1fcfe17609aa9a6ed8aa5070ce62a0012857374a7817e37bf003cb0dc61592"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_default_enemy.png",
+    "source": "SharedIconsWin32 / objectives_pickup_default_enemy.png",
+    "sha256": "086b6562293a8abf77d7c5150bdf8c73e6912e54b1668aea54b4cd409e9aa336"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_default_friendly.png",
+    "source": "SharedIconsWin32 / objectives_pickup_default_friendly.png",
+    "sha256": "0304e0452dba736352b3d6b3395d865379f16b109d55fbbb231cae2345b29bd4"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_default_neutral.png",
+    "source": "SharedIconsWin32 / objectives_pickup_default_neutral.png",
+    "sha256": "b55c2606b4af45532676aaeb823e011200b3e5ce0e4969a5031ddb2587b5d5d4"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_map_enemy.png",
+    "source": "SharedIconsWin32 / objectives_pickup_map_enemy.png",
+    "sha256": "3a082abb0355215e967264899cb4d56d441557d6234da21704adc76ff7890cb5"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_map_friendly.png",
+    "source": "SharedIconsWin32 / objectives_pickup_map_friendly.png",
+    "sha256": "c31250f15378442a98f29f4123c8695b2ecc963f0ed9893de8e56f40b7c76dac"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_pickup_map_neutral.png",
+    "source": "SharedIconsWin32 / objectives_pickup_map_neutral.png",
+    "sha256": "6d8a1c1577cb1e75bd294e742bfb9bb82b10182c3b8e462e102aaba515623e0c"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrateartillery_hud_default.png",
+    "source": "SharedIconsWin32 / objectives_rushcrateartillery_hud_default.png",
+    "sha256": "e98987e2f21efbbafb64d3c43a1b14182a30965a570f5432a44402e5ee9624d1"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_hud_enemy.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_hud_enemy.png",
+    "sha256": "bedda0cd61a9db711cc14078a9078a39efc0b4d1cacbc230e7969227f2fb7727"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_hud_friendly.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_hud_friendly.png",
+    "sha256": "d111e63123cd41b8e7e6d2f2a9cbcfa2d95f521dfbfe324b51ce0b17b34911ba"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_hud_team1.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_hud_team1.png",
+    "sha256": "d111e63123cd41b8e7e6d2f2a9cbcfa2d95f521dfbfe324b51ce0b17b34911ba"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_hud_team2.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_hud_team2.png",
+    "sha256": "bedda0cd61a9db711cc14078a9078a39efc0b4d1cacbc230e7969227f2fb7727"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_map_enemy.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_map_enemy.png",
+    "sha256": "5f9ed21044f0964b37fc9a32312db1a197090b087bb2e50b4b2bb285ecdf41f6"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_map_friendly.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_map_friendly.png",
+    "sha256": "6d1acb466d4c0bb71a3b934f715602106908033dc31747616c3a0150b8f875ab"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_map_team1.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_map_team1.png",
+    "sha256": "6d1acb466d4c0bb71a3b934f715602106908033dc31747616c3a0150b8f875ab"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_rushcrate_map_team2.png",
+    "source": "SharedIconsWin32 / objectives_rushcrate_map_team2.png",
+    "sha256": "5f9ed21044f0964b37fc9a32312db1a197090b087bb2e50b4b2bb285ecdf41f6"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_spawnable_default_default.png",
+    "source": "SharedIconsWin32 / objectives_spawnable_default_default.png",
+    "sha256": "5b8851cd80df5dc8893149a03258cf4a4b5c9f3624c5f33aa49e0b0c9294c24d"
+  },
+  {
+    "target": "textures/gui/bf1/objectives_spobjective_default_default.png",
+    "source": "SharedIconsWin32 / objectives_spobjective_default_default.png",
+    "sha256": "8d699e3c456b63d95e17ed7527284235b728b86ae2939c1e82aedd88ed1b64d2"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_ammobag_default_default.png",
+    "source": "SharedIconsWin32 / pickups_ammobag_default_default.png",
+    "sha256": "7ea0b61a392346f8227d027ae2b9208f891caa1da9ac2fb10222d5b065da2d09"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_ammopouch_default_default.png",
+    "source": "SharedIconsWin32 / pickups_ammopouch_default_default.png",
+    "sha256": "5dc1fbe0a9bc9054168411924d8780c7ac786969a4017850121fbd65f6949de5"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_antitank_hud_default.png",
+    "source": "SharedIconsWin32 / pickups_antitank_hud_default.png",
+    "sha256": "08ef90aa23b94851a26de960c49f4fd5a3f70ac6450dfe1b94cbf89a4000ad4c"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_antitank_map_default.png",
+    "source": "SharedIconsWin32 / pickups_antitank_map_default.png",
+    "sha256": "9ec38919dc4d56b632d6b40006537f6f5d6e13c2793dbdcaf14a41db0c0f4725"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_flamethrower_hud_default.png",
+    "source": "SharedIconsWin32 / pickups_flamethrower_hud_default.png",
+    "sha256": "5f4a6dbc294ec69f60552e304a32361c9b322a5699c533c884adbaae06d69a5f"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_flamethrower_map_default.png",
+    "source": "SharedIconsWin32 / pickups_flamethrower_map_default.png",
+    "sha256": "1d9f87798f775ecc083b8991ae6e871f4d3dc91bb9abdbf2782016f8b54b49b3"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_gadget_hud_default.png",
+    "source": "SharedIconsWin32 / pickups_gadget_hud_default.png",
+    "sha256": "79a43def941a4485b07612de153956a39b354180f207e6448b41488f7f82ac91"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_grenades_default_default.png",
+    "source": "SharedIconsWin32 / pickups_grenades_default_default.png",
+    "sha256": "79a43def941a4485b07612de153956a39b354180f207e6448b41488f7f82ac91"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_medbag_default_default.png",
+    "source": "SharedIconsWin32 / pickups_medbag_default_default.png",
+    "sha256": "50b9d9c5099722378024371316e2ad530c0a7dbf14c08f9400fde93e3d5d172d"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_sentry_hud_default.png",
+    "source": "SharedIconsWin32 / pickups_sentry_hud_default.png",
+    "sha256": "d2b7f4e28760fb250360c92a86ca2d55f3b6d307e670372fa3668ce4e1d37320"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_sentry_map_default.png",
+    "source": "SharedIconsWin32 / pickups_sentry_map_default.png",
+    "sha256": "095f6b6d1d5cc658edb06b32becacee311d4a69db7fdc1563942109ef0a10dcc"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_weapon_hud_default.png",
+    "source": "SharedIconsWin32 / pickups_weapon_hud_default.png",
+    "sha256": "f0bff75c81487595737953349215a68c8278934c703d0f9eebef141996f7cbc1"
+  },
+  {
+    "target": "textures/gui/bf1/pickups_weapon_map_default.png",
+    "source": "SharedIconsWin32 / pickups_weapon_map_default.png",
+    "sha256": "f0bff75c81487595737953349215a68c8278934c703d0f9eebef141996f7cbc1"
+  },
+  {
+    "target": "textures/gui/bf1/playeralt_map_default.png",
+    "source": "SharedIconsWin32 / playeralt_map_default.png",
+    "sha256": "719b2eb88da915326a6085c035f50577afe6a732d7f80c2cdb3cd1ed877e9665"
+  },
+  {
+    "target": "textures/gui/bf1/playeralt_map_enemy.png",
+    "source": "SharedIconsWin32 / playeralt_map_enemy.png",
+    "sha256": "59518512b79aa07daf9bcfd066f9ca00bdabdcda1b6134d831a221481fe037ab"
+  },
+  {
+    "target": "textures/gui/bf1/player_hud_default.png",
+    "source": "SharedIconsWin32 / player_hud_default.png",
+    "sha256": "2b68754555cce3a81856619193997d587e86ed5a131c0a7e89bd349678ebdbd3"
+  },
+  {
+    "target": "textures/gui/bf1/player_hud_enemy.png",
+    "source": "SharedIconsWin32 / player_hud_enemy.png",
+    "sha256": "abab7eef20b39cfd8cde96958c50fc8c92098a208396fb3dc051fdf299ac65b9"
+  },
+  {
+    "target": "textures/gui/bf1/player_map_default.png",
+    "source": "SharedIconsWin32 / player_map_default.png",
+    "sha256": "2b68754555cce3a81856619193997d587e86ed5a131c0a7e89bd349678ebdbd3"
+  },
+  {
+    "target": "textures/gui/bf1/player_map_enemy.png",
+    "source": "SharedIconsWin32 / player_map_enemy.png",
+    "sha256": "abab7eef20b39cfd8cde96958c50fc8c92098a208396fb3dc051fdf299ac65b9"
+  },
+  {
+    "target": "textures/gui/bf1/player_map_self.png",
+    "source": "SharedIconsWin32 / player_map_self.png",
+    "sha256": "2b68754555cce3a81856619193997d587e86ed5a131c0a7e89bd349678ebdbd3"
+  },
+  {
+    "target": "textures/gui/bf1/squadleader_hud_default.png",
+    "source": "SharedIconsWin32 / squadleader_hud_default.png",
+    "sha256": "4587e15d00bbd7f0cfd3596fd6770385931e7ad8dea6a6bbe571aedf51e42e02"
+  },
+  {
+    "target": "textures/gui/bf1/squadleader_map_default.png",
+    "source": "SharedIconsWin32 / squadleader_map_default.png",
+    "sha256": "62dcfa5e40d331a16b7884e5fc3ed80001103e5461bb8de4230b100af463574d"
+  },
+  {
+    "target": "textures/gui/bf1/squadleader_map_self.png",
+    "source": "SharedIconsWin32 / squadleader_map_self.png",
+    "sha256": "4587e15d00bbd7f0cfd3596fd6770385931e7ad8dea6a6bbe571aedf51e42e02"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_7n7cm_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_7n7cm_default_default.png",
+    "sha256": "fc987bfd44625ece70e990ba2a983eadc422d24c8ce995fe739aef0bca161c23"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_a7v_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_a7v_default_default.png",
+    "sha256": "e2c8501b5d362363629f32298cdb752835b36b4b80513a5956e7b09d9a0f2922"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_armoredtrain_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_armoredtrain_default_default.png",
+    "sha256": "0f54a358423ce62cd3c5993ac4e04ff92b000ddfffeda903b59fce99d5924a6d"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_dodgescout_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_dodgescout_default_default.png",
+    "sha256": "7010b560512aeec573818b0edfa76848e061298b6de35e99b283bd0fdf61bccf"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_dreadnought_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_dreadnought_default_default.png",
+    "sha256": "977fc3ec7fbd5d75d357487a206706dbc20b5d4b6ef97897c4ad0286d8123b91"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_fokkerdr_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_fokkerdr_default_default.png",
+    "sha256": "4566313400269ec9b322a0a0e246a2b9cef32f9e163b8ea0f688baa87a53a905"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_fortressturret_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_fortressturret_default_default.png",
+    "sha256": "9430ab679ad4762443015526aa32f6bc6dc7c562f2c59b32ca4af9313c608a9d"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_gothagiv_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_gothagiv_default_default.png",
+    "sha256": "642f3f3a34cb582dc1a086fe5d265bb174a02c759ae7ea2e65fb865dedccb402"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_halberstadt_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_halberstadt_default_default.png",
+    "sha256": "bbfa60596d396fd65ba77fda8bef5575192c50b4f4d9d7142c00a5ac0bb41af5"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_hdsidecar_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_hdsidecar_default_default.png",
+    "sha256": "c59515da6d24e24f269de449e48c527b27eaa80982f8958bf7efd7ece547abff"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_horse_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_horse_default_default.png",
+    "sha256": "d087f0184166ca45e7778bf4923946fd40664fe795467fa96c93da2facd9d918"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_jet_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_jet_default_default.png",
+    "sha256": "bbfa60596d396fd65ba77fda8bef5575192c50b4f4d9d7142c00a5ac0bb41af5"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_markv_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_markv_default_default.png",
+    "sha256": "200afd7f68ec6b999c5f47a4bde048919c576d0711e6b998781ee996c90c7820"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_mortar_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_mortar_default_default.png",
+    "sha256": "b3e988f8d18d8ffc34a928086e2d04a91cb90b8ab267f17df0af14fe4ea71663"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_motorboat_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_motorboat_default_default.png",
+    "sha256": "332a813b782b88ad336cf7f3e1a08382f8e5aa677b1ff94a617307a62de3d18b"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_piercearrow_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_piercearrow_default_default.png",
+    "sha256": "554a9fe0878430c1afbf37be9cc7e703b837d26b67ad9e4c6f7ffe4bccbd261d"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_qfpounder_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_qfpounder_default_default.png",
+    "sha256": "8a370aa87122d9cba9c59d3ac8533c309c73dacda82aceef25f1339c3822d0b8"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_renault_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_renault_default_default.png",
+    "sha256": "14aa50b13ffcf6a0d6e9c7526aaf461ba58c640bc612bb19f497ba5dcfb914f1"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_rollsroyse_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_rollsroyse_default_default.png",
+    "sha256": "259564be51b333d8bc5bbd30e229e355686ff258ea4e38429c1907cf30c71918"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_stationary_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_stationary_default_default.png",
+    "sha256": "dd005fd4afa4048a086c7bec26ee0d2f549063aa8962e3d2e291b35fde385869"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_tank_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_tank_default_default.png",
+    "sha256": "200afd7f68ec6b999c5f47a4bde048919c576d0711e6b998781ee996c90c7820"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_vickers_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_vickers_default_default.png",
+    "sha256": "dd005fd4afa4048a086c7bec26ee0d2f549063aa8962e3d2e291b35fde385869"
+  },
+  {
+    "target": "textures/gui/bf1/vehicles_zeppelin_default_default.png",
+    "source": "SharedIconsWin32 / vehicles_zeppelin_default_default.png",
+    "sha256": "45f28f6a1b80bdcc4a1cfcc4520ba60ff1890ebe2fe081f83789390d23fb890c"
+  },
+  {
+    "target": "textures/gui/class_assault.png",
+    "source": "BattlefieldOps\\src\\main\\resources\\assets\\battlefield_ops\\textures\\gui\\bf1\\kit_assault_hud_default.png",
+    "operation": "native 24x24 BF1 kit glyph copied as-is (no resampling) so the UI can draw it at integer divisors 24/12/8/6 and stay crisp",
+    "sha256": "f0c0a362b456ba3eb8e48dcf2d38854c1582b74a93d5f6aa241b0ffefe15fcd0"
+  },
+  {
+    "target": "textures/gui/class_support.png",
+    "source": "BattlefieldOps/src/main/resources/assets/battlefield_ops/textures/gui/bf1/kit_medic_hud_default.png",
+    "operation": "native 24x24 BF1 kit glyph copied as-is (no resampling) so the UI can draw it at integer divisors 24/12/8/6 and stay crisp",
+    "sha256": "704454211a91850228ce1929e30cb9fe12cebbc7ce321215441e8a0e811e6337"
+  },
+  {
+    "target": "textures/gui/class_engineer.png",
+    "source": "BattlefieldOps/src/main/resources/assets/battlefield_ops/textures/gui/bf1/kit_support_hud_default.png",
+    "operation": "native 24x24 BF1 kit glyph copied as-is (no resampling) so the UI can draw it at integer divisors 24/12/8/6 and stay crisp",
+    "sha256": "bb9cee212a0c864aa9f2be66e7a054a47de35f6259667d9122fa608f2dc39344"
+  },
+  {
+    "target": "textures/gui/class_recon.png",
+    "source": "BattlefieldOps\\src\\main\\resources\\assets\\battlefield_ops\\textures\\gui\\bf1\\kit_scout_hud_default.png",
+    "operation": "native 24x24 BF1 kit glyph copied as-is (no resampling) so the UI can draw it at integer divisors 24/12/8/6 and stay crisp",
+    "sha256": "9b3efc36646c1713a11f068a7995b8a083f4b18c5cd8a872238478f5ddfb66a3"
+  },
+  {
+    "target": "textures/gui/bf1/lobby_background.png",
+    "source": "frontend/assets/Forest_Background-07d95344.dds",
+    "operation": "DDS decode; proportional resize to 2048px",
+    "sha256": "8688fbd4f9c16784697213684c041d3e1ab2bf741c85e0f601094f6452e793d3"
+  },
+  {
+    "target": "textures/gui/bf1/server_browser_card.png",
+    "source": "frontend/assets/mp-cardimage-serverbrowser-a4afc40e.png",
+    "sha256": "439547e1f7d48642d67769f265c74858861c73f4ac97cc5b1053bf4c1498892f",
+    "operation": "original image; GUI border nine-slice metadata supplied separately"
+  },
+  {
+    "target": "textures/gui/sprites/bf1/card.png",
+    "source": "frontend/assets/card-border-af033134.png",
+    "sha256": "61ffbe86269bdc517b10e0be1f5893c4aef4d6892e3f3813a2f3ae05246fbc13",
+    "operation": "original image; GUI border nine-slice metadata supplied separately"
+  },
+  {
+    "target": "textures/gui/sprites/bf1/button.png",
+    "source": "frontend/assets/button-border-94eb5b72.png",
+    "sha256": "d56357335f698c72b0120bcd0baf355daca4e35c9985abb2cbd1f07314038b2c",
+    "operation": "original image; GUI border nine-slice metadata supplied separately"
+  },
+  {
+    "target": "textures/gui/bf1/player_map_default_mask.png",
+    "source": "SharedIconsWin32 / player_map_default",
+    "operation": "original canvas/alpha retained as a white tint mask, then cropped to the glyph alpha bounds so drawn size == glyph size",
+    "sha256": "1739261404815e3cf80c273c2114f0d0a7424538d4005c35eb45852f4d64ad45"
+  },
+  {
+    "target": "textures/gui/bf1/player_map_self_mask.png",
+    "source": "SharedIconsWin32 / player_map_self",
+    "operation": "original canvas/alpha retained as a white tint mask, then cropped to the glyph alpha bounds so drawn size == glyph size",
+    "sha256": "1739261404815e3cf80c273c2114f0d0a7424538d4005c35eb45852f4d64ad45"
+  },
+  {
+    "target": "textures/gui/bf1/modify_background.png",
+    "source": "BF1 unpacked frontend / Desert_Background (menu plate)",
+    "operation": "centre 16:9 crop; gaussian blur 2.2; saturation 0.62; brightness 0.44; contrast 1.12; radial vignette; resized to 1600x900",
+    "sha256": "0fb61425fad37feaa130df20851c6e5b1b07b7f1ded27c4b2763c79cc101675c"
+  }
+]

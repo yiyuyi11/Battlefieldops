@@ -21,6 +21,8 @@ import java.util.function.IntConsumer;
  * the right canvas are two panels of one opaque window instead of two independently painted layers.
  */
 final class OpsScreen extends FrontScreen {
+    @Override protected boolean horizontalTabs(){return true;}
+    @Override protected void paintBackdrop(GuiGraphics g){super.paintBackdrop(g);Bf1Ui.backdrop(g,width,height);}
     private static final String[] TABS = {"部署", "地图划线", "据点/出生", "规则", "兵种", "武器/载具库", "兼容"};
 
     /**
@@ -74,7 +76,7 @@ final class OpsScreen extends FrontScreen {
         if(!Engine.str(arena,"id","").equals(savingId))return;
         savedDraft=BattlefieldOps.GSON.toJson(BattlefieldOps.GSON.fromJson(arena,Model.Arena.class));
         savingId="";
-        ok(dirty()?"已保存提交的版本；还有后续修改未保存":"保存成功！点击底部「作战房间」创建房间");
+        ok(dirtyCache?"已保存提交的版本；还有后续修改未保存":"保存成功！点击底部「作战房间」创建房间");
         rebuild();
     }
     private void discardThen(Runnable action){
@@ -154,9 +156,20 @@ final class OpsScreen extends FrontScreen {
             load();
             rebuild();
         } else if (tab == 0) {
-            rebuild();
+            // The deploy page reads only control state, but a snapshot arrives several times a second
+            // and used to tear down and rebuild every widget each time — which is exactly what a click
+            // queued behind the rebuild feels like: a stutter. Rebuild only when something the page
+            // actually prints has changed.
+            String next = UiSnapshot.controls(Client.state).toString();
+            if (!next.equals(lastControls)) {
+                lastControls = next;
+                rebuild();
+            }
         }
     }
+
+    /** Last control-only snapshot the deploy page was built from; see {@link #updated()}. */
+    private String lastControls = "";
 
     void catalogArrived() {
         if (tab == 5) rebuild();
@@ -167,6 +180,8 @@ final class OpsScreen extends FrontScreen {
 
     private void load() {
         selected = Engine.str(Client.state, "selected", "");
+        // The editor mutates its draft in place, so it has to own a private parse of the snapshot
+        // instead of the shared cached arena the HUD renders from.
         draft = Client.state.has("arena")
                 ? BattlefieldOps.GSON.fromJson(Client.state.get("arena"), Model.Arena.class) : null;
         if (draft == null) fresh();
@@ -247,7 +262,7 @@ final class OpsScreen extends FrontScreen {
     @Override
     protected String subtitle() {
         if (draft == null) return "尚未载入地图";
-        return draft.name + " [" + draft.id + "] · " + validationVerdict() + " · " + dimensionName() + (dirty()?" · 未保存":" · 已保存");
+        return draft.name + " [" + draft.id + "] · " + validationVerdict() + " · " + dimensionName() + (dirtyCache?" · 未保存":" · 已保存");
     }
 
     /**
@@ -258,12 +273,15 @@ final class OpsScreen extends FrontScreen {
      * exactly when the draft can have changed.
      */
     private String validation = "";
+    /** Cached edit flag: the footer prints it every frame and dirty() serialises the whole draft. */
+    private boolean dirtyCache;
 
     private String validationVerdict() {
         return validation.isEmpty() ? "校验通过" : validation;
     }
 
     private void revalidate() {
+        dirtyCache = dirty();
         if (draft == null) {
             validation = "尚未载入地图";
             return;
@@ -352,7 +370,7 @@ final class OpsScreen extends FrontScreen {
     Model.Arena quickDraft(){return draft;}
     void quickSave(){guard(this::save);}
     void quickRestore(String json){draft=BattlefieldOps.GSON.fromJson(json,Model.Arena.class);rawFields.clear();invalid.clear();}
-    private static java.util.List<ChoiceScreen.Choice> teamChoices(boolean both){var list=new java.util.ArrayList<ChoiceScreen.Choice>();if(both)list.add(new ChoiceScreen.Choice("-1","双方",""));list.add(new ChoiceScreen.Choice("0","机械轴心",""));list.add(new ChoiceScreen.Choice("1","格雷同盟",""));return list;}
+    private java.util.List<ChoiceScreen.Choice> teamChoices(boolean both){var list=new java.util.ArrayList<ChoiceScreen.Choice>();if(both)list.add(new ChoiceScreen.Choice("-1","双方",""));list.add(new ChoiceScreen.Choice("0",Factions.name(draft,0),""));list.add(new ChoiceScreen.Choice("1",Factions.name(draft,1),""));return list;}
     void chooseEditingMap(){
         if(me()!=null){warn("请先退出房间再编辑");return;}
         var choices=new ArrayList<ChoiceScreen.Choice>();
@@ -504,11 +522,11 @@ final class OpsScreen extends FrontScreen {
             else form.paragraph("这张地图还没有房间，请等待管理员创建。", Ui.TEXT_WARN);
             if (admin() && room) row(form,"关闭房间","结束并结算",()->minecraft.setScreen(new ConfirmActionScreen(this,"关闭并结算房间？","仅结束当前选中地图的房间，其他房间不受影响。","关闭并结算",()->action("stop"))));
         } else {
-            form.caption("阵营  " + (team == 0 ? "机械轴心" : team == 1 ? "格雷同盟" : "未选择"),
+            form.caption("阵营  " + Factions.name(draft,team),
                     team < 0 ? Ui.TEXT_WARN : team == 0 ? Ui.BLUE : Ui.RED);
             if (team < 0) {
-                primary(form, "选择机械轴心 / 进攻方", true, () -> join(0));
-                primary(form, "选择格雷同盟 / 防守方", true, () -> join(1));
+                primary(form, "选择 "+Factions.name(draft,0)+" / 进攻方", true, () -> join(0));
+                primary(form, "选择 "+Factions.name(draft,1)+" / 防守方", true, () -> join(1));
             }
             if (admin() && !running) row(form, "开始本局", "锁定阵营", () -> action("start"));
             row(form, "退出房间", "恢复原背包", () -> action("leave"));
@@ -756,6 +774,17 @@ final class OpsScreen extends FrontScreen {
             draft.id = value;
         });
         field(form, "地图名称", draft.name, 48, value -> draft.name = value);
+        form.section("双方阵营");
+        var nations=Factions.ALL.stream().map(n->new ChoiceScreen.Choice(n.id(),n.name(),"bf1")).toList();
+        dropdown(form,"队伍 0 / 进攻方",draft.blueFaction,nations,v->{draft.blueFaction=v;rebuild();});
+        dropdown(form,"队伍 1 / 防守方",draft.redFaction,nations,v->{draft.redFaction=v;rebuild();});
+        form.paragraph(Factions.name(draft,0)+" 对阵 "+Factions.name(draft,1)+" · 保存地图后生效",Ui.TEXT_DIM);
+        var languages=VoiceLanguages.ALL.stream().map(l->new ChoiceScreen.Choice(l.id(),l.label(),"")).toList();
+        dropdown(form,"队伍 0 战场语音",draft.blueVoiceLanguage,languages,v->{draft.blueVoiceLanguage=v;rebuild();});
+        dropdown(form,"队伍 1 战场语音",draft.redVoiceLanguage,languages,v->{draft.redVoiceLanguage=v;rebuild();});
+        form.paragraph("士兵喊话随所选语言；当前指挥官占点播报仅提供英语。",Ui.TEXT_DIM);
+
+
 
         Layout.Rect[] modeRow = form.pair(Layout.ROW);
         dropdown(form,modeRow[0],"模式",draft.mode,java.util.List.of(

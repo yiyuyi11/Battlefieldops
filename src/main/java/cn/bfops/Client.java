@@ -123,6 +123,19 @@ public final class Client {
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_M, "key.categories.battlefield_ops");
 
     static JsonObject state = new JsonObject(), catalog = new JsonObject();
+
+    /** Wall clock before which the client keeps the death view rather than opening the deploy map. */
+    static long deathHoldUntil;
+
+    /** True while the reference's death sequence should still own the screen. */
+    static boolean holdingDeathView() {
+        return deathHoldUntil > 0 && System.currentTimeMillis() < deathHoldUntil;
+    }
+
+    /** Space is the "I have read this" key: it lets the deploy map open immediately. */
+    static void releaseDeathHold() {
+        deathHoldUntil = 0;
+    }
     static JsonObject lobby=new JsonObject();
     private static long snapshotNanos=System.nanoTime();
     static long snapshotElapsed(){return Math.max(0,(System.nanoTime()-snapshotNanos)/1_000_000L);}
@@ -225,7 +238,7 @@ public final class Client {
 
     @SubscribeEvent
     public static void referenceReload(net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent event){
-        event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)manager->{ReferenceProps.clear();GearNames.clear();EquipmentStatistics.clear();BoundaryEffect.reset();NearMissEffect.reset();MusicDirector.silence();});
+        event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)manager->{Minecraft.getInstance().execute(()->{FactionArt.clear();AssetIcons.clear();NativeAudioBank.clear();NativeBattleAudio.reset();});ReferenceProps.clear();GearNames.clear();EquipmentStatistics.clear();BoundaryEffect.reset();NearMissEffect.reset();MusicDirector.silence();});
     }
 
     @SubscribeEvent
@@ -348,11 +361,16 @@ public final class Client {
             if(Engine.str(payload,"type","").equals("attachmentCatalog")){
                 if(mc.screen instanceof AttachmentRulesScreen screen)screen.receive(payload);return;
             }
+            if(Engine.str(payload,"type","").equals("downedCard")){
+                DeathCard.show(payload);return;
+            }
             if(Engine.str(payload,"type","").equals("deathStats")){
-                NativeKillIcons.deathStats(Engine.str(payload,"killer",""));return;
+                NativeKillIcons.deathStats(Engine.str(payload,"killer",""));
+                DeathCard.show(payload);return;
             }
             if(Engine.str(payload,"type","").equals("fittings")){
-                if(mc.screen instanceof FittingScreen screen)screen.receive(payload);return;
+                if(mc.screen instanceof FittingScreen screen)screen.receive(payload);
+                if(mc.screen instanceof GunModifyScreen screen)screen.receive(payload);return;
             }
             if(Engine.str(payload,"type","").equals("supportSound")){
                 String cue=Engine.str(payload,"cue","");
@@ -372,6 +390,7 @@ public final class Client {
             snapshotNanos=System.nanoTime();
             if(mc.screen instanceof AttachmentRulesScreen screen&&!Engine.str(payload,"message","").isEmpty())screen.error(Engine.str(payload,"message",""));
             if(mc.screen instanceof FittingScreen screen&&!Engine.str(payload,"message","").isEmpty())screen.error(Engine.str(payload,"message",""));
+            if(mc.screen instanceof GunModifyScreen screen&&!Engine.str(payload,"message","").isEmpty())screen.error(Engine.str(payload,"message",""));
             if(mc.screen instanceof LobbyScreen screen){
                 screen.roomUpdated(payload);
                 if(payload.has("open")&&payload.get("open").getAsBoolean()&&payload.has("me")&&mc.screen==screen)mc.setScreen(new BattleScreen());
@@ -379,7 +398,8 @@ public final class Client {
                 screen.updated();
             } else if (mc.screen instanceof OpsScreen screen) {
                 screen.updated();
-            } else if (!(mc.screen instanceof ConfirmActionScreen) && !(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) && !deployed && payload.has("open") && payload.get("open").getAsBoolean()) {
+            } else if (!(mc.screen instanceof DeathPreviewScreen) && !(mc.screen instanceof GunModifyScreen) && !(mc.screen instanceof FittingScreen) && !(mc.screen instanceof LoadoutScreen) && !(mc.screen instanceof ConfirmActionScreen) && !(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) && !deployed && payload.has("open") && payload.get("open").getAsBoolean()
+                    && !holdingDeathView()) {
                 mc.setScreen(new BattleScreen());
             }
         } catch (Exception ex) {
@@ -396,7 +416,7 @@ public final class Client {
             java.nio.file.Files.writeString(folder.resolve("mode-off-map-draft.json"),BattlefieldOps.GSON.toJson(editor.draft));
         }catch(java.io.IOException ex){BattlefieldOps.LOG.error("Cannot preserve map draft before mode shutdown",ex);}
         state=new JsonObject();lobby=new JsonObject();awards.clear();Cinematic.clear();MatchView.leftMatch();
-        NativeKillIcons.reset();MusicDirector.silence();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();WorldMarkers.reset();
+        NativeKillIcons.reset();NativeBattleAudio.reset();MusicDirector.silence();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();WorldMarkers.reset();
         if(mc.screen instanceof FrontScreen)mc.setScreen(null);
     }
     static boolean serverSupported() {
@@ -436,6 +456,20 @@ public final class Client {
 
     @EventBusSubscriber(modid = "battlefield_ops", value = Dist.CLIENT)
     public static final class Events {
+        /** True while the local player is on the death side of the match (dead, not merely downed elsewhere). */
+        static boolean dead() {
+            return state.has("inMatch") && state.get("inMatch").getAsBoolean()
+                    && state.has("me") && state.getAsJsonObject("me").has("alive")
+                    && !state.getAsJsonObject("me").get("alive").getAsBoolean();
+        }
+
+        @SubscribeEvent
+        public static void corpses(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
+            if (event.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+                CorpseRagdoll.render(event);
+            }
+        }
+
         @SubscribeEvent public static void deployTravelMovement(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event){
             if(!Cinematic.deployTravelLocked())return;
             var input=event.getInput();
@@ -465,7 +499,7 @@ public final class Client {
         @SubscribeEvent
         public static void logout(ClientPlayerNetworkEvent.LoggingOut event) {
             BattleServerMode.clientActive=false;EntryScene.clear();NativeXaero.reset();
-            MatchView.leftMatch();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();
+            MatchView.leftMatch();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();DeathCard.reset();CorpseRagdoll.reset();
             CrawlPose.apply(Minecraft.getInstance().player, false);
             LoadoutProfiles.save();fittingMemory.clear();loadoutMemory.clear();lobbyLoadouts.clear();LoadoutProfiles.load();wasDowned=false;downedJumpArmed=false;confirmedDeploy="";
             state = new JsonObject();
@@ -500,7 +534,7 @@ public final class Client {
             // A buffered music or voice stream outlives the world it was started in: leaving it running
             // means the next server's lobby has the previous match's victory bed playing over it.
             MusicDirector.silence();
-            SoundCues.reset();
+            NativeBattleAudio.reset();SoundCues.reset();
             cn.bfops.crawl.compat.tacz.TaczCrawlShootLimiter.clearClient();
             cn.bfops.crawl.compat.tacz.TaczPronePartService.clearAll();
             Cinematic.clear();
@@ -513,6 +547,8 @@ public final class Client {
         @SubscribeEvent
         public static void tick(ClientTickEvent.Post event) {
             NativeKillIcons.tick();
+            CorpseRagdoll.track(Minecraft.getInstance());
+            GunBallistics.bakeIfChanged();
             var mapMc=Minecraft.getInstance();
             // Leaderboard key. Polled before the minimap keys because it is the one binding that has to
             // work outside a match as well, and the block below is guarded on `inMatch`.
@@ -538,8 +574,10 @@ public final class Client {
                 if(downed){mc.options.keyAttack.setDown(false);mc.player.stopUsingItem();}
                 wasDowned=downed;
                 if(!EntryScene.active())trackDeathAndDeploy(mc, me);
-                if(!EntryScene.active()&&DeploymentLock.required(state)&&!Cinematic.inDeathSequence()&&!(mc.screen instanceof FrontScreen)&&!(mc.screen instanceof ConfirmActionScreen)&&!(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen)&&!(mc.screen!=null&&mc.screen.getClass().getName().startsWith("xaero.")))
+                if(!EntryScene.active()&&DeploymentLock.required(state)&&!holdingDeathView()
+                        &&!Cinematic.inDeathSequence()&&!(mc.screen instanceof FrontScreen)&&!(mc.screen instanceof GunModifyScreen)&&!(mc.screen instanceof DeathPreviewScreen)&&!(mc.screen instanceof ConfirmActionScreen)&&!(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen)&&!(mc.screen!=null&&mc.screen.getClass().getName().startsWith("xaero.")))
                     mc.setScreen(new BattleScreen());
+                NativeBattleAudio.tick(state,System.currentTimeMillis());
                 MusicDirector.tick(state, System.currentTimeMillis());
                 TacticalParticles.tick();
                 // Crosshair on a player keeps that player's health bar alive. This is the "I just shot
@@ -550,15 +588,6 @@ public final class Client {
                         && mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult aimed
                         && aimed.getEntity() instanceof net.minecraft.world.entity.player.Player target) {
                     Nameplates.recordHit(target);
-                }
-                // Own muzzle flash, driven off the hurt feedback the server already sends rather than a
-                // separate firing event: this client only needs to know when a shot landed, and a second
-                // source of truth for "did I shoot" would drift from the one the scoring uses.
-                if (mc.player.tickCount % 2 == 0 && GunFeedbackCompat.heldGun(mc.player.getMainHandItem())
-                        && mc.options.keyAttack.isDown()) {
-                    var look = mc.player.getLookAngle();
-                    var eye = mc.player.getEyePosition();
-                    MuzzleGlow.muzzle(eye.x + look.x, eye.y + look.y - 0.15, eye.z + look.z, false);
                 }
                 if (mc.screen == null && mc.options.keyUse.isDown() && mc.player.getMainHandItem().isEmpty()
                         && !CrawlPose.downed(mc.player) && mc.player.tickCount % 4 == 0) {
@@ -686,7 +715,7 @@ public final class Client {
             JsonObject me = state.getAsJsonObject("me");
             if (!Engine.str(me, "map", "").equals(Engine.str(state, "selected", ""))) return;
 
-            Model.Arena arena = BattlefieldOps.GSON.fromJson(state.get("arena"), Model.Arena.class);
+            Model.Arena arena = FactionArt.arena();
             // The HUD is suppressed while this overlay is held, so this is the only thing asking for the
             // baked terrain at that moment. Without it, a player who joins a match and immediately holds
             // the key would see the checkerboard outside their view distance until they let go.
@@ -749,7 +778,7 @@ public final class Client {
         /** One line: each objective id, its owner and its capture progress. */
         private static void objectives(Minecraft mc, GuiGraphics graphics, int x, int y, int width) {
             if (!state.has("flags") || !state.has("arena")) return;
-            Model.Arena arena = BattlefieldOps.GSON.fromJson(state.get("arena"), Model.Arena.class);
+            Model.Arena arena = FactionArt.arena();
             JsonArray flags = state.getAsJsonArray("flags");
             int stage = Engine.num(state, "stage", 0);
             StringBuilder line = new StringBuilder("据点  ");
@@ -792,7 +821,7 @@ public final class Client {
         }
 
         private static String title() {
-            Model.Arena arena = BattlefieldOps.GSON.fromJson(state.get("arena"), Model.Arena.class);
+            Model.Arena arena = FactionArt.arena();
             return arena.name + "   " + MatchScore.line(arena,state);
         }
 
@@ -803,7 +832,7 @@ public final class Client {
             int limit = Math.max(1, (graphics.guiHeight() - y - 85) / 11);
             List<Scoreboard.Row> shown = Scoreboard.top(ranked, limit);
 
-            String label = Board.label(team);
+            String label = FactionArt.name(team);
             int selfTeam=Engine.num(state.getAsJsonObject("me"),"team",0);
             int headerColor=team==selfTeam?TacticalColors.FRIEND:TacticalColors.ENEMY;
             graphics.drawString(mc.font,Ui.clip(mc.font,label+"  "+Scoreboard.teamAlive(all,team)+" 人存活 · "+Scoreboard.teamScore(all,team)+" 分",width),x,y,headerColor);
@@ -817,7 +846,7 @@ public final class Client {
                 int color=!row.alive()?Scoreboard.DEAD:row.self()?TacticalColors.SELF:headerColor;
                 if(row.self())graphics.fill(x-2,line-1,x+width+2,line+10,0x305f9dd4);
                 String numbers=Scoreboard.stats(row);
-                AssetIcons.draw(graphics,"role",row.kit(),x,line-1,9,9);
+                AssetIcons.draw(graphics,"role",row.kit(),x,line-1,12,12);
                 String who=Scoreboard.label(row)+(row.squad()>0?" ["+row.squad()+"]":"");
                 graphics.drawString(mc.font,Ui.clip(mc.font,who,Math.max(8,nameWidth-17)),x+12,line,color);
                 // Stats are right-aligned so the digits line up; a ragged column is unreadable fast.
@@ -890,7 +919,7 @@ public final class Client {
             if(key.equals(confirmedDeploy))return false;
             confirmedDeploy=key;wasAlive=true;wasEverAlive=true;deployLaunched=false;overviewWarning="";
             Cinematic.descend();DeployMarkers.select("");
-            if(mc.screen instanceof BattleScreen||mc.screen instanceof LoadoutScreen||mc.screen instanceof FittingScreen)mc.setScreen(null);
+            if(mc.screen instanceof BattleScreen||mc.screen instanceof LoadoutScreen||mc.screen instanceof FittingScreen||mc.screen instanceof GunModifyScreen)mc.setScreen(null);
             return true;
         }
 
@@ -905,8 +934,11 @@ public final class Client {
          * player stays {@code alive} so they keep their crawl view; a true death flips {@code alive} to
          * false and plays the rise; a redeploy flips it back and descends to the body.
          */
+        static void previewClosed(){deployLaunched=false;overviewKey="";}
         private static void trackDeathAndDeploy(Minecraft mc, JsonObject me) {
+            if(DeathPreviewScreen.active())return;
             if (!DeploymentLock.room(state) || me == null || !me.has("alive")) {
+                if(VanillaDeathFlow.active())return;
                 // Not in a match at all. Hand the camera back if we were holding it.
                 if (Cinematic.active()) Cinematic.clear();
                 wasAlive = true;
@@ -930,6 +962,8 @@ public final class Client {
                 Cinematic.startDeath(mc.player.getX(), mc.player.getY() + 1.6, mc.player.getZ(),
                         mc.player.getYRot(), mc.player.getXRot());
                 deployLaunched = false;
+                // Hold the deploy map back so the camera move and the death card are actually seen.
+                deathHoldUntil = System.currentTimeMillis() + 2600L;
             } else if (!wasAlive && alive) {
                 // Redeployed: descend to the body the server just placed.
                 Cinematic.descend();
@@ -938,13 +972,13 @@ public final class Client {
                     && state.has("arena") && Engine.num(me,"team",-1)>=0) {
                 // Dead, and the death sequence has finished (or never ran, e.g. a spectator who just picked
                 // a team): rise to the overhead view of the deploy area and hold there.
-                Model.Arena arena=BattlefieldOps.GSON.fromJson(state.get("arena"),Model.Arena.class);
+                Model.Arena arena=FactionArt.arena();
                 frameOverview(mc,me,arena);
                 deployLaunched = true;
             }
 
             if(!alive&&deployLaunched&&!Cinematic.inDeathSequence()&&state.has("arena")&&!overviewKey.equals(overviewSignature(mc)))
-                frameOverview(mc,me,BattlefieldOps.GSON.fromJson(state.get("arena"),Model.Arena.class));
+                frameOverview(mc,me,FactionArt.arena());
             wasAlive = alive;
         }
         private static String overviewSignature(Minecraft mc){return mc.getWindow().getGuiScaledWidth()+":"+mc.getWindow().getGuiScaledHeight()+":"+(ConfirmActionScreen.base(mc.screen) instanceof BattleScreen screen?screen.fullBattlefield():false)+":"+mc.options.fov().get()+":"+overviewZoom+":"+overviewPanX+":"+overviewPanZ;}
@@ -1018,12 +1052,17 @@ public final class Client {
                 // they are supposed to be pinned to.
                 // Friendly halos go under everything else: the glow is background reassurance, and drawing it
                 // after the name plates would wash out the very text it is meant to help you find.
+                // World-space HUD keeps drawing while dead: objective markers, teammate bodies, name
+                // plates and the deploy markers are anchored to places in the world, so they are part of
+                // what the death camera is looking at rather than part of your own readout.
                 MateGlow.draw(graphics, mc, System.currentTimeMillis());
-                if (state.has("me") && !state.getAsJsonObject("me").get("alive").getAsBoolean()) DeployMarkers.draw(graphics, mc);
+                if (!me.has("alive") || !me.get("alive").getAsBoolean()) DeployMarkers.draw(graphics, mc);
                 else WorldMarkers.draw(graphics, mc);
                 Nameplates.draw(graphics, mc, spottedEnemies());
-                MuzzleGlow.draw(graphics, mc);
-                if (!(VehicleUi.active() && VehicleUi.scoped())) {
+                // What death does hide is your own screen-space HUD: minimap, weapon and equipment bars,
+                // squad list, capture queue and tickets.
+                boolean dead = me.has("alive") && !me.get("alive").getAsBoolean();
+                if (!dead && !(VehicleUi.active() && VehicleUi.scoped())) {
                     // Inertial sway: the whole match HUD trails the view by a few pixels and settles
                     // back. Wrapped in push/pop with a try/finally so a draw failure cannot leave the
                     // pose stack unbalanced, which would displace every later GUI layer in the frame.
@@ -1037,6 +1076,13 @@ public final class Client {
                         pose.popPose();
                     }
                 }
+            } catch (RuntimeException | LinkageError ex) {
+                reportHudFailure(ex);
+            }
+            // The death card is drawn outside the sway and outside the HUD block: while dead there is no
+            // other HUD left, and the card must not slide with the view.
+            try {
+                DeathCard.draw(event.getGuiGraphics(), mc);
             } catch (RuntimeException | LinkageError ex) {
                 reportHudFailure(ex);
             }

@@ -15,7 +15,7 @@ final class Ui {
     static final int PANEL_SUNKEN = 0xd0121618;
     static final int FRAME = 0x60707880;
     static final int FRAME_LIGHT = 0x909aa4ac;
-    static final int ACCENT = 0xffd9a566;
+    static final int ACCENT = 0xffe6e6e6;
     static final int ACCENT_DIM = 0x809a7448;
     /**
      * The lit edge above a raised surface.
@@ -39,6 +39,12 @@ final class Ui {
     static final int RED = 0xffc56a6a;
     static final int GOLD = 0xffd9a566;
 
+    /** True while a screen that follows the BF1 reference layout is painting. */
+    private static boolean bf1;
+    static boolean bf1(){return bf1;}
+    static void bf1(boolean value){bf1=value;}
+    private static boolean previous;
+
     private Ui() {}
 
     // ---------------------------------------------------------------- panels
@@ -46,8 +52,14 @@ final class Ui {
     /** Opaque framed surface. The 1px border is what makes two panes read as one window. */
     static void panel(GuiGraphics g, Layout.Rect r) {
         if (r.w() <= 0 || r.h() <= 0) return;
+        if(bf1){ // Reference style: a translucent plate and one hairline, no raised bevel.
+            g.fill(r.x(),r.y(),r.right(),r.bottom(),0x4a0b0e11);
+            g.fill(r.x(),r.y(),r.right(),r.y()+1,0x24ffffff);
+            return;
+        }
         g.fill(r.x(), r.y(), r.right(), r.bottom(), PANEL);
         g.fill(r.x(),r.y(),r.right(),r.y()+1,FRAME);
+        g.blitSprite(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("battlefield_ops","bf1/card"),r.x(),r.y(),r.w(),r.h());
 
     }
 
@@ -92,6 +104,16 @@ final class Ui {
 
     /** Panel with a title strip; returns the area left for content. */
     static Layout.Rect header(GuiGraphics g, Font font, Layout.Rect r, String title) {
+        if (bf1) {
+            // Reference style: no title band, just the caption over a hairline, so the pane reads as one
+            // surface instead of a header stacked on a body.
+            int h = Math.min(r.h(), 14);
+            if (!title.isEmpty() && h >= 10) {
+                g.drawString(font, UiFont.text(clip(font, title, r.w() - 12)), r.x() + 4, r.y() + (h - 8) / 2, TEXT, false);
+            }
+            g.fill(r.x(), r.y() + h, r.right(), r.y() + h + 1, 0x38ffffff);
+            return headerBody(r);
+        }
         panel(g, r);
         int stripHeight = Math.min(r.h(), 14);
         g.fill(r.x() + 1, r.y() + 1, r.right() - 1, r.y() + stripHeight, PANEL_ALT);
@@ -207,19 +229,10 @@ final class Ui {
         frame(g, r, color);
     }
 
-    /**
-     * Soft vertical gradient inside a rect, band by band.
-     *
-     * <p>Rendered as a stack of solid 1px fills rather than a translucent overlay: the whole point of
-     * this theme is that nothing is semi-transparent over the world, and a real {@code fillGradient}
-     * would reintroduce exactly the compositing seam this mod removed.
-     */
+    /** One native gradient quad instead of a fill call for every pixel row. */
     static void gradient(GuiGraphics g, Layout.Rect r, int top, int bottom) {
         if (r.w() <= 0 || r.h() <= 0) return;
-        for (int i = 0; i < r.h(); i++) {
-            double f = r.h() <= 1 ? 0 : i / (double) (r.h() - 1);
-            g.fill(r.x(), r.y() + i, r.right(), r.y() + i + 1, mix(top, bottom, f));
-        }
+        g.fillGradient(r.x(),r.y(),r.right(),r.bottom(),top,bottom);
     }
 
     /** A group box: sunken body with a tiny caption in the top-left, used to cluster related rows. */

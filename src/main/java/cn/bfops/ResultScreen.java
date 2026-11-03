@@ -18,7 +18,7 @@ final class ResultScreen extends FrontScreen {
    int tint=team==mine?TacticalColors.FRIEND:TacticalColors.ENEMY;
    var rows=new java.util.ArrayList<JsonObject>();if(result.has("ranking"))for(var value:result.getAsJsonArray("ranking")){var row=value.getAsJsonObject();if(Engine.num(row,"team",-1)==team)rows.add(row);}
    rows.sort(java.util.Comparator.comparingInt((JsonObject row)->Engine.num(row,"score",0)).reversed());
-   ranking.section(Board.label(team)+" · "+(team==mine?"我方":"敌方")+" · "+rows.size()+" 人");
+   ranking.section(Engine.str(result,team==0?"blueFactionName":"redFactionName",Board.label(team))+" · "+(team==mine?"我方":"敌方")+" · "+rows.size()+" 人");
    ranking.caption("姓名       击/死 · 助/救 · 得分",Ui.TEXT_DIM);
    int index=0;for(var row:rows){int position=++index;ranking.paint(16,(g,r)->{
     boolean self=Engine.str(row,"name","").equals(Engine.str(result,"playerName",""));if(self)g.fill(r.x(),r.y(),r.right(),r.bottom(),0x405b9abb);

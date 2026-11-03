@@ -122,13 +122,8 @@ final class MateMarker {
         int color = tint(squad, downed);
         graphics.setColor(((color >> 16) & 0xff) / 255f, ((color >> 8) & 0xff) / 255f,
                 (color & 0xff) / 255f, ((color >>> 24) & 0xff) / 255f);
-        // Whole-pixel blit at 16x16 or an integer multiple of it. The art is 1px-crisp with no
-        // anti-aliasing, so a fractional scale would drop and duplicate rows — the exact artefact
-        // UiIcons exists to avoid. Sizes below 16 crop the middle of the glyph; 16 and above scale by
-        // whole factors.
-        int draw = size >= 16 ? 16 * Math.max(1, size / 16) : size;
-        int u = size >= 16 ? 0 : (16 - draw) / 2;
-        graphics.blit(location, cx - draw / 2, cy - draw / 2, draw, draw, u, u, draw, draw, 16, 16);
+        if(downed)Bf1Ui.icon(graphics,"death_hud_default",cx-size/2,cy-size/2,size);
+        else AssetIcons.draw(graphics,"role",kitId,cx-size/2,cy-size/2,size,size);
         graphics.setColor(1f, 1f, 1f, 1f);
         return true;
     }

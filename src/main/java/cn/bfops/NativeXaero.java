@@ -48,8 +48,8 @@ public final class NativeXaero {
         try{
             var mc=Minecraft.getInstance();if(!mc.level.dimension().equals(mapDimension.get(info)))return;
             Vec3 center=(Vec3)renderPos.get(info);var state=Client.state;
-            if(arenaSource!=state.get("arena")){
-                arenaSource=state.get("arena");arena=BattlefieldOps.GSON.fromJson(arenaSource,Model.Arena.class);
+            if(arena!=FactionArt.arena()){
+                arenaSource=state.get("arena");arena=FactionArt.arena();
                 pointShapes=arena.points.stream().map(v->AreaShape.of(v).outline()).toList();spawnShapes=arena.spawns.stream().map(v->AreaShape.of(v).outline()).toList();
             }
             var me=state.getAsJsonObject("me");int team=Engine.num(me,"team",-1),stage=Engine.num(state,"stage",0);
@@ -95,7 +95,7 @@ public final class NativeXaero {
                     int[] at=p.at(pad.x(),pad.z());if(at==null)continue;
                     MapIcons.marker(g,at[0],at[1],0,pad.health()?MarkerVisualType.MEDICAL_BOX:MarkerVisualType.AMMO_BOX,"",1);
                 }
-                MapIcons.contacts(g,mc.font,state,p::at,0,options);
+                MapIcons.contacts(g,mc.font,state,p::at,0,options,(float)Math.toDegrees(Math.atan2(pc,ps)));
                 // The self arrow follows the same native rotation; the stock entity radar is suppressed.
                 double angle=Math.toRadians(mc.player.getYRot());
                 double dx=-Math.sin(angle),dz=Math.cos(angle);
@@ -104,8 +104,7 @@ public final class NativeXaero {
                     double vx=dx*Math.cos(offset)-dz*Math.sin(offset),vz=dx*Math.sin(offset)+dz*Math.cos(offset);
                     Ui.line(g,0,0,(int)Math.round((ps*vx-pc*vz)*22),(int)Math.round((pc*vx+ps*vz)*22),0x885f9dd4,1);
                 }
-                Ui.line(g,0,0,(int)Math.round(ax*8),(int)Math.round(ay*8),TacticalColors.SELF,2);
-                g.fill(-1,-1,2,2,TacticalColors.SELF);
+                Bf1Players.draw(g,0,0,(float)Math.toDegrees(Math.atan2(ay,ax))-90,true,false,1,PlayerMarkerSize.self(ClientPrefs.selfArrowSize()));
                 int y=(int)Math.round(hh)+5,x=-(int)Math.round(hw),width=(int)Math.round(hw*2);
                 if(options.coordinates){g.drawString(mc.font,"X "+mc.player.getBlockX()+"  Z "+mc.player.getBlockZ(),x,y,Ui.ACCENT,true);y+=12;}
                 if(options.squad){

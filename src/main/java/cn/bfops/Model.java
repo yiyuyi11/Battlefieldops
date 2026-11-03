@@ -353,6 +353,8 @@ public final class Model {
     }
     public static final class Arena {
         public String id="map",name="新地图",dimension="minecraft:overworld",mode="CONQUEST";
+        public String blueFaction="legacy",redFaction="legacy";
+        public String blueVoiceLanguage="AUTO",redVoiceLanguage="AUTO";
         public boolean isRush(){return "RUSH".equals(mode);}
         public boolean isStaged(){return "BREAKTHROUGH".equals(mode)||isRush();}
         public int rushPlantSeconds=5,rushDefuseSeconds=8,rushFuseSeconds=45;
@@ -528,6 +530,8 @@ public final class Model {
         /** How many AI soldiers each team gets while {@link #botMode} is on. */
         public int botsPerTeam=8;
         public void validate() {
+            require(Factions.valid(blueFaction)&&Factions.valid(redFaction),"地图阵营配置无效");
+            require(VoiceLanguages.valid(blueVoiceLanguage)&&VoiceLanguages.valid(redVoiceLanguage),"战场语音语言配置无效");
             range(maxPlayers,2,128,"房间人数上限");
             range(entrySeconds,1,60,"入局简报秒数");
             require(roomDescription!=null&&roomDescription.length()<=1600,"房间说明最多 1600 字");

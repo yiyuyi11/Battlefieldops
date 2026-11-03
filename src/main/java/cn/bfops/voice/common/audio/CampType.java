@@ -4,7 +4,8 @@ public enum CampType {
     CN,
     US,
     RU,
-    COMMON;
+    COMMON,
+    UK, DE, FR, IT, TK, NONE;
 
     public static CampType fromString(String name) {
         if (name == null) {
@@ -14,6 +15,12 @@ public enum CampType {
             case "CN" -> CN;
             case "US" -> US;
             case "RU" -> RU;
+            case "UK" -> UK;
+            case "DE" -> DE;
+            case "FR" -> FR;
+            case "IT" -> IT;
+            case "TK" -> TK;
+            case "NONE" -> NONE;
             default -> COMMON;
         };
     }

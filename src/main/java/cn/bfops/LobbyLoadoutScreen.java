@@ -20,6 +20,7 @@ import net.minecraft.client.gui.screens.Screen;
  * pick a later deployment uses.
  */
 final class LobbyLoadoutScreen extends FrontScreen {
+    @Override protected boolean bf1Style(){return true;}
     private final Screen parent;
     private String kitId = "";
     private Form form, bar;
@@ -108,7 +109,7 @@ final class LobbyLoadoutScreen extends FrontScreen {
         row(form,"载具库","全部已安装载具",()->{
             var choices=new ArrayList<ChoiceScreen.Choice>();
             if(Client.catalog.has("entries"))for(var value:Client.catalog.getAsJsonArray("entries")){var e=value.getAsJsonObject();if(Engine.str(e,"kind","").equals("vehicle"))choices.add(new ChoiceScreen.Choice(Engine.str(e,"id",""),Engine.str(e,"name",""),"vehicle"));}
-            minecraft.setScreen(new ChoiceScreen(this,"大厅载具库",choices,id->minecraft.setScreen(new FittingScreen(this,"",id,"vehicle",fitting("vehicle",id),""))));
+            minecraft.setScreen(new ChoiceScreen(this,"大厅载具库",choices,id->minecraft.setScreen(FittingScreen.open(this,"",id,"vehicle",fitting("vehicle",id),""))));
         });
         form.paragraph("进入任意房间都会沿用这里的配装；若该地图未授权某武器，会回退到该兵种首个可用武器。", Ui.TEXT_DIM);
 
@@ -177,7 +178,7 @@ final class LobbyLoadoutScreen extends FrontScreen {
 
     private void customize(String id) {
         if (id == null || id.isEmpty()) { warn("请先选择武器"); return; }
-        minecraft.setScreen(new FittingScreen(this, "", id, "gun", fitting("gun", id), ""));
+        minecraft.setScreen(FittingScreen.open(this, "", id, "gun", fitting("gun", id), ""));
     }
 
     @Override

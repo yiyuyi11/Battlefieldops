@@ -37,6 +37,10 @@ final class ClientPrefs {
         public String minimapCorner = "";
         /** Hides this mod's HUD minimap without disabling the rest of the HUD. */
         public boolean minimapHidden = false;
+        /** Show the death screen while downed instead of the crawl HUD; on by default. */
+        public boolean deathOverDowned = true;
+        /** File name (no extension) of a PNG in config/battlefield_ops/backgrounds, or "". */
+        public String screenBackground = "";
         /** Size of the arrow that marks the player on the map, in pixels. */
         public float selfArrowSize = 9.0F;
         public boolean distantGunCull = true;
@@ -144,6 +148,20 @@ final class ClientPrefs {
         data().minimapCorner = next;
         persist();
         return next;
+    }
+
+    static boolean deathOverDowned() { return data().deathOverDowned; }
+
+    static void toggleDeathOverDowned() { data().deathOverDowned = !data().deathOverDowned; persist(); }
+
+    static String screenBackground() {
+        String value = data().screenBackground;
+        return value == null ? "" : value;
+    }
+
+    static void setScreenBackground(String name) {
+        data().screenBackground = name == null ? "" : name;
+        persist();
     }
 
     static void toggleWhizz(){data().bulletWhizz=!data().bulletWhizz;persist();}

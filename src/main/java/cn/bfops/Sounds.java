@@ -46,7 +46,7 @@ final class Sounds {
      * constructor and any future caller must not be able to double-register by accident.
      */
     static void registerAll() {
-        for (String name : SoundCatalog.ALL) {
+        for (String name : names()) {
             ALL.computeIfAbsent(name, key -> REGISTRY.register(key,
                     () -> SoundEvent.createVariableRangeEvent(
                             ResourceLocation.fromNamespaceAndPath("battlefield_ops", key))));
@@ -67,12 +67,12 @@ final class Sounds {
      * in a test. It is the same list {@link #registerAll()} walks.
      */
     static Set<String> names() {
-        return Collections.unmodifiableSet(new java.util.LinkedHashSet<>(SoundCatalog.ALL));
+        return Collections.unmodifiableSet(new java.util.LinkedHashSet<>(java.util.stream.Stream.concat(SoundCatalog.ALL.stream(),Bf1AudioCatalog.ALL.stream()).toList()));
     }
 
     /** How many events are registered; the asset import asserts this against {@code sounds.json}. */
     static int size() {
-        return SoundCatalog.ALL.size();
+        return names().size();
     }
 
     /** How many have actually been registered so far, which is 0 before the mod constructor runs. */

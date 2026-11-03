@@ -25,9 +25,16 @@ public final class BattlefieldMixinPlugin implements IMixinConfigPlugin {
             if(stream==null)return null;var node=new ClassNode();new ClassReader(stream).accept(node,ClassReader.SKIP_CODE|ClassReader.SKIP_DEBUG|ClassReader.SKIP_FRAMES);return node;
         }
     }
+    public static boolean worldMapCompatible(){
+        try{var node=read("xaero.map.gui.GuiMap");if(node==null)return false;
+            var fields=new HashMap<String,String>();for(var f:node.fields)fields.put(f.name,f.desc);
+            for(String name:List.of("cameraX","cameraZ","scale","screenScale"))if(!"D".equals(fields.get(name)))return false;
+            return fields.containsKey("lastViewedDimensionId")&&node.methods.stream().anyMatch(m->m.name.equals("render")&&m.desc.equals("(Lnet/minecraft/client/gui/GuiGraphics;IIF)V"));
+        }catch(Exception|LinkageError e){return false;}
+    }
     public void onLoad(String mixinPackage){}
     public String getRefMapperConfig(){return null;}
-    public boolean shouldApplyMixin(String target,String mixin){return !mixin.substring(mixin.lastIndexOf('.')+1).startsWith("Xaero")||xaeroCompatible();}
+    public boolean shouldApplyMixin(String target,String mixin){return mixin.endsWith("XaeroWorldMapMixin")?worldMapCompatible():!mixin.substring(mixin.lastIndexOf('.')+1).startsWith("Xaero")||xaeroCompatible();}
     public void acceptTargets(Set<String> own,Set<String> others){}
     public List<String> getMixins(){return null;}
     public void preApply(String target,ClassNode node,String mixin,IMixinInfo info){}

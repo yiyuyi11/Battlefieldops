@@ -15,8 +15,8 @@ final class MatchScore {
     static String line(Model.Arena arena,JsonObject state){
         if(state==null||!state.has(arena.isDeathmatch()?"teamScores":"tickets"))return arena.modeName()+" · 未开局";
         int blue=value(arena,state,0),red=value(arena,state,1);
-        if(arena.isDeathmatch())return "团队击杀  "+Board.label(0)+" "+blue+" / "+Board.label(1)+" "+red+" · 目标 "+arena.targetKills;
+        if(arena.isDeathmatch())return "团队击杀  "+Factions.name(arena,0)+" "+blue+" / "+Factions.name(arena,1)+" "+red+" · 目标 "+arena.targetKills;
         if(arena.isStaged())return "进攻方兵力 "+blue+" · 阶段 "+(state.has("stage")?state.get("stage").getAsInt()+1:1)+" / "+(state.has("stages")?state.get("stages").getAsInt():1);
-        return "兵力  "+Board.label(0)+" "+blue+" / "+Board.label(1)+" "+red;
+        return "兵力  "+Factions.name(arena,0)+" "+blue+" / "+Factions.name(arena,1)+" "+red;
     }
 }

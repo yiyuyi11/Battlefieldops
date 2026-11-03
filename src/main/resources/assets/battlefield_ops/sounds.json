@@ -10311,5 +10311,3616 @@
         "name": "battlefield_ops:reference/whizz/rpg19"
       }
     ]
+  },
+  "bf1.announcer.uk.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1a41c6eda5b9f562aae2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/401b749f1159d74642c1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/15dc528bf907da1967a8",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.uk.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/19210fceaee1b9d9be99",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3b600b1e9cdfb61e0329",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9e7ab47d31648c1ddabf",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun03d_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a3ff1c46d2e309109065",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun05d_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/cb40390ce4bb7f9485b7",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun09c_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/82430571a8042d007b77",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun122_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/834f1901126f24172e4a",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun35a_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/cf9ead39c9bae0832e8a",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun39d_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/81075fd2b4c5b5175ae6",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun67d_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/f13a84fe2524126bdbc8",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun67e_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/13fd99aad317bf959311",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun73b_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/32e36adb5fd8aa636e97",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun74d_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/819dcad2f21df97d5004",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.frontend.music_frontend_tun92a_wave": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b1a9b18fa4ba7eb06ea6",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.attackersadvance": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/43c087217c2105ae3387",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.briefing": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/df46bfbe74c6f14ad5a0",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.eor": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/96e16e1c6ecbffcbe410",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.flagcaptured": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d0ebca85fc38f2c8f259",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.mandown": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8de5541971e5a56362cb",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menu_01": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c273ddc6ade71062f157",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menu_02": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4166e2f5534698c0dfe1",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menu_03": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/53e6ba310dac665eb2ea",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menu_04": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/78950cce943b74662cd8",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menu_05": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4ed5439202667ef9fd61",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.menuoverlay": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/ac11ede12d4c0e7f5755",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.preeor_01": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8a95d1496eaee96f2d92",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.preeor_02": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8cd83b2f891117ebd987",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.preeor_03": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d2a3b77d3c62be25362e",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.preeor_outro": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8de5541971e5a56362cb",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.preeor_overlay": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d0ebca85fc38f2c8f259",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.roundstart": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1d1fb1d143c248a0dec8",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.spawnin": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8e3e5e6778869fa1c325",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.voice.de.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/17b540059f8496e4a25b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d46e250c9a196e77f668",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/42e5ad40323be59250fb",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/999cec7a188dc7eda0f9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2ee7a96ec196adf51563",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6df4b51a69aca2ee6b18",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/61875a380615d00f7ce4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ca44d71b87ced13852c8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fdfbcff3dbea04ff89c8",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/239932b0931c8c6cca68",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/736b093e4320b2d10070",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/77025658308bc028a270",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e9dc3643173f800ed7c6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/15b97831c21fedd33068",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/74b43406e74f08e33514",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e136acb53925023a0b46",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/78d788016425d0cc00d6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b2bd1bb5c82d85757991",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/43e4fe102089278731b6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4e6d463e90f9ad0b9a8a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d58ae6c52d0b13a0eacc",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1ffd098fdbad150ea208",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3c02382d006fc7e2fe79",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0639719d37904e022243",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a41ca1d853dd4707f70b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8400c9635c5e094ca36c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f7e8a13910852ec61fbe",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4a1e8dedd742bffaa1e4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5e76eb19369fc161997a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4b4dd3df768435d878a7",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/07adfeaa48653efcab1a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/aa2a2e6e2f1b2a384975",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e5593df8aa99686ec308",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b011ad90b0d482254812",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8668a0708387a402efd3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4025d5ef5cb5eef28ecb",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4f479c6b8265a7de7be7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4b829efaff6d1f5ff194",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/06151c52ee306c997452",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/cd9f15356874702712c5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d26d8490cf887b7191af",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/35547a924ef43aeba02f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7ab35b97d23593c8efc1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a24ac38b33434c145140",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6fb835af2008e0e96471",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/6d5995052aff2f68a24a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fe880f04fdf19a180c78",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e3457a210fa189cbae00",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2779160a15aeb71f3968",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d8617285971079a0026d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ea66606ec348d4dbe3bf",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/17e1f5dbc122164d1198",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/833ac86b77497c74fa77",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/120517022a59d1c76791",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3530568549007d8c68b1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3a5b07987d3a3feae159",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d374399bce0aa55753d1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/06ebb933c0b41f7217e9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6da47d13b6a5dea387ba",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b53d08a9dd735ea703b1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/280f9cc6caa881fbdce2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/144c4b24c21a36dd8be6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/31f27cd2552b9511c35a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3a502c759a5c61c3023e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/80e6fdf621d3758db07d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1beb99cc61a8e830c7e6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4e83af8ae59cbde81147",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7587da9e32c041995438",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f0e631b57acc5ae61305",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/22747713a45b2b86de8b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8c54b34daf44e57bfc43",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7ebb9a1599294010d38c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/90917a84d61fc3671d6d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fae1dd2492b5ccf72951",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/269e80bbc139ac46bf82",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b3c61950558ca3d18217",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2a5c35af3e05596f61ae",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b42496f44113f80a1d27",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/22a224e4f222ff8f278d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8b0ee3b56cc452552806",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1211b5455fe57cb43e54",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/63ce0cdde0fc6793415a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/76c2321aba0d052b2141",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5bed159f5d8c88e284f4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/45b08909f38a7f95a854",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/dec2bc43c38080df99c2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b575e28bfd9241e4d71f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/22ea8ee380c7925bf051",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5b2cdbb0ea878aced685",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d8647a8b77f26f9683f6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/441bd890e16abd52d53a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/55c309da63952b0e635c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a450b19f3a7cadb96b33",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/018656b0e5d3914dbac0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7414929883240cd3460a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cec8260a559802395c76",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0fed6260b0d23ad67ce4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/618f2de3885ed98afc87",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6f03ab930808ff9140af",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/180638b44e6f5ec331f2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b65d4bcc95bd693ce63f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/87c160c42d853b285bab",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3773a02d11f6358a7d1a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/adfb90d0bdb23747a595",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/319b6ab90224db3accb1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d27d54e9193138116a00",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/874e632f308c8db41b95",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/73bfce6715c71ca4cb2d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/9c9d005c087f24d28abe",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ad34e6360f8d0de00c70",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/abee23886d4ad650df6e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1d603faf66370507354f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f360aa13dcc078e051ae",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/187590132272b847786e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/74f30ebb624fae462e90",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b789e4851fedd18626ad",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/83e614f9c48b63239cc6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8c7145285aad1662f5da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8ecfcbe953e4a086cce1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2df2d23de4a9804f9799",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c947aeec1095fc328e0a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a60281ff5fb588f67d27",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8f0a2f5dd5fcba0ea40b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/221cdb34578fabb5c3f2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f962581c5f56e51fd296",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ecc2603060e42b5abad4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/853e1fc2c52abea9012b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/98fe53d26e6a9d44252d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/eddffb6b5e71cb91308a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7d47aa549a58e2f0904a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3b5fa9fb38a8c60ace12",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9e870c613a4f2dc89662",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1e8d851e7f5b867c631c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/924d459eebe3097c9e75",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/367966085576b3441223",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b741bacb7c80498510a3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d8f615906f75747de35b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5bb3ceed636f9b738716",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/212b8d91fbc3719d04d1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a6b2d3494f9c1e90ea3c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8f8c3b2351260f5286fa",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/774c961c881f5ba85940",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a2aa694f16d911e84664",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2893b508c488f7f88033",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/47f67abf0268814dce3c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c1b02c264240cf8273a2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9c7cfd20986b00a02e67",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/808971918cebe2af6b09",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fcf7976af8d8cf0b43d5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/79c80b54d6dd4b1c7387",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/185cf87bbea4a6ebab57",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c3a42ecee68c2b5b2f55",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/666555e438154a150a9b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/6740d11ec6e72bcf5154",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f33c1dceaa56b64a3771",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5403a143a9cfcb257673",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4d998456af7a3ec548e8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a1abf7513baed49f4ad8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/67179fb36ed3c058cacc",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e2cb51cdccfc33598793",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c79198c74af3c22c05fe",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/98c45565f6bda9b80b2c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/83ee98c257c1fc518100",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3c7cb0a21f1b6e8ff9c2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/58a32caa1a034fc0b668",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1ec1364296402c6fa676",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7779d151d4debf68ad8e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f32e5d777b68d430b198",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/1b0ee60bf75ac90d754d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1368e6ec319f66ce52a6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/51a87988ebb4e19740e0",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b916ab8aaa0a7f1c0ff0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1f9406613c658a67f65f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ad3975d8117dc3e17cb9",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2e173ac63b51df60ee93",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/55cd09b15dfefd3d7b8b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f04c06ed2f4b526484b4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c2387f8ef42eeab84780",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4f89bbb78c6991fc89aa",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/62faa16f35bd6c217742",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7240940fca92fa8b3256",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/47df91684e8224a486c2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4eba9d1e34d253143c93",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d45a0a6ff415b842234e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/544bdfaac467fcdf7725",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3104e52bccddc7f239fa",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/64ec4b60907a17a240b0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bffd58f9bbea68a0e9da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3b21f188bfd578c2c64d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0e6dd505f7c29d82a313",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/420052c547923c26c9f3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9554ddf7603c5297396f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a5f565774aff6e8352f3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e72f056a92f309e51fb8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3de7cefdff791f3608d2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3fecda490edf8749a85c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bbbb3be5188ddf9bd072",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e9dbbfed782fb587c4c2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0bc362de08ad58b220f5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2204387867186c3b2b39",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e839cb3f7e7bf9b2f721",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/10bd8efba00e4c4c7459",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/63d9490c253e20370831",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/caf698048957abe84b56",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/97dd077174dbb92f0ea3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5064f3ed8334b4a19cc9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/26145412f2dc733f920d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c557b6a52e854371d3f2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/575843c5bd9559afd18f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1ca027dfba07c095aac2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d3dd9c6c148a616b9fbd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/21a54dc5f7d4b82e8414",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/52e1a939a121917f33d8",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/5bb6936aee7a6e9a8462",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e9ff7da448d0b64f9f52",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5e7768a5d8f97cc7416c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/adc1ac1a30ea08195ff0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2c70ab63bc5c9c74d9da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/68e45bea55692286491f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d3d30c905448c0905bbc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bfff5b7adab86c3f8e57",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/82716ed093395b38d4cf",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c348a3d9c66a3580f520",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4abde6e23b53530fa6ed",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/97d5f0d70d3087942103",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a2124c3f10fafad1a901",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4a7c14b8b7e4f786ad22",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/47933e629e83721bd28b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2366bd451668c1d8fc4f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b9784c7c3e0a45772771",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5ed37037cd5ceab7c480",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/168c72292670e3c522c2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d99a1eff148a3f25e8cb",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a48f0137b1e8816f7ed4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4ee18073823a059dbad0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/730f297e8d7f6cbe876e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/73bcf9a4b1ef45d4b650",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/edc1cc14dcb6e566930a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b5f2d5eb8075f3fedfa9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1b2b7d019d2cc1a96012",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/493f96a636b3581877ea",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b45a88a18797840a73c7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d42197f9c53fcc465b04",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e47549ecf30395ec9dbd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5d70e095f8d7b1ecce60",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2e72a292e3a08f339b1e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/437a9d3e38074d8cffc4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bf577f362e8198eabe59",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/96d2410bdd3812c1e373",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/ba990788c842af5b282f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/14e6bf4de6330625674b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/305590a46bf82decdd73",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/9e44abce0e7d1919b3f3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b45c5719b929a6cfdcff",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c78d60bd6b5a2c264a52",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d158670459cdb4f68025",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b87236b27dba53b80952",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5e5c3f2a83667ce757dc",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c10414a6ea0ad4f91eaa",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f1dd59e7629d282fb22c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bb0c1e15233a9f032363",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2dcaa03d09df672d386e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5f052c62485397fc6b96",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/db57fea28d72f1629873",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b3c5bb4c8531b3d9349f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7b41fa648e403fb5d134",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6df29474a0fe18837d42",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/14f097f64ea821b934fc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6e35cdc42d4e84e9925c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3035851d79ad404ef410",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a808aa3c193adac8a357",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/10ef8efb8aa7d96b26f2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2863ddba74df3241bfa1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/9b9ea7aa478dbeb623e7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/91d8638a0d483fb3b7e0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f35dbbb261b39904afd6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/25427bde999faed13529",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d6daf32ec693e38537a3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ec8e68a5bdc0bc2ff324",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2cda621798f73906554b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1079206206355260e55e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1417c9a4b88dffb23fe2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0b7a0839fa4b51de9912",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1f2b2fb16d74e8c96d83",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/60a8be32f7997ea64a1c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d52b4dcdc319f61007ef",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3c9df5ec0e5c543e653c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9c051b7a333147ec904d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8368b904fffeefcc40e9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8e2094b4a6b440674560",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/43e2472af0dec9432042",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/890a73b18e8482448e04",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4a16cade4575bfab71da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/19310a40442245f1566a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d31d0fc81dd22fbdf994",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/17c25974ff3c480cec25",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8243a7838737053bdca2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/09d475464d479535e734",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e129ba4cc0ba04658492",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/67ba00de6c69a5a1d718",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/35854aabc3c254a6404a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/841443dc9043a2839882",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7fd58d48fe7cb90e449a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4fd19a9984c12ef664de",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6fa1f0eb1707f0c95a44",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9f7c2ceecf8c97210f70",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.burning": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/fadac1d8a2a1338e96bc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/93cf4d8bbad44085fc0a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ac898b50e4bc5a5619d6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.downed_help": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/8324b9f5c15ed62f651a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9b8ce6ef1256252b104b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6c4de61101f0547ab340",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.friendly_fire": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/83e13e148c91155ab7f0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e96d460cec0cb0de11c6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ffc84493dba607d4622e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.gogogo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3f3ab97e151418dd43da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/88dfbe53915d026ce57a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f9563ad5abc0ff1f8bc0",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.grenade_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b592a19aa89ec55751ae",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ecb183e502d7a8a431d6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bb1d7258861b20222992",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.reloading": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2bd04f241ffc80129e74",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/65962bf1b1246057abd0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/27b865729000bc87d90c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.request_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c7c9af135a0c4514a92b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0f917b235bd847244a5e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4df1e7addf6d4a74041e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.request_repair": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/176bbd475b45a4933054",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/99e64bf41dddf99e43f7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e022936b8655aeba4982",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.revived": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e16ac5010e752134f965",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/819cb61a03dd2272bb79",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bcd41b9ed07127296006",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.reviving": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/5a0fce07c8473a7248f3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9bb92fb9aa59881820c2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c6d1dc0538891104cb46",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.sniper_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/63ce0cdde0fc6793415a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/76c2321aba0d052b2141",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5bed159f5d8c88e284f4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.spotted_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/6e8cb8e26bdeed7892c4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/28e8761ac0084bfe1a4a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2d7fdee090f9c0c228a4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.suppressed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a077af5d1a54b43f6403",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9d66c21573d89a02f648",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2c64d4652b8fbd897be1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.thanks": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/76c90326e492799b59bf",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/64d3f02edd2ad4f33a09",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/196fe3ff7cf128ec54dd",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.throw_ammo": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/bf4cff021dec82790a00",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3f71bafdef48fe1d3ffa",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/63e2b84524fde7602b6b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.throw_grenade": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c08040f85fad9f377207",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0db92f78053450edc4d3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f1321c9e8a43eba1f123",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.throw_medkit": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4b48fcdfdd41d488c1ca",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/acab9d79bc7875e9bd2e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6316f4fdc82f0dc74577",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.music.deathdrum": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/42a38ea616e45a1d0064",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.music.deathstinger": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/11744378021b85a2850d",
+        "stream": true
+      }
+    ]
+  },
+  "bf1.voice.de.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/046cd2b1b61760641f94",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5e28031d80a7d5393e33",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7eb20f9769f69c38e4d6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/061e6f6422d31fb57e4e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1d0f685857c6e3b4743b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0727d98f37112f12e918",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4220039037f0f0a23223",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/30f37e70f12fccdb5824",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0241e766ac632942c2ce",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3b31c1a00ba49bfca2be",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3fa6ea7c8707dcf24723",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/eb79cc0de2d6933d40c8",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/902d3af226789c8159b3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/018bbb4067588feee9dc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/379f1a84a43e0f7236e5",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/bf15ab56c478e96e3e2c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c90df3c21e9fcb0af2ef",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f2433a549e578edd7d3e",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/fa4ec41cfb440f6a4ab6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/699e2b2aceca45f37e0b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/29f4977d778e39250dde",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a84ab1745b4e5317e883",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/18a779c3b9a309a3cfd6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2e03c3ea0eda946a33fc",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a6af31de15bdfe0546a5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/dd75d01dafaf8f580cdf",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b6f222c0a8fafb786ca4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/343077f2d2e2541c9e38",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e3c481cce054f3af5811",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ba32e7c90976cc2bedb2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/058d6746ec5f1e286450",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bdee68bfe366dfc81080",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/178a7e4cf8f8220e9a88",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/bb630c25ae8f7558fbc4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d34fcc1e26e88a52b155",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4af6757ee62ebf419fda",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/f6a7c46221464bf8ab59",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0021e5f893e7c9e9bd94",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1f25b9c1165e33012775",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/3e54d45467daeeff4811",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ddda143e6c60370de132",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/77b378c60c330a73686b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0b4b8e52a9dc4b2f2d08",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a7148022bb33bfa7223d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cc9b0803dd6c440fcf91",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/493f96a636b3581877ea",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b45a88a18797840a73c7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d42197f9c53fcc465b04",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/eef4b1966695940db127",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f2d4517210a2ec82ce7a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b07edb06edbc856b285d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/212b8d91fbc3719d04d1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a6b2d3494f9c1e90ea3c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8f8c3b2351260f5286fa",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/890a73b18e8482448e04",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4a16cade4575bfab71da",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/19310a40442245f1566a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/afd9435c86b665e64109",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7dd4a6eefbb205b7da2b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d63808d583665460031a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/2e497a74ebf67a345095",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1da8a6ad6d963b4a81a0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/dac810b81866ec03f9d2",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/cac5d9273175986a7fed",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d101746dfb5d47e9772e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7ee470c2cef0afd61ba9",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/ef67068c56bc5e07e8ff",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/979129af4cacc1f7ec65",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a1a67d9a91a375186688",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/9e469c40b16d45f7af0c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8a17009f4fa589ffd3d5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/61f0b4f04f76b63d3424",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c8e8d25daa516bf871cd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0d10cc03170590f61349",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0f87ae6f477a19660f76",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/ba8a0f134be21c44345a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/556563d1a4d0ec27aec5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1a17067898b8dad49996",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/f39b3ab3abb971a8d779",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9a6d19af8213b846b1f9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2a818510cebd82fafd9f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0a910ae806c2410aaa13",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2724937e6376a2d6468e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/28db52fa8b450299067f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7751fa6bbb1f2c5e6980",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a6d9d52d3606996b170a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d2e6d59644b9abd29a58",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/085e50e217a3004c81bb",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/331d18ba5e687ed5a909",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c74bbc2605194cc56c47",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/de9063e49d3a81506377",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b1580506cfc33a6841a3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f66bc61e779dc0b51413",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a077af5d1a54b43f6403",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9d66c21573d89a02f648",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2c64d4652b8fbd897be1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/868e689ca6b7f74d902e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c1f3c7059cf11cf690fa",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8a0ccccea901d3f2a800",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/379657a482be194a7621",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/062dbc021920c4589ff5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/300c6e53ada28f4da6f9",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/533ea9919a793db98226",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/88d005b3a018856d97b9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a6e0cb5e352f2a8fef59",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d05ef003eebc1d01b9c8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/ffe9004fb9bb0dc1b014",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cd628e0bd1eec54c817a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a196b6e27ed284682734",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/395234b946bd578bcc53",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/35f5e822c62de042e991",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d4483fba24b202090511",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e19b616dd2c8eba88498",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/186ad1c80f0f1a44ab2d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/59c7c63e55391a7e5ad1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d2dc27ecb3b087d53ef9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/980a511246802b9df03a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7ffeb5d75194bc310883",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/04825a5f0736e9d388b8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4f5fe3acf4281af09389",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/795b001ad84b900936a1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fc8a2c7ce35167265abd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7f3906dc47520a058d3d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/80bf3cb58b1786f80145",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/642bfa05d29fa18fe4bc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e4c50c70c782b38b20c7",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/b6fb4141360f59b91d2f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5e436fa754d60e074fcf",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/1fa79cd7eb56bcc3ff43",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0311d055609a30f6e15b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/474a0bb546f6294f8e81",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/af90bf45809e06a78ea0",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d9456f8987872820e08f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/247372bb34e1632e0538",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4554a2e3e67d5ff843b4",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.teammate_downed": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/38b4fd1b30633a32fa2b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6fb166cc35eb13d767d8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7b07e03e57f8eae2641d",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/0e6dd505f7c29d82a313",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/420052c547923c26c9f3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/9554ddf7603c5297396f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/22ea8ee380c7925bf051",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5b2cdbb0ea878aced685",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d8647a8b77f26f9683f6",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/59f89247eb5ef461a85a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e32af0ae76d71803cf8b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3dedd9c2709b5157c36a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/810c41c045f19b918558",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d6ea525103b316204c6f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/2a6ab14c66b022fa9943",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e001e90b5e26015d70c6",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e0d0ee7aaee11b7bcc83",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/aec17b28f289b24449a5",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/94e9da59dfb935e98396",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cc5ed52228715dccdbfc",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4683852b05a4a0c75da5",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.kill_enemy": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/348cd3c568fef2dfe558",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/fdfe7a269a6538ba00f5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c0ae57f7645c24f5215c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.it.spotted_recon": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/e3e736bee52a59e9f661",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3b59189748e2933194bd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0de7b4909ddb9c241527",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.uk.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/dec236767615482b6dfd",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/0fd4e30734c0f3366f0e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/741d6bb0635fb56d3bcb",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/61f5fbe22272b86d059c",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d43484d996ec6a9ee06b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/be7a599cd0601ae43aa7",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.de.suppressing_hostile": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4f479c6b8265a7de7be7",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4b829efaff6d1f5ff194",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/06151c52ee306c997452",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.us.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7e83ebe496b26b577f2d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8d1162b0e4952c8e2ee8",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d3d9fbd1f8d350e75f38",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.throw_smoke": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/040eeb0621e2dc3be739",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/8ad46024143d29ec7ed9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/18967c6b35bcf9ce500b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.spotted_engineer": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a65c81bd741676659d48",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c39f90f652947c811409",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/5c077ec929c3ae2f9e2c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.tk.spotted_support": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/53c09fe33db05979973a",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/33a5f668d98d876dacf2",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/abed42aec89b451a8f1f",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.fr.explosion_close": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/18cf9c44825dd74365d3",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a7d52221e6605c6dfbe5",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/01689f4edf96bc39e722",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.voice.ru.machine_gun_alert": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/7dd772339a59b6e9da57",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/503b8d413fc271ee3e8d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/71252f26371ecf04da58",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.ru.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/250d446ec6baa9d32b71",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f10569d7792ef8f76dd9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/f7087ed54f385b9bac73",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.tk.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/57ad0e5f95c299c84822",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d2bc215519d7db16d61f",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/d880c2c7736ab902ef40",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.ru.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/c51041b603ca1259968b",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/e3a2cd7dba8333a5d111",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/4eed079d9c1a15ff62d0",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.it.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/d9e3cd29dd0421c9c2f0",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/867e1a5aaf2f7aefb759",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/a3224111edac4ca09c6c",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.it.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/202630f5963a90e17fd1",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c5e1d1d660afe376cb04",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c4b57e0f239ecee5c168",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.de.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/336616fe67cb3cbc8f1d",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/281e7eee379126942b46",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b42c86685878e2a2fde1",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.us.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/a0dd13bc8e343bbb8c01",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/50091a1b4cbacac7a6e4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b9eb0d0865b85e15c1ae",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.us.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/47f5bbc5dfbe0be585d9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cf6b715c793236f5a7ef",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bc00f5014bd7f6430ee7",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.tk.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/937c5e5eaecb61841376",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/b665009e5ec532b29e02",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/3a237cca5adffda7364b",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.de.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/73ed60a2cb81c6d5606e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/c58a78bb5b021694b26e",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/07c4f4efb8b1e385dc19",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.fr.taken": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/4a13830c44dd41de53f4",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/6bd6b50138a644be4126",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/7829f65aecb43aabf63a",
+        "stream": false
+      }
+    ]
+  },
+  "bf1.announcer.fr.lost": {
+    "replace": true,
+    "sounds": [
+      {
+        "name": "battlefield_ops:bf1/47f5bbc5dfbe0be585d9",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/cf6b715c793236f5a7ef",
+        "stream": false
+      },
+      {
+        "name": "battlefield_ops:bf1/bc00f5014bd7f6430ee7",
+        "stream": false
+      }
+    ]
   }
 }

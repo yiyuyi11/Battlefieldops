@@ -23,7 +23,8 @@ import net.minecraft.client.Minecraft;
  */
 final class MusicDirector {
     private static String current="",room="";
-    private static boolean firstDeploy;
+    private static boolean firstDeploy,roundStarted,wasAlive;
+    private static int lobbyTrack;
     private static String pendingMood="";private static long moodAt;
     private static int stage=-1,age;
     private static final java.util.Map<String,Track> channels=new java.util.HashMap<>();
@@ -52,30 +53,40 @@ final class MusicDirector {
     static void oneShot(String name,float volume,float pitch){
         if(!ClientPrefs.musicEnabled())return;
         if(cue!=null)cue.fade(5);
-        cue=play(name,volume,false,0);if(cue!=null)cue.tune(pitch);
+        String nativeName=switch(name){case "music.death"->{
+            // The single-player death sting is the reference's own "you died" cue; the man-down music bed
+            // stays as the fallback for packs that ship without it.
+            String sting=NativeAudioBank.music("deathstinger");
+            yield sting!=null?sting:NativeAudioBank.music("mandown");
+        }case "music.first_deploy"->NativeAudioBank.music("spawnin");case "music.stage_begin"->NativeAudioBank.music("attackersadvance");case "music.victory","music.defeat"->NativeAudioBank.music("eor");default->null;};
+        cue=play(nativeName==null?name:nativeName,volume,false,0);if(cue!=null)cue.tune(pitch);
     }
     private static void channel(String key,String bed,int fade){
-        Track old=channels.get(key);String event=bed.isEmpty()?"":SoundBank.pick(bed,0);
+        Track old=channels.get(key);String event=bed.isEmpty()?"":eventFor(bed);
         if(old!=null&&old.getLocation().getPath().equals(event)&&!old.isStopped()){
             if(age-old.started<40||Minecraft.getInstance().getSoundManager().isActive(old))return;
         }
         if(old!=null){old.fade(fade);channels.remove(key);}
         if(event==null||event.isEmpty())return;
-        Track next=play(event,Mood.volume(bed),true,fade);if(next!=null)channels.put(key,next);
+        Track next=play(event,Mood.volume(bed),!bed.equals("loop_lobby"),fade);if(bed.equals("loop_lobby"))lobbyTrack++;if(next!=null)channels.put(key,next);
     }
     static void tick(JsonObject state,long now){
         age++;var mc=Minecraft.getInstance();
         owned.removeIf(t->t.isStopped()||age-t.started>40&&!mc.getSoundManager().isActive(t));
         if(mc.level==null||!ClientPrefs.musicEnabled()){silence();return;}
         String nextRoom=state.has("me")?Engine.str(state.getAsJsonObject("me"),"map",""):"";
-        if(!nextRoom.equals(room)){for(var t:channels.values())t.fade(20);channels.clear();room=nextRoom;firstDeploy=false;stage=-1;}
+        if(!nextRoom.equals(room)){for(var t:channels.values())t.fade(20);channels.clear();room=nextRoom;firstDeploy=false;roundStarted=false;wasAlive=false;stage=-1;}
         boolean inMatch=state.has("inMatch")&&state.get("inMatch").getAsBoolean();
         var me=state.has("me")?state.getAsJsonObject("me"):new JsonObject();
         boolean alive=me.has("alive")&&me.get("alive").getAsBoolean();
         int nextStage=Engine.num(state,"stage",-1);
         if(inMatch&&stage>=0&&nextStage!=stage){oneShot("music.stage_begin",.85f,1);}
         stage=nextStage;
-        if(inMatch&&!firstDeploy){oneShot("music.first_deploy",.85f,1);firstDeploy=true;}
+        boolean running=state.has("roomRunning")&&state.get("roomRunning").getAsBoolean();
+        if(running&&!roundStarted){roundStarted=true;String event=NativeAudioBank.music("roundstart");if(event!=null)oneShot(event,.85f,1);}
+
+        if(inMatch&&alive&&!wasAlive){oneShot("music.first_deploy",.85f,1);firstDeploy=true;}
+        wasAlive=inMatch&&alive;
         String desiredFinale=inMatch?Mood.finale(state):"";
         if(!desiredFinale.equals(pendingMood)){pendingMood=desiredFinale;moodAt=now;}
         Track previous=channels.get("finale");
@@ -86,13 +97,35 @@ final class MusicDirector {
         // is event-driven (stage begin, first deploy, death, objective, finale), never a bed that plays on.
         String strategic="";
         if(!inMatch&&!nextRoom.isEmpty())strategic="loop_queue";
+        else if(!inMatch&&mc.screen instanceof LobbyScreen)strategic="loop_lobby";
         channel("deploy",deploy,60);channel("strategic",strategic,20);channel("objective",objective,20);channel("finale",finale,20);
         current=!finale.isEmpty()?finale:!deploy.isEmpty()?deploy:!objective.isEmpty()?objective:strategic;
     }
-    private static String cueFor(String path){for(String cue:new String[]{"loop_last_objective","loop_last_objective_victory","loop_final_victory","loop_final_defeat","loop_desperate"})if(path.equals(SoundBank.pick(cue,0)))return cue;return "";}
-    static void death(){channel("objective","",20);oneShot("music.death",.85f,1);}
+    static void captured(){String event=NativeAudioBank.music("flagcaptured");if(event!=null)oneShot(event,.6f,1);}
+    private static String eventFor(String cue){
+        String key=switch(cue){
+            case "loop_deploy"->"menu_"+String.format(java.util.Locale.ROOT,"%02d",Math.floorMod(room.hashCode(),5)+1);
+            case "loop_queue"->"briefing";
+            case "loop_desperate","loop_final_defeat","loop_last_objective"->"preeor_03";
+            case "loop_final_victory","loop_last_objective_victory"->"preeor_01";
+            default->null;
+        };
+        if(cue.equals("loop_lobby")){Track old=channels.get("strategic");if(old!=null&&!old.isStopped()&&(age-old.started<40||Minecraft.getInstance().getSoundManager().isActive(old)))return old.getLocation().getPath();String event=NativeAudioBank.frontend(lobbyTrack);if(event!=null)return event;}
+        String event=key==null?null:NativeAudioBank.music(key);return event!=null?event:SoundBank.pick(cue,0);
+    }
+    private static String cueFor(String path){for(String cue:new String[]{"loop_last_objective","loop_last_objective_victory","loop_final_victory","loop_final_defeat","loop_desperate"})if(path.equals(eventFor(cue)))return cue;return "";}
+    /** Low percussion layer under the death sting; stopped when the deploy map opens or the player respawns. */
+    private static Track deathBed;
+
+    static void death(){
+        if(deathBed!=null)deathBed.fade(4);
+        channel("objective","",20);
+        oneShot("music.death",.85f,1);
+        String drum=NativeAudioBank.music("deathdrum");
+        deathBed=drum!=null&&ClientPrefs.musicEnabled()?play(drum,.32f,false,6):null;
+    }
     static void result(String outcome){for(var t:channels.values())t.fade(20);channels.clear();current="";if(outcome.equals("胜利"))oneShot("music.victory",1,1);else if(outcome.equals("失败"))oneShot("music.defeat",1,1);}
-    static void silence(){var mc=Minecraft.getInstance();for(var t:owned)mc.getSoundManager().stop(t);owned.clear();channels.clear();cue=null;current="";room="";firstDeploy=false;stage=-1;}
+    static void silence(){var mc=Minecraft.getInstance();for(var t:owned)mc.getSoundManager().stop(t);owned.clear();channels.clear();cue=null;current="";room="";firstDeploy=false;roundStarted=false;wasAlive=false;stage=-1;}
     static boolean active(){return !owned.isEmpty()&&ClientPrefs.musicEnabled();}
     static String current(){return current;}
     static String wanted(JsonObject state){return Mood.bed(state);}

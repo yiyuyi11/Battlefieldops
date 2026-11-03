@@ -16,7 +16,9 @@
     "XaeroOverlayMixin",
     "XaeroRadarMixin",
     "XaeroVisibilityMixin",
-    "XaeroInfoMixin"
+    "XaeroInfoMixin",
+    "XaeroSelfMixin",
+    "XaeroWorldMapMixin"
   ],
   "injectors": {
     "defaultRequire": 0

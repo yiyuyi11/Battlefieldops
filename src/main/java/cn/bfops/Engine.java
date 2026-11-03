@@ -203,6 +203,11 @@ public final class Engine {
       return var1 == null ? null : this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var1.dimension)));
    }
 
+   public cn.bfops.voice.common.audio.CampType voiceCamp(ServerPlayer player){
+      var member=player==null?null:this.members.get(player.getUUID());
+      if(member==null)return cn.bfops.voice.common.audio.CampType.CN;
+      var match=this.matches.get(member.map);return VoiceLanguages.resolve(match==null?this.maps.get(member.map):match.rules.map,member.team);
+   }
    public boolean isBot(ServerPlayer var1) {
       Engine.Member var2 = var1 == null ? null : this.members.get(var1.getUUID());
       return var2 != null && var2.bot;
@@ -927,7 +932,7 @@ public final class Engine {
          Engine.Member var5 = this.members.get(var4.getUUID());
          if (var5 != null && var5.map.equals(var1)) {
             if (var5.team >= 0) {
-               this.board.apply(var4, var1, var5.team, var2.rules.map.friendlyFire, var2.rules.map.hideEnemyNametags);
+               this.board.apply(var4, var1, var5.team, var2.rules.map.friendlyFire, var2.rules.map.hideEnemyNametags,Factions.name(var2.rules.map,var5.team));
             }
 
             this.state(var4, var1, false, "对局开始，可以部署");
@@ -992,7 +997,7 @@ public final class Engine {
       var4.team = var3;
       var4.observerAt = this.ticks;
       if (var5.running) {
-         this.board.apply(var1, var4.map, var3, var5.rules.map.friendlyFire, var5.rules.map.hideEnemyNametags);
+         this.board.apply(var1, var4.map, var3, var5.rules.map.friendlyFire, var5.rules.map.hideEnemyNametags,Factions.name(var5.rules.map,var3));
       } else {
          this.board.clearPlayer(var1);
       }
@@ -2103,6 +2108,16 @@ public final class Engine {
     }
   }
 
+  private static String deathWeapon(ServerPlayer player) {
+    if (player == null) return "";
+    ItemStack held = player.getMainHandItem();
+    if (held.isEmpty()) return "";
+    String tacz = gunIdOf(held);
+    if (!tacz.isEmpty()) return tacz;
+    String id = BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
+    return SuperbAmmo.isGunId(id) ? id : "";
+  }
+
   int supportAmmoBag(ServerPlayer player) throws ReflectiveOperationException {
     this.bagGunsOnly = true;
     try {
@@ -3014,6 +3029,16 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          + (var47.isEmpty() ? 0 : 1)
          + (var48.isEmpty() ? 0 : 1)
          + var68.size();
+      if (var49 > 35) {
+         int core = var49 - var68.size();
+         int room = Math.max(0, 35 - core);
+         if (var68.size() > room) {
+            BattlefieldOps.LOG.warn("[bfops] deploy kit for {} dropped {} spare stacks (core {} slots)",
+                    var1.getScoreboardName(), var68.size() - room, core);
+            var68 = new ArrayList(var68.subList(0, room));
+            var49 = core + var68.size();
+         }
+      }
       Model.require(var49 <= 35, "配装超过背包容量");
       ServerLevel var50 = this.level(var11);
       var50.getChunkAt(BlockPos.containing(var27.x(), var27.y(), var27.z()));
@@ -3097,10 +3122,14 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       var1.getFoodData().setSaturation(var11.defaultSaturation ? 20.0F : 5.0F);
       var9.alive = true;
       var9.downed = false;
+      var9.noRevive = false;
       var9.kit = var12.id;
       var9.lastKit = var12.id;
       var9.lastPrimary = var64;
-      var9.lastMelee = str(var8, "melee", "");
+      String requestedMelee = str(var8, "melee", "");
+      // An empty request must not erase a valid pick: the redeploy path can legitimately send ""
+      // when the client has not re-synced yet.
+      var9.lastMelee = requestedMelee.isEmpty() ? var9.lastMelee : requestedMelee;
       var9.lastSecondary = var30;
       var9.tactical1 = var47.isEmpty() ? "" : str(var8, "tactical1", "");
       var9.throwable = var71.isEmpty() ? "" : str(var8, "throwable", "");
@@ -3464,6 +3493,11 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
    }
 
    public boolean tryDown(ServerPlayer var1, ServerPlayer var2, float var3) {
+      return tryDown(var1, var2, var3, false);
+   }
+
+   /** @param melee true when the downing blow was a melee hit, which makes the down unrevivable. */
+   public boolean tryDown(ServerPlayer var1, ServerPlayer var2, float var3, boolean melee) {
       Engine.Member var4 = this.members.get(var1.getUUID());
       if (var4 == null || !var4.alive || var4.downed) {
          return false;
@@ -3478,6 +3512,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                } else {
                   Engine.Member var6 = var2 == null ? null : this.members.get(var2.getUUID());
                   var4.downed = true;
+                  var4.noRevive = melee;
                   var4.downedAt = this.ticks;
                   var4.readyAt = this.ticks + (long)var5.rules.map.respawnSeconds * 20L;
                   var4.giveUpAt = -1L;
@@ -3500,14 +3535,25 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                      var2.displayClientMessage(Component.literal("§e" + var4.name + " 被你击倒（可被救起）"), true);
                   }
 
+                  boolean teammateVoice = false;
                   for (ServerPlayer var8 : this.server.getPlayerList().getPlayers()) {
                      Engine.Member var9 = this.members.get(var8.getUUID());
                      if (var9 != null && var9.team == var4.team && var9 != var4 && var9.map.equals(var4.map) && var9.alive) {
                         var8.displayClientMessage(Component.literal("§e队友 §f" + var4.name + " §e倒地，空手右键救援"), false);
+                        if(!teammateVoice && !var9.downed && var8.level()==var1.level() && var8.distanceToSqr(var1)<=1024 && var8.hasLineOfSight(var1)){
+                           cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(var8,VoiceCue.TEAMMATE_DOWNED);
+                           teammateVoice=true;
+                        }
                      }
                   }
 
                   this.state(var1, var4.map, false, "");
+                  Network.send(var1, Map.of("type", "downedCard", "killer", var4.downedByName,
+                     "kit", var6 == null || var6.lastKit == null ? "" : var6.lastKit,
+                     "weapon", deathWeapon(var2),
+                     "distance", var2 == null ? 0 : (int)Math.round(Math.sqrt(var2.distanceToSqr(var1))),
+                     "killerHealth", var2 == null ? -1f : var2.getHealth(),
+                     "killerMaxHealth", var2 == null ? -1f : var2.getMaxHealth()));
                   return true;
                }
             } else {
@@ -3552,8 +3598,9 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          var2.rescueCallAt = this.ticks;
          var2.rescueCallUntil = this.ticks + 160L;
          FrontVoicePlayRequest var3 = FrontVoicePlayRequest.cue(
-            VoiceCue.DOWNED_HELP, CampType.CN, FrontVoicePlaybackMode.ENTITY, var1.getId(), var1.position(), 1.0F, 1.0F, 96.0F
+            VoiceCue.DOWNED_HELP, this.voiceCamp(var1), FrontVoicePlaybackMode.ENTITY, var1.getId(), var1.position(), 1.0F, 1.0F, 96.0F
          );
+         VoiceNetwork.sendToPlayer(var1,new ClientboundPlayAudioPayload(var3));
 
          for (ServerPlayer var5 : this.server.getPlayerList().getPlayers()) {
             if (var5 != var1 && rescueRole(this.members.get(var5.getUUID()), var2) && var5.level() == var1.level() && var5.distanceToSqr(var1) <= 9216.0) {
@@ -3618,6 +3665,8 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       } else if (!this.canRescue(var1, var2)) {
          return false;
       } else {
+         if(!var2.getUUID().equals(var3.reviving)||this.ticks-var3.reviveHeldAt>6L)
+            cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(var1,VoiceCue.REVIVING);
          var3.reviving = var2.getUUID();
          var3.reviveHeldAt = this.ticks;
          var1.displayClientMessage(
@@ -3656,6 +3705,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       downPose(var1, false);
       float var5 = Medic.revivedHealth(var4 == null ? 0.0F : (float)var4.rules.map.reviveHealth, var1.getMaxHealth());
       var1.setHealth(var5);
+      cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(var1,VoiceCue.REVIVED);
       var1.displayClientMessage(Component.literal("§a你被救起了"), true);
       if (var3 != null) {
          Engine.Member var6 = this.members.get(var3.getUUID());
@@ -3685,13 +3735,31 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
             if (var3.alive) {
                this.releaseElite(var1.getUUID(), var3);
                String var5 = var2 != null && !var2.getUUID().equals(var1.getUUID()) ? var2.getScoreboardName() : (var3.downed ? var3.downedByName : "");
+               String killerKit = "";
+               String killerWeapon = "";
+               int killerDistance = 0;
+               if (var2 != null && var2 != var1) {
+                  Engine.Member killer = this.members.get(var2.getUUID());
+                  if (killer != null) {
+                     killerKit = killer.lastKit == null ? "" : killer.lastKit;
+                     killerWeapon = deathWeapon(var2);
+                  }
+                  killerDistance = (int) Math.round(Math.sqrt(var2.distanceToSqr(var1)));
+               }
                var3.alive = false;
                var3.observerAt = this.ticks + 80L;
                var3.downed = false;
                downPose(var1, false);
                this.clearReviver(var1.getUUID());
                var3.deaths++;
-               Network.send(var1, Map.of("type", "deathStats", "killer", var5));
+               Network.send(var1, Map.of("type", "deathStats", "killer", var5,
+                     "kit", killerKit, "weapon", killerWeapon, "distance", killerDistance,
+                     "killerHealth", var2 == null ? -1f : var2.getHealth(),
+                     "killerMaxHealth", var2 == null ? -1f : var2.getMaxHealth()));
+               // A physics body where the player fell, pushed away from whoever shot them. The dummy is
+               // independent of this player's state, so the deploy flow is untouched.
+               Vec3 push = var2 == null ? Vec3.ZERO : var1.position().subtract(var2.position());
+               RagdollBridge.corpse(var1, var1.position(), push);
                var3.readyAt = var3.downedAt >= 0L
                   ? var3.downedAt + (long)var4.rules.map.respawnSeconds * 20L
                   : this.ticks + (long)var4.rules.map.respawnSeconds * 20L;
@@ -3819,6 +3887,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
 
                var4.rules.kill(var5.team, var3.team);
                var5.kills++;
+               cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(var2,VoiceCue.KILL_ENEMY);
                var5.score = var5.score + var4.rules.map.killScore;
                var5.credits = var5.credits + var4.rules.map.killScore;
                var2.sendSystemMessage(Component.literal("§a击杀 §f" + var3.name + " §7(+" + var4.rules.map.killScore + ")"));
@@ -4025,7 +4094,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       var1.getFoodData().setFoodLevel(20);
       var1.teleportTo(var4, var5.x, var5.y, var5.z, var5.yaw, 0.0F);
       var1.fallDistance = 0.0F;
-      this.board.apply(var1, var2.map, var2.team, var3.map.friendlyFire, var3.map.hideEnemyNametags);
+      this.board.apply(var1, var2.map, var2.team, var3.map.friendlyFire, var3.map.hideEnemyNametags,Factions.name(var3.map,var2.team));
    }
 
    private void broadcastPlayerInfo(ServerPlayer var1, boolean var2) {
@@ -4699,6 +4768,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       }
 
       boolean var8 = var5 == Spotting.Kind.ENEMY;
+      if(var8)cn.bfops.voice.server.audio.FrontVoiceCueEmitter.emitCue(var1,VoiceCue.SPOTTED_ENEMY);
       String var9 = var8 ? "已标记" : "已呼叫";
       int var10 = var8 ? var3.rules.map.markScore : 0;
       if (var10 > 0) {
@@ -5093,6 +5163,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                         LinkedHashMap var10 = new LinkedHashMap();
                         var10.put("type", "result");
                         var10.put("mapName", var3.rules.map.name);
+                        var10.put("blueFactionName",Factions.name(var3.rules.map,0));var10.put("redFactionName",Factions.name(var3.rules.map,1));
                         var10.put("mode", var3.rules.map.mode);
                         var10.put("modeName", var3.rules.map.modeName());
                         var10.put("reason", var2);
@@ -5271,6 +5342,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          LinkedHashMap var10 = new LinkedHashMap();
          var10.put("id", var7.id);
          var10.put("name", var7.name);
+         var10.put("blueFactionName",Factions.name(var7,0));var10.put("redFactionName",Factions.name(var7,1));
          var10.put("mode", var7.mode);
          var10.put("modeName", var7.modeName());
          var10.put("room", var8 != null);
@@ -5604,7 +5676,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
             var7.put("reviveProgress", var30.downed ? var30.reviveProgress : 0);
             var7.put("vehicleRemaining", Math.max(0L, (var30.vehicleAt - this.ticks + 19L) / 20L));
             var7.put("team", var30.team);
-            var7.put("teamName", Board.label(var30.team));
+            var7.put("teamName", Factions.name(var8==null?this.maps.get(var6):var8.rules.map,var30.team));
             var7.put("vehicleState", this.vehicleState(var6, var30));
             if (var8 != null) {
                var var35 = new ArrayList();
@@ -5806,11 +5878,18 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       var6.put("yaw", var1.getYRot());
       var6.put("alive", var2.alive);
       var6.put("downed", var2.downed);
+      var6.put("noRevive", var2.noRevive);
+      var6.put("downLeft", var2.downed && var2.bleedOutAt > 0 ? Math.max(0L, (var2.bleedOutAt - this.ticks + 19L) / 20L) : 0L);
       var6.put("rescuable", !var4 && rescueRole(var5, var2));
       var6.put("rescueCall", var2.downed && var2.rescueCallUntil > this.ticks);
       var6.put("team", var2.team);
       var6.put("hostile", var4);
       var6.put("kit", var2.kit == null ? "" : var2.kit);
+      var6.put("lastMelee", var2.lastMelee == null ? "" : var2.lastMelee);
+      var6.put("lastPrimary", var2.lastPrimary == null ? "" : var2.lastPrimary);
+      var6.put("lastSecondary", var2.lastSecondary == null ? "" : var2.lastSecondary);
+      var6.put("throwable", var2.throwable == null ? "" : var2.throwable);
+      var6.put("tactical1", var2.tactical1 == null ? "" : var2.tactical1);
       var6.put("elite", var2.eliteType);
       var6.put("squad", var5 != null && SquadRules.same(var2.map, var2.team, var2.squad, var5.map, var5.team, var5.squad));
       Entity var7 = var1.getVehicle();
@@ -6012,6 +6091,8 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       public int credits;
       public boolean alive;
       public boolean downed;
+      /** Set when the blow that downed this player was melee: no medic can pick them up. */
+      public boolean noRevive;
       public long bleedOutAt;
       public long rescueCallAt = -1000L;
       public long rescueCallUntil;

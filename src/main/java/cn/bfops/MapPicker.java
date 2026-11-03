@@ -432,13 +432,18 @@ final class MapPicker {
 
     void polygon(GuiGraphics graphics, Layout.Rect body, List<Model.Vec> points, int color, int thickness) {
         if (points == null || points.size() < 2) return;
+        // Collect every clipped edge first, then rasterise them in one coverage pass. Per-edge Ui.line
+        // sampled each segment pixel by pixel with a fill per sample; the editor redraws this canvas every
+        // frame, so a boundary plus its zones was tens of thousands of draws and the canvas felt sticky.
+        java.util.List<int[]> segments = new java.util.ArrayList<>(points.size());
         for (int i = 0; i < points.size(); i++) {
             Model.Vec a = points.get(i);
             Model.Vec b = points.get((i + 1) % points.size());
             int[] segment=MapGeometry.clip(sx(body,a.x()),sz(body,a.z()),sx(body,b.x()),sz(body,b.z()),
                     body.x()-rotationMargin(body),body.y()-rotationMargin(body),body.right()-1+rotationMargin(body),body.bottom()-1+rotationMargin(body));
-            if(segment!=null)Ui.line(graphics,segment[0],segment[1],segment[2],segment[3],color,thickness);
+            if(segment!=null)segments.add(segment);
         }
+        if (!segments.isEmpty()) BatchLine.polyline(graphics, segments, thickness, color);
     }
 
     /**

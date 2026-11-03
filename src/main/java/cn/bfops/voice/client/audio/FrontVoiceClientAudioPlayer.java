@@ -33,6 +33,7 @@ public final class FrontVoiceClientAudioPlayer {
         if (request == null) {
             return;
         }
+        if(!cn.bfops.NativeAudioBank.voiceEnabled()&&!medical(request))return;
         if (!VoiceConfig.isClientAudioEnabled()) {
             FrontVoiceClientDebugSink.info("Skipped playback because client audio is disabled");
             return;
@@ -51,6 +52,13 @@ public final class FrontVoiceClientAudioPlayer {
         playRaw(request, minecraft);
     }
 
+    private static boolean medical(FrontVoicePlayRequest request){
+        if(request.voiceCue()!=null)return switch(request.voiceCue()){
+            case REVIVE_ASSAULT_START,REVIVE_ASSAULT_CHARGE,REVIVE_ASSAULT_FINISH,REVIVE_NORMAL_START,REVIVE_NORMAL_FINISH->true;
+            default->false;
+        };
+        String event=request.soundEventId();return event!=null&&(event.contains("downed.defibrillator")||event.contains("downed.syringe"));
+    }
     private static void playCue(FrontVoicePlayRequest request, Minecraft minecraft) {
         Player localPlayer = minecraft.player;
         if (localPlayer == null) return;
@@ -171,7 +179,7 @@ public final class FrontVoiceClientAudioPlayer {
             FrontVoiceClientDebugSink.warn("Sound event uses unsupported namespace: " + request.soundEventId());
             return null;
         }
-        if (!FrontVoiceAudioManifest.get().contains(manifestEventId)) {
+        if (!FrontVoiceAudioManifest.get().contains(manifestEventId)&&!cn.bfops.NativeAudioBank.nativeEvent(manifestEventId)) {
             FrontVoiceClientDebugSink.warn("Sound event not present in imported manifest: " + soundId);
         }
 

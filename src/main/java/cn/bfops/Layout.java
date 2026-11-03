@@ -100,6 +100,13 @@ final class Layout {
         this.footer = footer;
     }
 
+    static Layout bf1Lobby(int width,int height){
+        int margin=width>=620?24:8, top=64, bottom=Math.max(top+24,height-42);
+        int total=width-2*margin, left=(total-12)*58/100;
+        return new Layout(width,height,new Rect(margin,8,total,22),new Rect(margin,34,total,14),
+            new Rect(margin,top,total,bottom-top),new Rect(margin,top,left,bottom-top),
+            new Rect(margin+left+12,top,total-left-12,bottom-top),new Rect(margin,height-36,total,20),new Rect(margin,height-14,total,12));
+    }
     static Layout room(int width,int height){
         int half=Math.max(1,(width-24)/2),top=38,bottom=Math.max(top+1,height-42);
         return new Layout(width,height,new Rect(8,4,width-16,22),new Rect(0,0,0,0),new Rect(8,top,width-16,bottom-top),new Rect(8,top,half,bottom-top),new Rect(16+half,top,width-24-half,bottom-top),new Rect(8,height-38,width-16,20),new Rect(8,height-16,width-16,12));

@@ -10,6 +10,16 @@ import net.minecraft.world.item.ItemStack;
 final class Fittings {
     record Option(String id,String name,String kind,String icon){}
     record Group(String id,String name,List<Option> options){}
+    /** Display-only gun stack; the bench and the stat reader both need the same one. */
+    static ItemStack gun(String id)throws ReflectiveOperationException{
+        Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
+        Object value=builder.getMethod("create").invoke(null);
+        builder.getMethod("setId",ResourceLocation.class).invoke(value,ResourceLocation.parse(id));
+        var mc=net.minecraft.client.Minecraft.getInstance();
+        HolderLookup.Provider registry=mc.level!=null?mc.level.registryAccess():mc.player!=null?mc.player.registryAccess():null;
+        Model.require(registry!=null,"\u6ce8\u518c\u8868\u4e0d\u53ef\u7528");
+        return (ItemStack)builder.getMethod("build",HolderLookup.Provider.class).invoke(value,registry);
+    }
     static ItemStack attachment(String id)throws ReflectiveOperationException{
         Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.AttachmentItemBuilder");
         Object value=builder.getMethod("create").invoke(null);

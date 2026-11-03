@@ -53,7 +53,7 @@ public final class VoiceConfig {
 
     /** Detect enemy players via vanilla team rather than the conquest camp. */
     public static boolean isClientDetectEnemyByVanillaTeam() {
-        return true;
+        return false;
     }
 
     /** Use the friendly/enemy voice pack configs instead of the conquest camp. */

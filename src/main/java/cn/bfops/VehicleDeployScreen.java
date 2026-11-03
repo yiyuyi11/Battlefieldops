@@ -53,7 +53,13 @@ final class VehicleDeployScreen extends FrontScreen {
 
         if(!parent.vehicleSpawnAllowed())listForm.paragraph("当前部署目标只允许步兵增援/登车。请返回后先选择固定载具刷新点。",Ui.TEXT_WARN);
         summary();
-        List<String> vehicles = parent.arena == null ? List.of() : parent.arena.vehicles;
+        listForm.section("固定载具刷新点");
+        for(var site:parent.sites())if(DeploymentRules.canSpawnNew(site)){
+            var point=place(listForm,listForm.take(26),site.label(),site.air()?"航空 / 地面":"地面","bf1",site.air()?"vehicles_jet_default_default":"vehicles_tank_default_default",true,()->{parent.selectSite(site.id());rebuild();});
+            point.selected=site.id().equals(parent.selectedSite());
+        }
+
+        List<String> vehicles = parent.arena == null ? List.of() : parent.arena.vehiclesFor(team());
         if (vehicles.isEmpty()) {
             listForm.paragraph("本图没有授权任何载具。管理员可在「武器/载具库」中开启。", Ui.TEXT_FAINT);
         } else {

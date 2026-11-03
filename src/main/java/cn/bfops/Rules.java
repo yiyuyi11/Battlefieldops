@@ -217,6 +217,6 @@ public final class Rules {
             case 1 -> isStaged() ? "格雷同盟 / 防守方胜利" : "格雷同盟胜利";
             default -> "进行中";
         };
-        return map.isDeathmatch()&&winner!=-2?verdict+" · 团队击杀 "+Board.label(0)+" "+teamScores[0]+" : "+Board.label(1)+" "+teamScores[1]:verdict;
+        return map.isDeathmatch()&&winner!=-2?verdict+" · 团队击杀 "+Factions.name(map,0)+" "+teamScores[0]+" : "+Factions.name(map,1)+" "+teamScores[1]:verdict;
     }
 }

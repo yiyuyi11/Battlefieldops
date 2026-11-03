@@ -50,14 +50,30 @@ final class ChoiceScreen extends FrontScreen {
 
     ChoiceScreen(Screen parent,String title,List<Choice> choices,Consumer<String> chosen,DetailPreview details){this(parent,title,choices,chosen);this.details=details;}
 
+    /** Cached filter result: the footer prints its size every frame and the list only changes on input. */
+    private List<Choice> filteredCache;
+    private String filteredQuery, filteredCategory;
+
     private List<Choice> filtered() {
+        if (filteredCache != null && java.util.Objects.equals(filteredQuery, query)
+                && java.util.Objects.equals(filteredCategory, category)) {
+            return filteredCache;
+        }
+        filteredQuery = query;
+        filteredCategory = category;
+        filteredCache = computeFiltered();
+        return filteredCache;
+    }
+
+    private List<Choice> computeFiltered() {
         String needle = query.trim().toLowerCase(Locale.ROOT);
         return choices.stream()
-                .filter(c->c.id.isEmpty()||c.id.startsWith("@")||category.equals("全部类别")||EquipmentCategories.of(c.kind,c.id).equals(category))
+                .filter(c->c.id.isEmpty()||c.id.startsWith("@")||category.equals("\u5168\u90e8\u7c7b\u522b")||EquipmentCategories.of(c.kind,c.id).equals(category))
                 .filter(c -> LibrarySearch.matches(needle,c.id,c.name,LibrarySource.searchable(c.icon,c.kind)))
                 .toList();
     }
 
+    @Override protected boolean bf1Style(){return true;}
     @Override
     protected String subtitle() {
         return "@模组名 + 名称 · "+filtered().size()+" 项";

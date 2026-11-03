@@ -19,6 +19,6 @@ final class EnemyTag {
             g.fill(cx-half,top+row,cx+half+1,top+row+1,red);
         }
         // One pixel narrower than the triangle's widest row, so the glyph sits inside the tag.
-        if(roleVisible(size)&&FixedClasses.resolve(kit)!=null)AssetIcons.draw(g,"role",kit,cx-2,top+1,5,5);
+        if(roleVisible(size)&&FixedClasses.resolve(kit)!=null)AssetIcons.draw(g,"role",kit,cx-3,top+1,6,6);
     }
 }

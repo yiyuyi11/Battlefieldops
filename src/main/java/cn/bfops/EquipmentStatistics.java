@@ -20,7 +20,7 @@ final class EquipmentStatistics {
     static Report read(String kind,String id,Map<String,String> selected,VehicleArmament configured){
         if(id==null||id.isEmpty())return new Report("",List.of(),"请先选择装备");
         VehicleArmament armament=configured;
-        if(armament==null&&kind.equals("vehicle")&&Client.state.has("arena"))armament=BattlefieldOps.GSON.fromJson(Client.state.get("arena"),Model.Arena.class).armament(id);
+        if(armament==null&&kind.equals("vehicle")){var cached=FactionArt.arena();if(cached!=null)armament=cached.armament(id);}
         String key=BalanceDisplay.revision()+":"+kind+":"+id+new TreeMap<>(selected)+BattlefieldOps.GSON.toJson(armament);Report old=CACHE.get(key);if(old!=null)return old;
         Report result;
         try{result=kind.equals("vehicle")?vehicle(id,selected,armament):gun(id,selected);}
