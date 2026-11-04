@@ -39,6 +39,8 @@ final class ClientPrefs {
         public boolean minimapHidden = false;
         /** Show the death screen while downed instead of the crawl HUD; on by default. */
         public boolean deathOverDowned = true;
+        /** Hide Jade's block-info overlay while a match is running. */
+        public boolean hideJadeInMatch = true;
         /** Death card, camera and death music also outside a match. */
         public boolean deathScreenOutsideMatch = true;
         /** The kill-icon layer. */
@@ -155,6 +157,12 @@ final class ClientPrefs {
     }
 
     static boolean deathOverDowned() { return data().deathOverDowned; }
+    static boolean hideJadeInMatch() { return data().hideJadeInMatch; }
+
+    static void toggleHideJadeInMatch() {
+        data().hideJadeInMatch = !data().hideJadeInMatch;
+        persist();
+    }
 
     static boolean deathScreenOutsideMatch() { return data().deathScreenOutsideMatch; }
 

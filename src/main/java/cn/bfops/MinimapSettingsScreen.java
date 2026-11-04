@@ -38,6 +38,7 @@ final class MinimapSettingsScreen extends FrontScreen {
             });
         }
         toggle("倒地显示死亡界面", ClientPrefs.deathOverDowned(), () -> ClientPrefs.toggleDeathOverDowned(), left);
+        toggle("对局内隐藏方块信息浮窗（Jade）", ClientPrefs.hideJadeInMatch(), () -> ClientPrefs.toggleHideJadeInMatch(), left);
         toggle("对局外死亡界面与音乐", ClientPrefs.deathScreenOutsideMatch(), () -> ClientPrefs.toggleDeathScreenOutsideMatch(), left);
         toggle("击杀图标", ClientPrefs.killIcons(), () -> ClientPrefs.toggleKillIcons(), left);
         toggle("显示小地图",!hidden,()->hidden=!hidden,left);
