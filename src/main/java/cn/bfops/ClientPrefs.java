@@ -39,6 +39,10 @@ final class ClientPrefs {
         public boolean minimapHidden = false;
         /** Show the death screen while downed instead of the crawl HUD; on by default. */
         public boolean deathOverDowned = true;
+        /** Death card, camera and death music also outside a match. */
+        public boolean deathScreenOutsideMatch = true;
+        /** The kill-icon layer. */
+        public boolean killIcons = true;
         /** File name (no extension) of a PNG in config/battlefield_ops/backgrounds, or "". */
         public String screenBackground = "";
         /** Size of the arrow that marks the player on the map, in pixels. */
@@ -151,6 +155,17 @@ final class ClientPrefs {
     }
 
     static boolean deathOverDowned() { return data().deathOverDowned; }
+
+    static boolean deathScreenOutsideMatch() { return data().deathScreenOutsideMatch; }
+
+    static void toggleDeathScreenOutsideMatch() {
+        data().deathScreenOutsideMatch = !data().deathScreenOutsideMatch;
+        persist();
+    }
+
+    static boolean killIcons() { return data().killIcons; }
+
+    static void toggleKillIcons() { data().killIcons = !data().killIcons; persist(); }
 
     static void toggleDeathOverDowned() { data().deathOverDowned = !data().deathOverDowned; persist(); }
 

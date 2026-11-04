@@ -16,7 +16,8 @@ public final class VanillaDeathFlow {
     static boolean active(){return Minecraft.getInstance().screen instanceof View;}
     @SubscribeEvent
     public static void opening(ScreenEvent.Opening event){
-        if(!restoring && event.getNewScreen() instanceof DeathScreen original && !DeploymentLock.room(Client.state))
+        if(!restoring && event.getNewScreen() instanceof DeathScreen original
+                && !DeploymentLock.room(Client.state) && ClientPrefs.deathScreenOutsideMatch())
             event.setNewScreen(new View(original));
     }
     private static final class View extends Screen {

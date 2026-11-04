@@ -76,6 +76,7 @@ public final class NativeKillIcons {
     public static void logout(){reset();if(ready){ClientEvents.onClientPlayerLogout();ScoreboardTab.clearRoomData();}}
     public static void death(){if(ready)ComboSubtitleRenderer.getInstance().onPlayerDeath();}
     public static void receive(JsonObject event){
+        if(!cn.bfops.ClientPrefs.killIcons())return;
         init();
         String icon=Engine.str(event,"icon","kill");
         int kind=FeedbackTypes.killType(icon);
@@ -181,6 +182,7 @@ public final class NativeKillIcons {
     }
     public static void draw(GuiGraphics graphics){
         if(!ready)return;
+        if(!cn.bfops.ClientPrefs.killIcons())return;
         var mc=Minecraft.getInstance();if(mc.player==null||mc.options.hideGui)return;
         boolean vehicle=VehicleUi.active();
         graphics.pose().pushPose();
