@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.impl;
 
+import cn.bfops.Draw;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -230,7 +231,7 @@ public class HonorRenderer implements IHudRenderer {
                int screenHeight = mc.getWindow().getGuiScaledHeight();
                int centerX = ScreenAnchor.resolveCenterX(this.configScreenAnchor, this.configXOffset, screenWidth);
                int centerY = ScreenAnchor.resolveCenterY(this.configScreenAnchor, this.configYOffset, screenHeight);
-               ResourceLocation texture = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/honor/honor_" + this.currentDisplay.honorId + ".png");
+               ResourceLocation texture = new ResourceLocation("battlefield_ops", "icons/honor/honor_" + this.currentDisplay.honorId + ".png");
                float iconScale = scale * 0.4F;
                this.applyTextureFilter(texture);
                drawIcon(
@@ -291,7 +292,7 @@ public class HonorRenderer implements IHudRenderer {
                shakeY = shake[1];
             }
 
-            ResourceLocation texture = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/honor/honor_" + this.currentDisplay.honorId + ".png");
+            ResourceLocation texture = new ResourceLocation("battlefield_ops", "icons/honor/honor_" + this.currentDisplay.honorId + ".png");
             float iconScale = scaleFactor * 0.4F;
             this.applyTextureFilter(texture);
             drawIcon(guiGraphics, texture, originX + shakeX, originY + shakeY, iconScale, alpha, this.isBest() ? this.configBestIconColor : 16777215);
@@ -424,12 +425,12 @@ public class HonorRenderer implements IHudRenderer {
          RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
          Tesselator tesselator = Tesselator.getInstance();
          BufferBuilder builder;
-         builder = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
-         builder.addVertex(matrix, x1, y1, 0.0F).setColor(r, g, b, a).setUv(0.0F, 0.0F);
-         builder.addVertex(matrix, x2, y1, 0.0F).setColor(r, g, b, a).setUv(1.0F, 0.0F);
-         builder.addVertex(matrix, x2, y2, 0.0F).setColor(r, g, b, a).setUv(1.0F, 1.0F);
-         builder.addVertex(matrix, x1, y2, 0.0F).setColor(r, g, b, a).setUv(0.0F, 1.0F);
-         BufferUploader.drawWithShader(builder.buildOrThrow());
+         builder = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+         builder.vertex(matrix, x1, y1, 0.0F).color(r, g, b, a).uv(0.0F, 0.0F);
+         builder.vertex(matrix, x2, y1, 0.0F).color(r, g, b, a).uv(1.0F, 0.0F);
+         builder.vertex(matrix, x2, y2, 0.0F).color(r, g, b, a).uv(1.0F, 1.0F);
+         builder.vertex(matrix, x1, y2, 0.0F).color(r, g, b, a).uv(0.0F, 1.0F);
+         Draw.end(builder);
          RenderSystem.enableCull();
          RenderSystem.enableDepthTest();
          RenderSystem.disableBlend();
@@ -490,9 +491,9 @@ public class HonorRenderer implements IHudRenderer {
          RenderSystem.disableDepthTest();
          RenderSystem.disableCull();
          RenderSystem.setShader(GameRenderer::getPositionColorShader);
-         builder = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+         builder = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
          quad(builder, matrix, x1, y1, x2, y2, r, g, b, a);
-         BufferUploader.drawWithShader(builder.buildOrThrow());
+         Draw.end(builder);
          RenderSystem.enableCull();
          RenderSystem.enableDepthTest();
          RenderSystem.disableBlend();
@@ -500,10 +501,10 @@ public class HonorRenderer implements IHudRenderer {
    }
 
    private static void quad(BufferBuilder builder, Matrix4f matrix, float x1, float y1, float x2, float y2, int r, int g, int b, int a) {
-      builder.addVertex(matrix, x1, y1, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x2, y1, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x2, y2, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x1, y2, 0.0F).setColor(r, g, b, a);
+      builder.vertex(matrix, x1, y1, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x2, y1, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x2, y2, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x1, y2, 0.0F).color(r, g, b, a);
    }
 
    private long[] advanceTimeline(long now, boolean playSound) {

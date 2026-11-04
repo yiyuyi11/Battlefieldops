@@ -10,7 +10,7 @@ import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
@@ -238,7 +238,7 @@ public final class Catalog {
             try {
                 Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
                 Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
-                        .invoke(null, ResourceLocation.parse(id))).orElse(null);
+                        .invoke(null, new ResourceLocation(id))).orElse(null);
                 if (index != null) {
                     String stats = statsSummary(index);
                     if (!stats.isEmpty()) gunStats.put(id, stats);
@@ -479,7 +479,7 @@ public final class Catalog {
         List<ItemStack> template = gun(player, id, 1);
         List<ItemStack> result = new ArrayList<>();
         if (template.isEmpty()) return result;
-        result.add(template.getFirst());
+        result.add(template.get(0));
         if (template.size() < 2 || rounds <= 0) return result;
         ItemStack ammo = template.get(1);
         int perStack = Math.max(1, ammo.getMaxStackSize());
@@ -496,7 +496,7 @@ public final class Catalog {
     public List<ItemStack> gun(ServerPlayer player, String id, int stacks) throws ReflectiveOperationException {
         if (id.isEmpty()) return List.of();
         Model.require(guns.contains(id), "该武器不可用");
-        ItemStack gun = buildGun(id, player.registryAccess());
+        ItemStack gun = buildGun(id, player.level().registryAccess());
 
         List<ItemStack> result = new ArrayList<>();
         result.add(gun);
@@ -519,7 +519,7 @@ public final class Catalog {
     /** Builds a TaCZ gun stack from its common index, against the given registry access. */
     private static ItemStack buildGun(String id, net.minecraft.core.HolderLookup.Provider reg)
             throws ReflectiveOperationException {
-        ResourceLocation key = ResourceLocation.parse(id);
+        ResourceLocation key = new ResourceLocation(id);
         Object data = gunData(id);
         Class<?> builderClass = Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
         Object builder = builderClass.getMethod("create").invoke(null);
@@ -530,10 +530,17 @@ public final class Catalog {
         List<?> modes = (List<?>) data.getClass().getMethod("getFireModeSet").invoke(data);
         if (!modes.isEmpty()) {
             builderClass.getMethod("setFireMode", Class.forName("com.tacz.guns.api.item.gun.FireMode"))
-                    .invoke(builder, modes.getFirst());
+                    .invoke(builder, modes.get(0));
         }
-        ItemStack gun = (ItemStack) builderClass
-                .getMethod("build", net.minecraft.core.HolderLookup.Provider.class).invoke(builder, reg);
+        // 1.20.1 builds without a registry provider; 1.21 needs one. The server catalogue is what feeds every
+        // kit and fitting list, so a wrong signature here empties the whole deploy screen.
+        ItemStack gun;
+        try {
+            gun = (ItemStack) builderClass.getMethod("build").invoke(builder);
+        } catch (NoSuchMethodException shortForm) {
+            gun = (ItemStack) builderClass
+                    .getMethod("build", net.minecraft.core.HolderLookup.Provider.class).invoke(builder, reg);
+        }
         Model.require(!gun.isEmpty(), "TaCZ 构建武器失败");
         return gun;
     }
@@ -542,7 +549,7 @@ public final class Catalog {
     private static Object gunData(String id) throws ReflectiveOperationException {
         Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
         Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
-                .invoke(null, ResourceLocation.parse(id)))
+                .invoke(null, new ResourceLocation(id)))
                 .orElseThrow(() -> new IllegalArgumentException("TaCZ 未加载该武器：" + id));
         return index.getClass().getMethod("getGunData").invoke(index);
     }

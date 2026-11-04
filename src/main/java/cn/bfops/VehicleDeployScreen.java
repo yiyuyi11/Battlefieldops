@@ -165,9 +165,9 @@ final class VehicleDeployScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double x, double y, double h, double v) {if(dropdownOpen())return super.mouseScrolled(x,y,h,v);
+    public boolean mouseScrolled(double x, double y, double v) {if(dropdownOpen())return super.mouseScrolled(x, y, v);
         if (listForm != null && listForm.wheel(x, y, v)) return true;
-        return super.mouseScrolled(x, y, h, v);
+        return super.mouseScrolled(x, y, v);
     }
 
     @Override

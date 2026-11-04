@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import net.minecraft.world.scores.DisplaySlot;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
@@ -22,7 +21,7 @@ import java.util.List;
  * <p>Two surfaces on this server are not ours to own unconditionally:
  *
  * <ul>
- *   <li><b>TAB</b> runs on the Velocity proxy and drives both {@code DisplaySlot.SIDEBAR} and player
+ *   <li><b>TAB</b> runs on the Velocity proxy and drives both {@code 1} and player
  *       team membership. A player can only belong to <i>one</i> scoreboard team, so whoever assigns
  *       last wins and the other side's settings (nametag visibility, friendly fire) silently stop
  *       applying. Two writers to one sidebar likewise produce flicker or a layout that snaps back
@@ -165,7 +164,7 @@ final class Compat {
 
     /** Reads the live sidebar slot so the pure core can decide. */
     boolean useSidebar(Scoreboard scoreboard, String ourObjectiveName, org.slf4j.Logger log) {
-        Objective shown = scoreboard.getDisplayObjective(DisplaySlot.SIDEBAR);
+        Objective shown = scoreboard.getDisplayObjective(1);
         String shownName = shown == null ? null : shown.getName();
         boolean before = policy.foreignSidebar();
         boolean allowed = policy.mayUseSidebar(settings.sidebar, shownName, ourObjectiveName);

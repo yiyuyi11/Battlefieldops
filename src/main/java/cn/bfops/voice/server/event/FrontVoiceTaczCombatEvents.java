@@ -5,12 +5,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.Event;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import cn.bfops.voice.common.audio.VoiceCue;
 import cn.bfops.voice.server.audio.FrontVoiceCueEmitter;
 import cn.bfops.voice.server.compat.TaczCompat;
@@ -34,7 +34,7 @@ public final class FrontVoiceTaczCombatEvents {
     }
 
     @SubscribeEvent
-    public void onLivingIncomingDamage(LivingIncomingDamageEvent event) {
+    public void onLivingIncomingDamage(LivingHurtEvent event) {
         Entity entity = event.getEntity();
         if (entity instanceof ServerPlayer player && player.server != null && !player.isSpectator()) {
             tryPlaySniperCueOnHit(player, event);
@@ -246,7 +246,7 @@ public final class FrontVoiceTaczCombatEvents {
         FrontVoiceCueEmitter.emitCue(shooter, VoiceCue.SUPPRESSING_HOSTILE);
     }
 
-    private void tryPlaySniperCueOnHit(ServerPlayer target, LivingIncomingDamageEvent event) {
+    private void tryPlaySniperCueOnHit(ServerPlayer target, LivingHurtEvent event) {
         DamageSource damageSource = event.getSource();
         if (damageSource == null) {
             return;
@@ -262,7 +262,7 @@ public final class FrontVoiceTaczCombatEvents {
         tryPlaySniperCue(target, target.server.getTickCount());
     }
 
-    private void tryPlayRpgCueOnHit(ServerPlayer target, LivingIncomingDamageEvent event) {
+    private void tryPlayRpgCueOnHit(ServerPlayer target, LivingHurtEvent event) {
         DamageSource damageSource = event.getSource();
         if (damageSource == null) {
             return;
@@ -430,7 +430,7 @@ public final class FrontVoiceTaczCombatEvents {
     private static void registerTacz(Consumer<Event> handler, String className) {
         try {
             Class<? extends Event> type = (Class<? extends Event>) Class.forName(className);
-            NeoForge.EVENT_BUS.addListener((Class) type, handler);
+            MinecraftForge.EVENT_BUS.addListener(net.minecraftforge.eventbus.api.EventPriority.NORMAL, false, (Class) type, (java.util.function.Consumer) handler);
         } catch (ClassNotFoundException | LinkageError ignored) {
         }
     }

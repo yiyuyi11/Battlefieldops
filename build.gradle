@@ -1,11 +1,17 @@
-plugins { id 'java'; id 'net.neoforged.moddev' version '2.0.141' }
-group = 'cn.bfops'
-version = '0.8.30'
-base.archivesName = 'battlefield-ops'
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
-neoForge {
-    version = '21.1.233'
-    runs { client { client() }; server { server(); programArgument '--nogui' } }
-    mods { battlefield_ops { sourceSet sourceSets.main } }
+buildscript {
+ repositories { maven { url='https://maven.minecraftforge.net/' }; maven { url='https://repo.spongepowered.org/repository/maven-public/' }; mavenCentral() }
+ dependencies { classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT' }
 }
-tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+plugins { id 'java'; id 'net.minecraftforge.gradle' version '6.0.54' }
+apply plugin: 'org.spongepowered.mixin'
+mixin { add sourceSets.main, 'battlefield_ops.refmap.json'; config 'battlefield_ops.mixins.json'; config 'battlefield_ops.crawl.mixins.json' }
+group = 'cn.bfops'
+version = '0.8.34-forge1201'
+base.archivesName = 'battlefield_ops'
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+minecraft { mappings channel: 'official', version: '1.20.1' }
+repositories { mavenCentral(); maven { url = 'https://maven.minecraftforge.net/' } }
+dependencies { annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'; minecraft 'net.minecraftforge:forge:1.20.1-47.4.16'; compileOnly fileTree(dir:'libs',include:['*.jar']) }
+tasks.withType(JavaCompile).configureEach { options.encoding='UTF-8'; options.compilerArgs += ['-Xmaxerrs','1000'] }
+jar { manifest { attributes 'MixinConfigs': 'battlefield_ops.mixins.json,battlefield_ops.crawl.mixins.json' }; finalizedBy 'reobfJar' }
+tasks.register('writeCompileClasspath') { doLast { file('build/compile-classpath.txt').text=sourceSets.main.compileClasspath.asPath } }

@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.gui.elements;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -260,12 +261,12 @@ public class ColorPickerDialog {
       RenderSystem.enableBlend();
       RenderSystem.defaultBlendFunc();
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
-      bufferbuilder = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-      bufferbuilder.addVertex(matrix, (float)x, (float)(y + h), 0.0F).setColor(0, 0, 0, 255);
-      bufferbuilder.addVertex(matrix, (float)(x + w), (float)(y + h), 0.0F).setColor(0, 0, 0, 255);
-      bufferbuilder.addVertex(matrix, (float)(x + w), (float)y, 0.0F).setColor(r, g, b, 255);
-      bufferbuilder.addVertex(matrix, (float)x, (float)y, 0.0F).setColor(255, 255, 255, 255);
-      BufferUploader.drawWithShader(bufferbuilder.buildOrThrow());
+      bufferbuilder = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+      bufferbuilder.vertex(matrix, (float)x, (float)(y + h), 0.0F).color(0, 0, 0, 255);
+      bufferbuilder.vertex(matrix, (float)(x + w), (float)(y + h), 0.0F).color(0, 0, 0, 255);
+      bufferbuilder.vertex(matrix, (float)(x + w), (float)y, 0.0F).color(r, g, b, 255);
+      bufferbuilder.vertex(matrix, (float)x, (float)y, 0.0F).color(255, 255, 255, 255);
+      Draw.end(bufferbuilder);
       RenderSystem.disableBlend();
    }
 

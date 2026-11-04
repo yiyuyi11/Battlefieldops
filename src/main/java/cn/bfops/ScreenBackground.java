@@ -28,7 +28,7 @@ final class ScreenBackground {
     private ScreenBackground() {}
 
     static Path folder() {
-        return net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("battlefield_ops/backgrounds");
+        return net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve("battlefield_ops/backgrounds");
     }
 
     /** Available image names (file names without extension), sorted. */

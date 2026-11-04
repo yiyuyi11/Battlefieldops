@@ -8,40 +8,70 @@ import net.minecraft.world.item.ItemStack;
 
 /** Server-generated compatible options, revalidated against the actual deployed equipment. */
 final class Fittings {
+    private static final java.util.Set<String> attachmentWarned=new java.util.HashSet<>();
     record Option(String id,String name,String kind,String icon){}
     record Group(String id,String name,List<Option> options){}
-    /** Display-only gun stack; the bench and the stat reader both need the same one. */
-    static ItemStack gun(String id)throws ReflectiveOperationException{
-        Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
-        Object value=builder.getMethod("create").invoke(null);
-        builder.getMethod("setId",ResourceLocation.class).invoke(value,ResourceLocation.parse(id));
-        var mc=net.minecraft.client.Minecraft.getInstance();
-        HolderLookup.Provider registry=mc.level!=null?mc.level.registryAccess():mc.player!=null?mc.player.registryAccess():null;
-        Model.require(registry!=null,"\u6ce8\u518c\u8868\u4e0d\u53ef\u7528");
-        return (ItemStack)builder.getMethod("build",HolderLookup.Provider.class).invoke(value,registry);
-    }
     static ItemStack attachment(String id)throws ReflectiveOperationException{
         Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.AttachmentItemBuilder");
         Object value=builder.getMethod("create").invoke(null);
-        builder.getMethod("setId",ResourceLocation.class).invoke(value,ResourceLocation.parse(id));
+        // 1.20.1 names the setter setAttachmentId; 1.21 uses setId.
+        try {
+            builder.getMethod("setAttachmentId", ResourceLocation.class).invoke(value, new ResourceLocation(id));
+        } catch (NoSuchMethodException newer) {
+            builder.getMethod("setId", ResourceLocation.class).invoke(value, new ResourceLocation(id));
+        }
         return (ItemStack)builder.getMethod("build").invoke(value);
     }
     static List<Group> gunOptions(ItemStack gun)throws ReflectiveOperationException{
         Class<?> api=Class.forName("com.tacz.guns.api.TimelessAPI"),igun=Class.forName("com.tacz.guns.api.item.IGun");
         Object item=igun.getMethod("getIGunOrNull",ItemStack.class).invoke(null,gun);
-        Model.require(item!=null,"该物品不是 TaCZ 枪械");
-        Map<String,List<Option>> groups=new LinkedHashMap<>();
+        Model.require(item!=null,"璇ョ墿鍝佷笉鏄?TaCZ 鏋");
+        var all=new java.util.ArrayList<Object[]>();
         for(Object obj:(Iterable<?>)api.getMethod("getAllCommonAttachmentIndex").invoke(null)){
             var entry=(Map.Entry<?,?>)obj;String id=entry.getKey().toString();
-            Object type=entry.getValue().getClass().getMethod("getType").invoke(entry.getValue());
-            ItemStack stack=attachment(id);
-            if((boolean)igun.getMethod("allowAttachment",ItemStack.class,ItemStack.class).invoke(item,gun,stack)
-                    &&(boolean)igun.getMethod("allowAttachmentType",ItemStack.class,type.getClass()).invoke(item,gun,type)){
-                groups.computeIfAbsent(type.toString(),k->new ArrayList<>()).add(new Option(id,stack.getHoverName().getString(),"attachment",id));
+            try{
+                Object type=entry.getValue().getClass().getMethod("getType").invoke(entry.getValue());
+                ItemStack stack=attachment(id);
+                all.add(new Object[]{id,type,stack});
+            }catch(ReflectiveOperationException|RuntimeException skipped){
+                if(attachmentWarned.add(id))BattlefieldOps.LOG.warn("[bfops] attachment unreadable: {}",id,skipped);
             }
+        }
+        List<Group> groups=buckets(all,item,igun,gun,2);
+        String pass="strict";
+        if(groups.isEmpty()){groups=buckets(all,item,igun,gun,1);pass="type-only";}
+        if(groups.isEmpty()){groups=buckets(all,item,igun,gun,0);pass="unfiltered";}
+        if(!attachmentPassLogged){
+            attachmentPassLogged=true;
+            BattlefieldOps.LOG.info("[bfops] attachment enumeration pass={} groups={} candidates={}",pass,groups.size(),all.size());
+        }
+        return groups;
+    }
+
+    private static boolean attachmentPassLogged;
+
+    /**
+     * @param pass 2 = type and compatibility, 1 = type only, 0 = no filtering. Each step is a fallback for packs
+     *             whose metadata does not answer {@code allowAttachment} the way 1.21 does.
+     */
+    private static List<Group> buckets(List<Object[]> all,Object item,Class<?> igun,ItemStack gun,int pass)
+            throws ReflectiveOperationException{
+        Map<String,List<Option>> groups=new LinkedHashMap<>();
+        for(Object[] candidate:all){
+            String id=(String)candidate[0];Object type=candidate[1];ItemStack stack=(ItemStack)candidate[2];
+            boolean allowed=pass==0;
+            if(pass>=1){
+                allowed=(boolean)igun.getMethod("allowAttachmentType",ItemStack.class,type.getClass()).invoke(item,gun,type);
+            }
+            if(pass>=2&&allowed){
+                allowed=(boolean)igun.getMethod("allowAttachment",ItemStack.class,ItemStack.class).invoke(item,gun,stack);
+            }
+            if(allowed)groups.computeIfAbsent(type.toString(),k->new ArrayList<>()).add(
+                    new Option(id,stack.getHoverName().getString(),"attachment",id));
         }
         return groups.entrySet().stream().map(e->new Group(e.getKey(),slotName(e.getKey()),e.getValue())).toList();
     }
+
     static String slotName(String type){return switch(type){case "SCOPE"->"瞄具";case "MUZZLE"->"枪口";case "GRIP"->"握把";case "STOCK"->"枪托";case "EXTENDED_MAG"->"弹匣";case "LASER"->"激光";default->type;};}
     static void applyGun(ItemStack gun,Map<String,String> selected,HolderLookup.Provider registry)throws ReflectiveOperationException{
         if(selected.isEmpty())return;
@@ -50,7 +80,18 @@ final class Fittings {
         for(String id:selected.values())if(!id.isEmpty()){
             ItemStack attachment=attachment(id);
             Model.require((boolean)type.getMethod("allowAttachment",ItemStack.class,ItemStack.class).invoke(item,gun,attachment),"配件组合不兼容："+id);
-            type.getMethod("installAttachment",HolderLookup.Provider.class,ItemStack.class,ItemStack.class).invoke(item,registry,gun,attachment);
+            installAttachmentCompat(type,item,registry,gun,attachment);
+        }
+    }
+
+    /** 1.20.1 installs attachments as (gun, attachment); 1.21 wants the registry provider first. */
+    private static void installAttachmentCompat(Class<?> type, Object item, HolderLookup.Provider registry,
+                                                ItemStack gun, ItemStack attachment) throws ReflectiveOperationException {
+        try {
+            type.getMethod("installAttachment", ItemStack.class, ItemStack.class).invoke(item, gun, attachment);
+        } catch (NoSuchMethodException newer) {
+            type.getMethod("installAttachment", HolderLookup.Provider.class, ItemStack.class, ItemStack.class)
+                    .invoke(item, registry, gun, attachment);
         }
     }
     static List<Group> vehicleOptions(Entity vehicle)throws ReflectiveOperationException{

@@ -44,7 +44,7 @@ final class MinimapSettingsScreen extends FrontScreen {
             String[][] fields={{"SIZE","地图尺寸"},{"ZOOM","缩放等级"},{"UI_SCALE","界面比例"},{"OPACITY","地形透明度"}};
             for(var field:fields){String key=field[0];nativeNumbers.putIfAbsent(key,nativeSettings.value(key));
                 field(left,field[1],nativeNumbers.get(key),6,v->nativeNumbers.put(key,v));
-                var valid=nativeSettings.valid.get(key);if(valid!=null&&!valid.isEmpty())left.caption("原生范围："+valid.getFirst()+" ～ "+valid.getLast(),Ui.TEXT_FAINT);
+                var valid=nativeSettings.valid.get(key);if(valid!=null&&!valid.isEmpty())left.caption("原生范围："+valid.get(0)+" ～ "+valid.get(valid.size() - 1),Ui.TEXT_FAINT);
             }
             dropdown(left,"地图形状",nativeSettings.value("SHAPE"),nativeSettings.shapeChoices(),v->{nativeSettings.values.put("SHAPE",nativeSettings.valid.get("SHAPE").stream().filter(n->String.valueOf(n).equals(v)).findFirst().orElseThrow());rebuild();});
             row(left,"北方朝上",Boolean.TRUE.equals(nativeSettings.get("NORTH_LOCKED"))?"开":"关",()->{nativeSettings.cycle("NORTH_LOCKED");rebuild();});
@@ -89,7 +89,7 @@ final class MinimapSettingsScreen extends FrontScreen {
         });bar.finish();say("F7 打开设置；小键盘 + / − 缩放。可在按键设置中修改，不占用滚轮。");
     }
     protected void paint(GuiGraphics g,int x,int y,float dt){Ui.header(g,font,layout.left,"范围与布局");Ui.header(g,font,layout.right,"显示图层");left.render(g,x,y,dt);right.render(g,x,y,dt);bar.render(g,x,y,dt);}
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return left.wheel(x,y,v)||right.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return left.wheel(x,y,v)||right.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     public void onClose(){minecraft.setScreen(parent);}
     public boolean isPauseScreen(){return false;}
 }

@@ -11,7 +11,7 @@ public final class NativeAudioBank {
     public static void clear(){cached=null;}
     private static JsonObject data(){
         if(cached!=null)return cached;cached=new JsonObject();
-        try{var resource=Minecraft.getInstance().getResourceManager().getResource(ResourceLocation.fromNamespaceAndPath("battlefield_ops","bf1_audio_bank.json"));
+        try{var resource=Minecraft.getInstance().getResourceManager().getResource(new ResourceLocation("battlefield_ops","bf1_audio_bank.json"));
             if(resource.isPresent())try(var reader=resource.get().openAsReader()){cached=JsonParser.parseReader(reader).getAsJsonObject();}
         }catch(Exception e){BattlefieldOps.LOG.warn("Native BF1 sound bindings unavailable",e);}
         return cached;

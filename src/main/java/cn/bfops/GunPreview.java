@@ -18,6 +18,8 @@ import net.minecraft.world.item.ItemStack;
 final class GunPreview {
     private static final Map<String, ItemStack> CACHE = new LinkedHashMap<>(64, .75f, true);
     private static Method builderCreate, builderSetId, builderBuild;
+    /** True when this TaCZ build requires a registry provider for GunItemBuilder.build. */
+    private static boolean buildTakesRegistry;
 
     private GunPreview() {}
 
@@ -87,11 +89,19 @@ final class GunPreview {
                 Class<?> builder = Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
                 builderCreate = builder.getMethod("create");
                 builderSetId = builder.getMethod("setId", ResourceLocation.class);
-                builderBuild = builder.getMethod("build", HolderLookup.Provider.class);
+                // 1.20.1 builds without a registry provider; 1.21 needs one. Resolve whichever exists.
+                try {
+                    builderBuild = builder.getMethod("build");
+                    buildTakesRegistry = false;
+                } catch (NoSuchMethodException shortForm) {
+                    builderBuild = builder.getMethod("build", HolderLookup.Provider.class);
+                    buildTakesRegistry = true;
+                }
+                BattlefieldOps.LOG.info("[bfops] gun preview builder: build(provider)={}", buildTakesRegistry);
             }
             Object value = builderCreate.invoke(null);
-            builderSetId.invoke(value, ResourceLocation.parse(id));
-            return (ItemStack) builderBuild.invoke(value, registry);
+            builderSetId.invoke(value, new ResourceLocation(id));
+            return (ItemStack) (buildTakesRegistry ? builderBuild.invoke(value, registry) : builderBuild.invoke(value));
         } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
             BattlefieldOps.LOG.debug("Gun preview unavailable: {}", id, ex);
             return ItemStack.EMPTY;
@@ -111,14 +121,11 @@ final class GunPreview {
             Object item = igun.getMethod("getIGunOrNull", ItemStack.class).invoke(null, stack);
             if (item == null) return;
             Method allow = igun.getMethod("allowAttachment", ItemStack.class, ItemStack.class);
-            Method install = igun.getMethod("installAttachment", HolderLookup.Provider.class,
-                    ItemStack.class, ItemStack.class);
-            HolderLookup.Provider registry = registry();
-            if (registry == null) return;
+            Method install = igun.getMethod("installAttachment", ItemStack.class, ItemStack.class);
             for (String attachment : choices.values()) {
                 if (attachment == null || attachment.isEmpty()) continue;
                 ItemStack part = Fittings.attachment(attachment);
-                if ((boolean) allow.invoke(item, stack, part)) install.invoke(item, registry, stack, part);
+                if ((boolean) allow.invoke(item, stack, part)) install.invoke(item, stack, part);
             }
         } catch (ReflectiveOperationException | RuntimeException | LinkageError ex) {
             BattlefieldOps.LOG.debug("Gun preview attachment skipped", ex);
@@ -128,6 +135,6 @@ final class GunPreview {
     private static HolderLookup.Provider registry() {
         var mc = Minecraft.getInstance();
         if (mc.level != null) return mc.level.registryAccess();
-        return mc.player != null ? mc.player.registryAccess() : null;
+        return mc.player != null ? mc.player.level().registryAccess() : null;
     }
 }

@@ -310,7 +310,7 @@ public class ChoiceListDialog {
    public boolean charTyped(char codePoint, int modifiers) {
       if (!this.visible) {
          return false;
-      } else if (net.minecraft.util.StringUtil.isAllowedChatCharacter(codePoint)) {
+      } else if ((codePoint >= 32 && codePoint != 127)) {
          this.replaceSelection(String.valueOf(codePoint));
          this.applyFilter();
          return true;
@@ -650,7 +650,7 @@ public class ChoiceListDialog {
 
    private void pushUndoState() {
       if (this.undoStack.size() >= 64) {
-         this.undoStack.removeFirst();
+         this.undoStack.remove(0);
       }
 
       this.undoStack.addLast(new ChoiceListDialog.EditState(this.filterText, this.cursorPosition, this.selectionAnchor));

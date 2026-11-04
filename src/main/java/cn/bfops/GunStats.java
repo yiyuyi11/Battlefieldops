@@ -41,7 +41,7 @@ final class GunStats {
         try {
             Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
             Object index = ((Optional<?>) api.getMethod("getClientGunIndex", net.minecraft.resources.ResourceLocation.class)
-                    .invoke(null, net.minecraft.resources.ResourceLocation.parse(id))).orElse(null);
+                    .invoke(null, new net.minecraft.resources.ResourceLocation(id))).orElse(null);
             if (index == null) return "";
             Object gun = index.getClass().getMethod("getGunData").invoke(index);
             if (gun == null) return "";

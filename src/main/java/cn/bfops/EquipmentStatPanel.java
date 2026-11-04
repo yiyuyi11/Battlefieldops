@@ -63,15 +63,6 @@ final class EquipmentStatPanel {
 
     /** Builds a display-only gun stack through TaCZ's public builder (optional dependency, so reflective). */
     private static ItemStack buildGun(String id){
-        try{
-            var level=net.minecraft.client.Minecraft.getInstance().level;
-            if(level==null)return ItemStack.EMPTY;
-            Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
-            Object instance=builder.getMethod("create").invoke(null);
-            builder.getMethod("setId",net.minecraft.resources.ResourceLocation.class)
-                    .invoke(instance,net.minecraft.resources.ResourceLocation.parse(id));
-            return (ItemStack)builder.getMethod("build",net.minecraft.core.HolderLookup.Provider.class)
-                    .invoke(instance,level.registryAccess());
-        }catch(Throwable ex){return ItemStack.EMPTY;}
+        return GunPreview.stack(id);
     }
 }

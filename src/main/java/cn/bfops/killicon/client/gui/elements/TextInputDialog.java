@@ -265,7 +265,7 @@ public class TextInputDialog {
    public boolean charTyped(char codePoint, int modifiers) {
       if (!this.visible) {
          return false;
-      } else if (net.minecraft.util.StringUtil.isAllowedChatCharacter(codePoint)) {
+      } else if ((codePoint >= 32 && codePoint != 127)) {
          this.replaceSelection(String.valueOf(codePoint));
          return true;
       } else {
@@ -439,7 +439,7 @@ public class TextInputDialog {
 
    private void pushUndoState() {
       if (this.undoStack.size() >= 64) {
-         this.undoStack.removeFirst();
+         this.undoStack.remove(0);
       }
 
       this.undoStack.addLast(new TextInputDialog.EditState(this.text, this.cursorPosition, this.selectionAnchor));

@@ -1,5 +1,6 @@
 package cn.bfops.voice.client.hud;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -285,7 +286,7 @@ public final class QuickMessageHudRenderer {
             float startAngle, float endAngle,
             float innerR, float outerR, float r, float g, float b, float a) {
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buffer = Draw.begin(VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
         int steps = Math.max(1, (int) ((endAngle - startAngle) / 1.5f));
         for (int i = 0; i < steps; i++) {
@@ -298,32 +299,32 @@ public final class QuickMessageHudRenderer {
             float sin0 = (float) Math.sin(rad0), cos0 = (float) Math.cos(rad0);
             float sin1 = (float) Math.sin(rad1), cos1 = (float) Math.cos(rad1);
 
-            buffer.addVertex(matrix, innerR * sin0, -innerR * cos0, 0.0f).setColor(r, g, b, a);
-            buffer.addVertex(matrix, outerR * sin0, -outerR * cos0, 0.0f).setColor(r, g, b, a);
-            buffer.addVertex(matrix, outerR * sin1, -outerR * cos1, 0.0f).setColor(r, g, b, a);
+            buffer.vertex(matrix, innerR * sin0, -innerR * cos0, 0.0f).color(r, g, b, a);
+            buffer.vertex(matrix, outerR * sin0, -outerR * cos0, 0.0f).color(r, g, b, a);
+            buffer.vertex(matrix, outerR * sin1, -outerR * cos1, 0.0f).color(r, g, b, a);
 
-            buffer.addVertex(matrix, innerR * sin0, -innerR * cos0, 0.0f).setColor(r, g, b, a);
-            buffer.addVertex(matrix, outerR * sin1, -outerR * cos1, 0.0f).setColor(r, g, b, a);
-            buffer.addVertex(matrix, innerR * sin1, -innerR * cos1, 0.0f).setColor(r, g, b, a);
+            buffer.vertex(matrix, innerR * sin0, -innerR * cos0, 0.0f).color(r, g, b, a);
+            buffer.vertex(matrix, outerR * sin1, -outerR * cos1, 0.0f).color(r, g, b, a);
+            buffer.vertex(matrix, innerR * sin1, -innerR * cos1, 0.0f).color(r, g, b, a);
         }
 
-        BufferUploader.drawWithShader(buffer.buildOrThrow());
+        Draw.end(buffer);
     }
 
     private static void drawFilledCircle(Matrix4f matrix,
             float radius, float r, float g, float b, float a) {
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buffer = tesselator.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+        BufferBuilder buffer = Draw.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
 
-        buffer.addVertex(matrix, 0.0f, 0.0f, 0.0f).setColor(r, g, b, a);
+        buffer.vertex(matrix, 0.0f, 0.0f, 0.0f).color(r, g, b, a);
         int steps = 32;
         for (int i = 0; i <= steps; i++) {
             float angle = (float) (2.0 * Math.PI * i / steps);
             float sin = (float) Math.sin(angle);
             float cos = (float) Math.cos(angle);
-            buffer.addVertex(matrix, radius * sin, -radius * cos, 0.0f).setColor(r, g, b, a);
+            buffer.vertex(matrix, radius * sin, -radius * cos, 0.0f).color(r, g, b, a);
         }
 
-        BufferUploader.drawWithShader(buffer.buildOrThrow());
+        Draw.end(buffer);
     }
 }

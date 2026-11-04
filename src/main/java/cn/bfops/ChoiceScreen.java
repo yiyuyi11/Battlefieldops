@@ -45,7 +45,7 @@ final class ChoiceScreen extends FrontScreen {
         this.prompt = title;
         this.choices = List.copyOf(choices);
         this.chosen = chosen;
-        if (!choices.isEmpty()) preview = choices.getFirst();
+        if (!choices.isEmpty()) preview = choices.get(0);
     }
 
     ChoiceScreen(Screen parent,String title,List<Choice> choices,Consumer<String> chosen,DetailPreview details){this(parent,title,choices,chosen);this.details=details;}
@@ -100,7 +100,7 @@ final class ChoiceScreen extends FrontScreen {
         if(focused){setFocused(search);search.setFocused(true);search.setCursorPosition(Math.min(cursor,query.length()));}
 
         List<Choice> all = filtered();
-        if (preview == null || !all.contains(preview)) preview = all.isEmpty() ? null : all.getFirst();
+        if (preview == null || !all.contains(preview)) preview = all.isEmpty() ? null : all.get(0);
 
         int visible = Math.max(1, Layout.fitRows(
                 new Layout.Rect(0, 0, 1, Math.max(0, listForm.free() - 2)), Layout.ROW + 4, 2));
@@ -113,7 +113,7 @@ final class ChoiceScreen extends FrontScreen {
             Choice choice = all.get(i);
             Layout.Rect row = listForm.take(Layout.ROW + 4);
             place(listForm, row, choice.name, choice.id.equals(preview == null ? "" : preview.id) ? "●" : "",
-                    choice.kind, choice.icon, true, () -> {
+                    choice.kind.equals("gun") ? "gunart" : choice.kind, choice.icon, true, () -> {
                         preview = choice;
                         rebuild();
                     });
@@ -169,7 +169,8 @@ final class ChoiceScreen extends FrontScreen {
         int nameY = body.bottom() - 30;
         Layout.Rect icon = new Layout.Rect(body.x() + 6, body.y() + 6, body.w() - 12,
                 Math.max(16, nameY - body.y() - 12));
-        AssetIcons.draw(graphics, choice.kind, choice.icon, icon.x(), icon.y(), icon.w(), icon.h());
+        AssetIcons.draw(graphics, choice.kind.equals("gun") ? "gunart" : choice.kind,
+                choice.icon, icon.x(), icon.y(), icon.w(), icon.h());
         graphics.drawString(font, Ui.clip(font, choice.name, body.w() - 12),
                 body.x() + 6, nameY + 2, Ui.TEXT, false);
         graphics.drawString(font, Ui.clip(font, "@"+LibrarySource.name(choice.icon)+" · "+choice.icon, body.w() - 12),
@@ -177,7 +178,7 @@ final class ChoiceScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
+    public boolean mouseScrolled(double mouseX, double mouseY, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX, mouseY, vertical);
         if(vertical==0)return false;
         if (listForm != null && listForm.wheel(mouseX, mouseY, vertical)) return true;
         // Otherwise page the selection, which is the useful thing when the wheel is over the preview.

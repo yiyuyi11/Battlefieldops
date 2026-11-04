@@ -419,7 +419,7 @@ final class MapPicker {
         int x = (int) Math.floor(worldX(body, mouseX));
         int z = (int) Math.floor(worldZ(body, mouseY));
         var chunk = level.getChunkSource().getChunk(x >> 4, z >> 4,
-                net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
+                net.minecraft.world.level.chunk.ChunkStatus.FULL, false);
         if (chunk == null || !dimension.equals(level.dimension().location().toString())) return Double.NaN;
         return chunk.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x & 15, z & 15) + 1;
     }

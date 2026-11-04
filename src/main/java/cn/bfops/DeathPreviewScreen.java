@@ -6,12 +6,12 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.RegisterClientCommandsEvent;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.RenderGuiEvent;
 
 /** A local display preview; never sends a death, inventory, respawn or deployment request. */
 @EventBusSubscriber(modid="battlefield_ops",value=Dist.CLIENT)
@@ -20,15 +20,19 @@ public final class DeathPreviewScreen extends Screen {
     private final JsonObject snapshot;
     private final JsonObject card;
     private boolean started;
+    private boolean skipped, overview;
+    private final boolean downed;
     private final boolean wasDead;
 
     private DeathPreviewScreen(boolean downed){
         super(Component.literal("死亡界面预览"));
+        this.downed=downed;
         var mc=Minecraft.getInstance();
         var current=Client.state.has("me")?Client.state.getAsJsonObject("me"):new JsonObject();
         wasDead=current.has("alive")&&!current.get("alive").getAsBoolean();
         snapshot=sample(downed);
         card=new JsonObject();card.addProperty("killer","示例敌方士兵");card.addProperty("kit","侦察兵");
+        card.addProperty("type",downed?"downedCard":"deathStats");
         card.addProperty("weapon",Engine.str(current,"lastPrimary",Engine.str(current,"primary","")));
         card.addProperty("distance",24);card.addProperty("killerHealth",13);card.addProperty("killerMaxHealth",20);
     }
@@ -58,7 +62,8 @@ public final class DeathPreviewScreen extends Screen {
         pending=downed?"downed":"death";return 1;
     }
     @SubscribeEvent
-    public static void tickPending(ClientTickEvent.Post event){
+    public static void tickPending(ClientTickEvent event){
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
         if(pending==null)return;
         String mode=pending;pending=null;
         var mc=Minecraft.getInstance();
@@ -67,20 +72,37 @@ public final class DeathPreviewScreen extends Screen {
     }
     @Override protected void init(){if(!started){started=true;replay();}}
     private void replay(){
+        skipped=overview=false;
         DeathCard.reset();DeathCard.show(card);Cinematic.clear();
-        if(minecraft.player!=null)Cinematic.startDeath(minecraft.player.getX(),minecraft.player.getEyeY(),minecraft.player.getZ(),minecraft.player.getYRot(),minecraft.player.getXRot());
+        var player=minecraft.player;
+        if(player!=null){
+            var ahead=player.getLookAngle();
+            var target=player.getEyePosition().add(ahead.x*8+ahead.z*6,.5,ahead.z*8-ahead.x*6);
+            if(downed)Cinematic.downed(target);
+            else Cinematic.startDeath(player.getX(),player.getEyeY(),player.getZ(),player.getYRot(),player.getXRot(),target);
+        }
     }
     @Override public void tick(){
         if(minecraft.player==null||minecraft.level==null||minecraft.player.isDeadOrDying()){onClose();return;}
         var me=Client.state.has("me")?Client.state.getAsJsonObject("me"):new JsonObject();
-        if(!wasDead&&me.has("alive")&&!me.get("alive").getAsBoolean())onClose();
+        if(!wasDead&&me.has("alive")&&!me.get("alive").getAsBoolean()){onClose();return;}
+        if(skipped&&!overview&&!DeathCard.blockingDeploy()){
+            overview=true;
+            var player=minecraft.player;
+            Cinematic.overview(new DeployView.Placement(player.getX(),player.getY()+24,player.getZ(),
+                    player.getYRot(),80,true,0,24));
+        }
     }
     @Override public void render(GuiGraphics g,int mx,int my,float dt){
-        DeathCard.drawPreview(g,minecraft,snapshot);
-        g.drawCenteredString(font,"死亡界面预览 · 示例数据",width/2,12,0xffeeeeee);
+        if(!overview)DeathCard.drawPreview(g,minecraft,snapshot);
+        g.drawCenteredString(font,overview?"部署镜头预览 · R 重播 · Esc 退出":"死亡界面预览 · 示例数据",width/2,12,0xffeeeeee);
     }
-    @Override public void renderBackground(GuiGraphics g,int mx,int my,float dt){}
-    @Override public boolean keyPressed(int key,int scan,int modifiers){if(key==82){replay();return true;}return super.keyPressed(key,scan,modifiers);}
+    @Override public void renderBackground(GuiGraphics g){}
+    @Override public boolean keyPressed(int key,int scan,int modifiers){
+        if(key==82){replay();return true;}
+        if(!downed&&minecraft.options.keyJump.matches(key,scan)){skipped=true;DeathCard.release();return true;}
+        return super.keyPressed(key,scan,modifiers);
+    }
     @Override public void onClose(){minecraft.setScreen(null);}
     @Override public void removed(){Cinematic.clear();DeathCard.reset();Client.Events.previewClosed();}
     @Override public boolean isPauseScreen(){return false;}

@@ -1,7 +1,7 @@
 package cn.bfops.voice.server.command;
 
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.event.RegisterCommandsEvent;
 
 public final class FrontVoiceCommandEntrypoint {
     @SubscribeEvent

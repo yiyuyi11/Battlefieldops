@@ -19,7 +19,7 @@ import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.Team;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 import cn.bfops.killicon.client.cache.LocalLeaderboardCache;
 import cn.bfops.killicon.client.config.ClientConfigManager;
 import cn.bfops.killicon.client.config.ScoreboardLoadoutConfigManager;
@@ -1899,7 +1899,7 @@ public class ScoreboardTab extends ConfigTabContent {
             Objective objective = scoreboard.getObjective("battlefield_ops.score");
             if (objective != null) {
                try {
-                  Object scoreAccess = scoreboard.getPlayerScoreInfo(this.minecraft.player, objective);
+                  Object scoreAccess = scoreboard.getOrCreatePlayerScore(this.minecraft.player.getScoreboardName(), objective);
 
                   try {
                      int score = ((Number)scoreAccess.getClass().getMethod("get").invoke(scoreAccess)).intValue();

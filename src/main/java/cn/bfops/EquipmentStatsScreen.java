@@ -19,6 +19,6 @@ final class EquipmentStatsScreen extends FrontScreen {
         bar=newForm(layout.bar.inset(2));place(bar,layout.bar.inset(2),"返回","","","",true,this::onClose);bar.finish();
     }
     protected void paint(GuiGraphics g,int x,int y,float dt){Ui.header(g,font,layout.content,"原生属性对比");form.render(g,x,y,dt);bar.render(g,x,y,dt);}
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return form.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return form.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     public void onClose(){minecraft.setScreen(parent);}public boolean isPauseScreen(){return false;}
 }

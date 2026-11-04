@@ -8,9 +8,9 @@ final class DraftHistory {
     void reset(String value){states.clear();states.add(value);at=0;}
     void record(String value){
         if(at>=0&&states.get(at).equals(value))return;
-        while(states.size()>at+1)states.removeLast();
+        while(states.size()>at+1)states.remove(states.size() - 1);
         states.add(value);at++;
-        if(states.size()>100){states.removeFirst();at--;}
+        if(states.size()>100){states.remove(0);at--;}
     }
     String undo(){if(at>0)at--;return at<0?null:states.get(at);}
     String redo(){if(at+1<states.size())at++;return at<0?null:states.get(at);}

@@ -72,7 +72,7 @@ public final class FormatDefaultsManager {
 
    private static Map<String, Map<String, String>> load(String language) {
       try {
-         ResourceLocation location = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "formats/" + language + ".json");
+         ResourceLocation location = new ResourceLocation("battlefield_ops", "formats/" + language + ".json");
          Optional<Resource> resourceOptional = Minecraft.getInstance().getResourceManager().getResource(location);
          if (resourceOptional.isEmpty()) {
             return Map.of();

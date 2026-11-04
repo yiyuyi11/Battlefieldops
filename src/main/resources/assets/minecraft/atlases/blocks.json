@@ -1,0 +1,10 @@
+{
+  "sources": [
+    { "type": "single", "resource": "battlefield_ops:gui/hud_ammo_bag" },
+    { "type": "single", "resource": "battlefield_ops:gui/hud_ammo_box" },
+    { "type": "single", "resource": "battlefield_ops:gui/hud_beacon" },
+    { "type": "single", "resource": "battlefield_ops:gui/hud_ground_sensor" },
+    { "type": "single", "resource": "battlefield_ops:gui/hud_medic_bag" },
+    { "type": "single", "resource": "battlefield_ops:gui/hud_medical_box" }
+  ]
+}

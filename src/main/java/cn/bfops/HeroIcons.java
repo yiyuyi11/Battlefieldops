@@ -12,6 +12,6 @@ final class HeroIcons {
         g.fill(left-1,top-1,left+size+1,top+size+1,(Math.round(alpha*88)<<24)|0x08121c);
         g.setColor(.4f,.72f,.98f,alpha);
         try{AssetIcons.draw(g,"elite",type,Math.round(x)-size/2,Math.round(y)-size/2,size,size);}
-        finally{g.flush();g.setColor(1,1,1,1);RenderSystem.setShaderColor(1,1,1,1);}
+        finally{g.flush();g.setColor(1f,1f,1f,1f);RenderSystem.setShaderColor(1,1,1,1);}
     }
 }

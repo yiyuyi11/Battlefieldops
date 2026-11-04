@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 
 @Mixin(ArmorStand.class)
 public abstract class SupportBoundsMixin {
-    @Inject(method="getDefaultDimensions",at=@At("HEAD"),cancellable=true,require=0)
+    @Inject(method="getDimensions(Lnet/minecraft/world/entity/Pose;)Lnet/minecraft/world/entity/EntityDimensions;",at=@At("HEAD"),cancellable=true,require=0)
     private void bfops$bounds(Pose pose,CallbackInfoReturnable<EntityDimensions> cir){
         var dimensions=cn.bfops.PropVitals.dimensions((ArmorStand)(Object)this);if(dimensions!=null)cir.setReturnValue(dimensions);
     }

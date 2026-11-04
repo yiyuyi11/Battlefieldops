@@ -9,6 +9,26 @@ import net.minecraft.world.item.Items;
 import net.minecraft.core.registries.BuiltInRegistries;
 /** Read-only stacks, native attachment evaluation. Never change the held weapon or spawn a vehicle. */
 final class EquipmentStatistics {
+    /** 1.20.1 TaCZ takes (stack, attachment); 1.21 takes a registry provider first. */
+    private static void installAttachment(Class<?> gun, Object item, ItemStack current, ItemStack part) throws Exception {
+        try {
+            gun.getMethod("installAttachment", ItemStack.class, ItemStack.class).invoke(item, current, part);
+        } catch (NoSuchMethodException newer) {
+            gun.getMethod("installAttachment", net.minecraft.core.HolderLookup.Provider.class, ItemStack.class, ItemStack.class)
+                    .invoke(item, Minecraft.getInstance().player.level().registryAccess(), current, part);
+        }
+    }
+
+    /** 1.20.1 TaCZ builds without a registry provider; 1.21 needs one, so try both. */
+    private static ItemStack buildGun(Class<?> builder, Object bare) throws Exception {
+        try {
+            return (ItemStack) builder.getMethod("build", net.minecraft.core.HolderLookup.Provider.class)
+                    .invoke(bare, Minecraft.getInstance().player.level().registryAccess());
+        } catch (NoSuchMethodException missing) {
+            return (ItemStack) builder.getMethod("build").invoke(bare);
+        }
+    }
+
     record Row(String key,String title,String before,String after,double baseBar,double currentBar,double delta,boolean biggerBetter){
         boolean changed(){return Math.abs(delta)>1e-7;}
         boolean improved(){return changed()&&(delta>0)==biggerBetter;}
@@ -29,28 +49,29 @@ final class EquipmentStatistics {
     }
     private static Object invoke(Object value,String name)throws ReflectiveOperationException{return value.getClass().getMethod(name).invoke(value);}
     private static double number(Object value){return ((Number)value).doubleValue();}
-    static double ratio(double value){return Double.isFinite(value)?Math.clamp(value,0,1):0;}
+    static double ratio(double value){return Double.isFinite(value)?cn.bfops.Java17.clamp(value,0,1):0;}
     static String plain(String value){return value==null?"":value.replaceAll("§.","");}
     private static Report gun(String id,Map<String,String> selected)throws ReflectiveOperationException{
         Class<?> api;
         try{api=Class.forName("com.tacz.guns.api.TimelessAPI");}catch(ClassNotFoundException ex){return sbwItem(id);}
-        Object index=((Optional<?>)api.getMethod("getCommonGunIndex",ResourceLocation.class).invoke(null,ResourceLocation.parse(id))).orElse(null);
+        Object index=((Optional<?>)api.getMethod("getCommonGunIndex",ResourceLocation.class).invoke(null,new ResourceLocation(id))).orElse(null);
         if(index==null)return sbwItem(id);
         Object data=invoke(index,"getGunData");Class<?> builder=Class.forName("com.tacz.guns.api.item.builder.GunItemBuilder");
-        Object bare=builder.getMethod("create").invoke(null);builder.getMethod("setId",ResourceLocation.class).invoke(bare,ResourceLocation.parse(id));
-        List<?> modes=(List<?>)invoke(data,"getFireModeSet");if(!modes.isEmpty())builder.getMethod("setFireMode",Class.forName("com.tacz.guns.api.item.gun.FireMode")).invoke(bare,modes.getFirst());
-        ItemStack base=(ItemStack)builder.getMethod("build",net.minecraft.core.HolderLookup.Provider.class).invoke(bare,Minecraft.getInstance().player.registryAccess());
+        Object bare=builder.getMethod("create").invoke(null);builder.getMethod("setId",ResourceLocation.class).invoke(bare,new ResourceLocation(id));
+        List<?> modes=(List<?>)invoke(data,"getFireModeSet");if(!modes.isEmpty())builder.getMethod("setFireMode",Class.forName("com.tacz.guns.api.item.gun.FireMode")).invoke(bare,modes.get(0));
+        ItemStack base;
+        try { base=(ItemStack)buildGun(builder, bare); } catch (Exception ex) { return sbwItem(id); }
         ItemStack current=base.copy();Class<?> gun=Class.forName("com.tacz.guns.api.item.IGun");Object item=gun.getMethod("getIGunOrNull",ItemStack.class).invoke(null,current);
         for(String attachment:selected.values())if(!attachment.isEmpty()){
             ItemStack part=Fittings.attachment(attachment);
             Model.require((boolean)gun.getMethod("allowAttachment",ItemStack.class,ItemStack.class).invoke(item,current,part),"配件不兼容");
-            gun.getMethod("installAttachment",net.minecraft.core.HolderLookup.Provider.class,ItemStack.class,ItemStack.class).invoke(item,Minecraft.getInstance().player.registryAccess(),current,part);
+            try { installAttachment(gun, item, current, part); } catch (Exception ignored) { }
         }
         Class<?> cache=Class.forName("com.tacz.guns.resource.modifier.AttachmentCacheProperty"),gunData=data.getClass();Object before=cache.getConstructor().newInstance(),after=cache.getConstructor().newInstance();
         cache.getMethod("eval",ItemStack.class,gunData).invoke(before,base,data);cache.getMethod("eval",ItemStack.class,gunData).invoke(after,current,data);
         Class<?> manager=Class.forName("com.tacz.guns.resource.modifier.AttachmentPropertyManager"),modifier=Class.forName("com.tacz.guns.api.modifier.IAttachmentModifier");
         Map<?,?> modifiers=(Map<?,?>)manager.getMethod("getModifiers").invoke(null);List<Row> rows=new ArrayList<>();
-        String fire=modes.isEmpty()?"未知":switch(modes.getFirst().toString()){case "AUTO"->"全自动";case "SEMI"->"半自动";case "BURST"->"连发";default->modes.getFirst().toString();};
+        String fire=modes.isEmpty()?"未知":switch(modes.get(0).toString()){case "AUTO"->"全自动";case "SEMI"->"半自动";case "BURST"->"连发";default->modes.get(0).toString();};
         rows.add(new Row("FIRE_MODE","默认射击模式",fire,fire,0,0,0,false));
         try{
             Class<?> utils=Class.forName("com.tacz.guns.util.AttachmentDataUtils");
@@ -93,7 +114,7 @@ final class EquipmentStatistics {
         return data.getMethod("from",ItemStack.class,function).invoke(null,new ItemStack(Items.PAPER),supplier);
     }
     private static Report sbwItem(String id)throws ReflectiveOperationException{
-        ResourceLocation key=ResourceLocation.parse(id);if(!BuiltInRegistries.ITEM.containsKey(key))return new Report("",List.of(),"此装备没有可读取属性");
+        ResourceLocation key=new ResourceLocation(id);if(!BuiltInRegistries.ITEM.containsKey(key))return new Report("",List.of(),"此装备没有可读取属性");
         Class<?> data=Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");Object current=data.getMethod("from",ItemStack.class).invoke(null,new ItemStack(BuiltInRegistries.ITEM.get(key)));
         var rows=new ArrayList<Row>();sbwRows(rows,"",current,current,id);return new Report("卓越前线原生属性",List.copyOf(rows),"按原生属性显示；没有提供的字段不作推算");
     }

@@ -18,7 +18,7 @@ final class PlayerProgress {
             try{
                 JsonObject data=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
                 Map<UUID,Integer> next=new HashMap<>();
-                for(var entry:data.entrySet())next.put(UUID.fromString(entry.getKey()),Math.clamp(entry.getValue().getAsInt(),0,totalForLevel(100)));
+                for(var entry:data.entrySet())next.put(UUID.fromString(entry.getKey()),cn.bfops.Java17.clamp(entry.getValue().getAsInt(),0,totalForLevel(100)));
                 experience.putAll(next);
             }catch(RuntimeException ex){throw new IOException("等级存档损坏，已保留原文件",ex);}
         }
@@ -39,6 +39,6 @@ final class PlayerProgress {
     }
     // Reference PlayerLevelService: score * .005 + 7 for a win, +4 for lose/draw.
     static int matchExperience(int score,boolean won){return (int)Math.round(Math.max(0,score)*.005+(won?7:4));}
-    static int totalForLevel(int level){int l=Math.clamp(level,0,100);return l<=16?l*l+6*l:l<=31?(int)(2.5*l*l-40.5*l+360):(int)(4.5*l*l-162.5*l+2220);}
+    static int totalForLevel(int level){int l=cn.bfops.Java17.clamp(level,0,100);return l<=16?l*l+6*l:l<=31?(int)(2.5*l*l-40.5*l+360):(int)(4.5*l*l-162.5*l+2220);}
     static int levelFor(int total){int level=0;while(level<100&&totalForLevel(level+1)<=Math.max(0,total))level++;return level;}
 }

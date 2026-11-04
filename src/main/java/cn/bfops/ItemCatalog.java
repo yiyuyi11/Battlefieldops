@@ -67,7 +67,7 @@ final class ItemCatalog {
 
     static boolean isGun(String id){
         if(Client.catalog.has("gunTypes")&&Client.catalog.getAsJsonObject("gunTypes").has(id))return true;
-        try{return ((java.util.Optional<?>)Class.forName("com.tacz.guns.api.TimelessAPI").getMethod("getCommonGunIndex",ResourceLocation.class).invoke(null,ResourceLocation.parse(id))).isPresent();}catch(ReflectiveOperationException|LinkageError|RuntimeException ex){return false;}
+        try{return ((java.util.Optional<?>)Class.forName("com.tacz.guns.api.TimelessAPI").getMethod("getCommonGunIndex",ResourceLocation.class).invoke(null,new ResourceLocation(id))).isPresent();}catch(ReflectiveOperationException|LinkageError|RuntimeException ex){return false;}
     }
     private static String weaponSource(String id,String system){return LibrarySource.searchable(id,"gun")+" "+system+" tacz 刀包 近战 近身武器 "+switch(id.split(":")[0]){case "katana"->"影武";case "delta_wt"->"三角洲 DeltaForce Melee Pack";default->"";};}
     private static void lrtEntry(java.util.Map<String,Entry> entries,String selection,String resource,String key,String category){

@@ -1,46 +1,36 @@
 package cn.bfops;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.network.*;
+import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.function.Consumer;
-
 public final class Network {
-    private static final com.google.gson.Gson WIRE_JSON=new com.google.gson.Gson();
-    public static Consumer<String> receiver=s->{};
-    public static Consumer<Boolean> modeReceiver=value->{};
-    public record Mode(boolean enabled) implements CustomPacketPayload {
-        public static final Type<Mode> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","mode"));
-        public static final StreamCodec<RegistryFriendlyByteBuf,Mode> CODEC=StreamCodec.of((b,p)->b.writeBoolean(p.enabled),b->new Mode(b.readBoolean()));
-        public Type<Mode> type(){return TYPE;}
-    }
-    public static void mode(ServerPlayer player,boolean enabled){
-        if(net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)player.connection,Mode.TYPE.id()))PacketDistributor.sendToPlayer(player,new Mode(enabled));
-    }
-    public record Request(String json) implements CustomPacketPayload {
-        public static final Type<Request> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","request"));
-        public static final StreamCodec<RegistryFriendlyByteBuf,Request> CODEC=StreamCodec.of((b,p)->b.writeUtf(p.json,20000),b->new Request(b.readUtf(20000)));
-        public Type<Request> type(){return TYPE;}
-    }
-    public record State(String json) implements CustomPacketPayload {
-        public static final Type<State> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","state"));
-        public static final StreamCodec<RegistryFriendlyByteBuf,State> CODEC=StreamCodec.of((b,p)->b.writeUtf(p.json,800000),b->new State(b.readUtf(800000)));
-        public Type<State> type(){return TYPE;}
-    }
-    public record MapSave(byte[] data) implements CustomPacketPayload {
-        public static final Type<MapSave> TYPE=new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops","map_save"));
-        public static final StreamCodec<RegistryFriendlyByteBuf,MapSave> CODEC=StreamCodec.of((b,p)->b.writeByteArray(p.data),b->new MapSave(b.readByteArray(30000)));
-        public Type<MapSave> type(){return TYPE;}
-    }
-    public static void register(RegisterPayloadHandlersEvent e){var r=e.registrar("3").optional();r.playToClient(Mode.TYPE,Mode.CODEC,(p,c)->c.enqueueWork(()->modeReceiver.accept(p.enabled)));r.playToServer(Request.TYPE,Request.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);}));r.playToClient(State.TYPE,State.CODEC,(p,c)->c.enqueueWork(()->receiver.accept(p.json)));r.playToServer(MapSave.TYPE,MapSave.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp)MapTransfer.receive(sp,p.data);}));}
-    public static boolean supported(ServerPlayer p){
-        // Bots (fake players) have no client: treat them as unsupported so state/award packets never
-        // reach their dropped connection.
-        if(BattlefieldOps.engine!=null && BattlefieldOps.engine.isBot(p))return false;
-        return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,State.TYPE.id()) && net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,Request.TYPE.id());
-    }
-    public static void send(ServerPlayer p,Object state){if(!supported(p))return;String s=WIRE_JSON.toJson(state);if(s.length()>780000||s.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>900000)throw new IllegalStateException("响应过大");PacketDistributor.sendToPlayer(p,new State(s));}
+ private static final String VERSION="forge1201-3";
+ private static final SimpleChannel CHANNEL=NetworkRegistry.newSimpleChannel(new ResourceLocation("battlefield_ops","main"),()->VERSION,v->VERSION.equals(v)||NetworkRegistry.ABSENT.equals(v)||NetworkRegistry.ACCEPTVANILLA.equals(v),v->VERSION.equals(v)||NetworkRegistry.ABSENT.equals(v)||NetworkRegistry.ACCEPTVANILLA.equals(v));
+ private static final com.google.gson.Gson WIRE_JSON=new com.google.gson.Gson();
+ public static Consumer<String> receiver=s->{};
+ public static Consumer<Boolean> modeReceiver=value->{};
+ public record Mode(boolean enabled) {}
+ public record Request(String json) {}
+ public record State(String json) {}
+ public record MapSave(byte[] data) {}
+ public static void register(){
+  CHANNEL.messageBuilder(Mode.class,0,NetworkDirection.PLAY_TO_CLIENT).encoder((p,b)->b.writeBoolean(p.enabled)).decoder(b->new Mode(b.readBoolean())).consumerMainThread((p,c)->{modeReceiver.accept(p.enabled);c.get().setPacketHandled(true);}).add();
+  CHANNEL.messageBuilder(Request.class,1,NetworkDirection.PLAY_TO_SERVER).encoder((p,b)->b.writeUtf(p.json,20000)).decoder(b->new Request(b.readUtf(20000))).consumerMainThread((p,c)->{ServerPlayer sp=c.get().getSender();if(sp!=null&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);c.get().setPacketHandled(true);}).add();
+  CHANNEL.messageBuilder(State.class,2,NetworkDirection.PLAY_TO_CLIENT).encoder((p,b)->b.writeUtf(p.json,800000)).decoder(b->new State(b.readUtf(800000))).consumerMainThread((p,c)->{receiver.accept(p.json);c.get().setPacketHandled(true);}).add();
+  CHANNEL.messageBuilder(MapSave.class,3,NetworkDirection.PLAY_TO_SERVER).encoder((p,b)->b.writeByteArray(p.data)).decoder(b->new MapSave(b.readByteArray(30000))).consumerMainThread((p,c)->{ServerPlayer sp=c.get().getSender();if(sp!=null)MapTransfer.receive(sp,p.data);c.get().setPacketHandled(true);}).add();
+ }
+ public static boolean supported(ServerPlayer player) {
+  if (player == null || player.connection == null
+      || (BattlefieldOps.engine != null && BattlefieldOps.engine.isBot(player))) return false;
+  var connection = player.connection.connection;
+  return connection.isMemoryConnection() || CHANNEL.isRemotePresent(connection);
+ }
+ public static void mode(ServerPlayer p,boolean enabled){
+  if(!supported(p))return;
+  CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new Mode(enabled));
+ }
+ public static void sendToServer(Object packet){CHANNEL.sendToServer(packet);}
+ public static void send(ServerPlayer p,Object state){if(!supported(p))return;String s=WIRE_JSON.toJson(state);if(s.length()>780000||s.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>900000)throw new IllegalStateException("response too large");CHANNEL.send(PacketDistributor.PLAYER.with(()->p),new State(s));}
 }

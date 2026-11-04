@@ -16,7 +16,7 @@ final class Bf1Ui {
     static void screenBackdrop(GuiGraphics g, int width, int height) {
         int veil = Minecraft.getInstance().level != null ? 0x9c0a0d10 : 0x70080b0e;
         if (ScreenBackground.draw(g, width, height, veil)) return;
-        var texture = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "textures/gui/bf1/modify_background.png");
+        var texture = new ResourceLocation("battlefield_ops", "textures/gui/bf1/modify_background.png");
         double scale = Math.max(width / 1600.0, height / 900.0);
         int w = (int) Math.ceil(1600 * scale), h = (int) Math.ceil(900 * scale);
         g.blit(texture, (width - w) / 2, (height - h) / 2, w, h, 0, 0, 1600, 900, 1600, 900);
@@ -24,7 +24,7 @@ final class Bf1Ui {
     }
 
     static void lobbyBackground(GuiGraphics g,int width,int height) {
-        var tex=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/bf1/lobby_background.png");
+        var tex=new ResourceLocation("battlefield_ops","textures/gui/bf1/lobby_background.png");
         double scale=Math.max(width/(double)2048,height/(double)722);
         int w=(int)Math.ceil(2048*scale),h=(int)Math.ceil(722*scale);
         g.blit(tex,(width-w)/2,(height-h)/2,w,h,0,0,2048,722,2048,722);

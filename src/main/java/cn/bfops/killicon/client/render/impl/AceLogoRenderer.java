@@ -11,7 +11,7 @@ import cn.bfops.killicon.client.render.IHudRenderer;
 public class AceLogoRenderer implements IHudRenderer {
    @Override public void resetPreview(){isVisible=false;startTime=-1;}
 
-   private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icon/ace_logo.png");
+   private static final ResourceLocation TEXTURE = new ResourceLocation("battlefield_ops", "icon/ace_logo.png");
    private static final long DISPLAY_DURATION_MS = 10000L;
    private static final long FADE_OUT_DURATION_MS = 600L;
    private static final int LOGO_WIDTH = 74;

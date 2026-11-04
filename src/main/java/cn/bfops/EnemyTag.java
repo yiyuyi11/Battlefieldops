@@ -12,7 +12,7 @@ final class EnemyTag {
     static void draw(GuiGraphics g,float x,float y,double distance,String kit,float alpha) {
         int size=size(distance),cx=Math.round(x),top=Math.round(y)-size;
         if(alpha<=.01f)return;
-        g.setColor(1,1,1,1);
+        g.setColor(1f,1f,1f,1f);
         int red=0xffa64b50;
         for(int row=0;row<size;row++){
             int half=Math.max(0,(size-row-1)/2);

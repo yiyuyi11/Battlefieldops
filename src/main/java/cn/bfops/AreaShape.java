@@ -35,7 +35,7 @@ record AreaShape(double x,double y,double z,double radius,double height,List<Mod
             double px=bounds[0]+(bounds[2]-bounds[0])*i/33,pz=bounds[1]+(bounds[3]-bounds[1])*j/33;
             if(Model.contains(polygon,px,pz))return new Model.Vec(px,pz);
         }
-        return polygon.getFirst();
+        return polygon.get(0);
     }
     static void validatePolygon(List<Model.Vec> polygon){
         Model.require(polygon!=null&&polygon.size()>=3&&polygon.size()<=64,"点位范围需要 3～64 个顶点");

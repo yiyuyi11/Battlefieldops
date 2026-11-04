@@ -332,7 +332,7 @@ public class GlobalConfigTab extends ConfigTabContent {
          if (key != null) {
             BlockState state = blockx.defaultBlockState();
             if (state.canOcclude() && state.isCollisionShapeFullBlock(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)) {
-               ResourceLocation textureLocation = ResourceLocation.fromNamespaceAndPath(key.getNamespace(), "textures/block/" + key.getPath() + ".png");
+               ResourceLocation textureLocation = new ResourceLocation(key.getNamespace(), "textures/block/" + key.getPath() + ".png");
                if (!this.minecraft.getResourceManager().getResource(textureLocation).isEmpty()) {
                   String label = blockx.getName().getString();
                   choices.add(new FixedChoiceConfigEntry.Choice(key.toString(), label + " (" + key + ")"));

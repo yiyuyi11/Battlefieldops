@@ -49,6 +49,6 @@ final class ResultScreen extends FrontScreen {
   Ui.header(g,font,layout.left,"个人表现");Ui.header(g,font,layout.right,"本局最终排行");
   personal.render(g,x,y,dt);ranking.render(g,x,y,dt);actions.render(g,x,y,dt);
  }
- public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return personal.wheel(x,y,v)||ranking.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+ public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return personal.wheel(x,y,v)||ranking.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
  public void onClose(){minecraft.setScreen(previous instanceof OpsScreen?previous:null);}public boolean isPauseScreen(){return false;}
 }

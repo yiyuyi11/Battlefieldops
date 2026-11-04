@@ -21,7 +21,7 @@ public final class PropVitals {
                     float scale=switch(k){case AMMO_BOX,MED_BOX->.88f;case RADIO_BEACON->1.1f;case AMMO_BAG,MEDIC_BAG->2;default->1;};
                     float half=0,top=0;
                     for(var v:mesh.vertices()){half=Math.max(half,Math.max(Math.abs(v.x()),Math.abs(v.z()))*scale);top=Math.max(top,v.y()*scale+.05f);}
-                    width=Math.clamp(half*2+.06f,.15f,4);height=Math.clamp(top+.06f,.12f,4);
+                    width=cn.bfops.Java17.clamp(half*2+.06f,.15f,4);height=cn.bfops.Java17.clamp(top+.06f,.12f,4);
                 }
             }catch(Exception ex){BattlefieldOps.LOG.warn("Cannot derive support hitbox for {}",k.id,ex);}
             return EntityDimensions.scalable(width,height);

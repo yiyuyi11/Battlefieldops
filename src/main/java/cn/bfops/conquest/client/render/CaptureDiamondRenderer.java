@@ -1,5 +1,6 @@
 package cn.bfops.conquest.client.render;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -218,13 +219,13 @@ public final class CaptureDiamondRenderer {
       RenderSystem.lineWidth(1.0F);
       Tesselator tesselator = Tesselator.getInstance();
       BufferBuilder buffer;
-      buffer = tesselator.begin(Mode.DEBUG_LINE_STRIP, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, 0.0F, radius, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, -radius, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, -radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, radius, 0.0F).setColor(red, green, blue, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer = Draw.begin(Mode.DEBUG_LINE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, 0.0F, radius, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, -radius, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, -radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, radius, 0.0F).color(red, green, blue, alpha);
+      Draw.end(buffer);
    }
 
    public static void drawIconLabelInWorld(Font font, PoseStack poseStack, BufferSource bufferSource, String text, float alpha) {
@@ -335,12 +336,12 @@ public final class CaptureDiamondRenderer {
          RenderSystem.defaultBlendFunc();
          Tesselator tesselator = Tesselator.getInstance();
          BufferBuilder buffer;
-         buffer = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+         buffer = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
          addHorizontalCrosshairArm(buffer, matrix, 0.0F, gapLeft, barTop, barBottom, false, horizontalFeather, rgb, clampedAlpha);
          addHorizontalCrosshairArm(buffer, matrix, gapRight, (float)screenWidth, barTop, barBottom, true, horizontalFeather, rgb, clampedAlpha);
          addVerticalCrosshairArm(buffer, matrix, 0.0F, gapTop, barLeft, barRight, false, verticalFeather, rgb, clampedAlpha);
          addVerticalCrosshairArm(buffer, matrix, gapBottom, (float)screenHeight, barLeft, barRight, true, verticalFeather, rgb, clampedAlpha);
-         BufferUploader.drawWithShader(buffer.buildOrThrow());
+         Draw.end(buffer);
          gui.pose().popPose();
       }
    }
@@ -444,10 +445,10 @@ public final class CaptureDiamondRenderer {
          float red = (float)(rgb >>> 16 & 0xFF) / 255.0F;
          float green = (float)(rgb >>> 8 & 0xFF) / 255.0F;
          float blue = (float)(rgb & 0xFF) / 255.0F;
-         buffer.addVertex(matrix, left, bottom, 0.0F).setColor(red, green, blue, Mth.clamp(bottomLeftAlpha, 0.0F, 1.0F));
-         buffer.addVertex(matrix, right, bottom, 0.0F).setColor(red, green, blue, Mth.clamp(bottomRightAlpha, 0.0F, 1.0F));
-         buffer.addVertex(matrix, right, top, 0.0F).setColor(red, green, blue, Mth.clamp(topRightAlpha, 0.0F, 1.0F));
-         buffer.addVertex(matrix, left, top, 0.0F).setColor(red, green, blue, Mth.clamp(topLeftAlpha, 0.0F, 1.0F));
+         buffer.vertex(matrix, left, bottom, 0.0F).color(red, green, blue, Mth.clamp(bottomLeftAlpha, 0.0F, 1.0F));
+         buffer.vertex(matrix, right, bottom, 0.0F).color(red, green, blue, Mth.clamp(bottomRightAlpha, 0.0F, 1.0F));
+         buffer.vertex(matrix, right, top, 0.0F).color(red, green, blue, Mth.clamp(topRightAlpha, 0.0F, 1.0F));
+         buffer.vertex(matrix, left, top, 0.0F).color(red, green, blue, Mth.clamp(topLeftAlpha, 0.0F, 1.0F));
       }
    }
 
@@ -512,20 +513,20 @@ public final class CaptureDiamondRenderer {
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
       Tesselator tesselator = Tesselator.getInstance();
       BufferBuilder buffer;
-      buffer = tesselator.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, radius, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, -radius, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, -radius, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, -radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, -radius, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, 0.0F, radius, 0.0F).setColor(red, green, blue, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, radius, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, -radius, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, -radius, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, -radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, -radius, 0.0F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, 0.0F, radius, 0.0F).color(red, green, blue, alpha);
+      Draw.end(buffer);
    }
 
    private static void drawDiamondSector(Matrix4f matrix, float radius, float progress, boolean clockwise, float red, float green, float blue, float alpha) {
@@ -535,20 +536,20 @@ public final class CaptureDiamondRenderer {
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
             Tesselator tesselator = Tesselator.getInstance();
             BufferBuilder buffer;
-            buffer = tesselator.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+            buffer = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
             for (int i = 0; i < perimeter.size() - 1; i++) {
                float[] p0 = perimeter.get(i);
                float[] p1 = perimeter.get(i + 1);
-               buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-               buffer.addVertex(matrix, p0[0], p0[1], 0.0F).setColor(red, green, blue, alpha);
-               buffer.addVertex(matrix, p1[0], p1[1], 0.0F).setColor(red, green, blue, alpha);
-               buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
-               buffer.addVertex(matrix, p1[0], p1[1], 0.0F).setColor(red, green, blue, alpha);
-               buffer.addVertex(matrix, p0[0], p0[1], 0.0F).setColor(red, green, blue, alpha);
+               buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+               buffer.vertex(matrix, p0[0], p0[1], 0.0F).color(red, green, blue, alpha);
+               buffer.vertex(matrix, p1[0], p1[1], 0.0F).color(red, green, blue, alpha);
+               buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
+               buffer.vertex(matrix, p1[0], p1[1], 0.0F).color(red, green, blue, alpha);
+               buffer.vertex(matrix, p0[0], p0[1], 0.0F).color(red, green, blue, alpha);
             }
 
-            BufferUploader.drawWithShader(buffer.buildOrThrow());
+            Draw.end(buffer);
          }
       }
    }

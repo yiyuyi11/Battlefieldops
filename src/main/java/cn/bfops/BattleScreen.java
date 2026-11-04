@@ -97,7 +97,7 @@ final class BattleScreen extends FrontScreen {
         var whitelisted = kit.ammoWhitelist(gunId);
         if (!whitelisted.isEmpty()) return whitelisted;
         var probe = SuperbAmmo.gunBundle(gunId, 0);
-        return probe.isEmpty() ? java.util.List.of() : SuperbAmmo.ammoIds(probe.getFirst());
+        return probe.isEmpty() ? java.util.List.of() : SuperbAmmo.ammoIds(probe.get(0));
     }
 
     /** Text for the ammunition row of one gun on the deploy screen. */
@@ -106,8 +106,8 @@ final class BattleScreen extends FrontScreen {
         if (k == null) return "未设置";
         var allowed = ammoCandidates(k, gunId);
         if (allowed.isEmpty()) return "默认";
-        String picked = Client.deployedAmmo.getOrDefault(gunId, allowed.getFirst());
-        return allowed.contains(picked) ? KitItems.name(picked) : KitItems.name(allowed.getFirst());
+        String picked = Client.deployedAmmo.getOrDefault(gunId, allowed.get(0));
+        return allowed.contains(picked) ? KitItems.name(picked) : KitItems.name(allowed.get(0));
     }
 
     /** Cycles this gun's ammunition through the map's whitelist; the choice travels with the deploy request. */
@@ -116,7 +116,7 @@ final class BattleScreen extends FrontScreen {
         if (k == null) return;
         var allowed = ammoCandidates(k, gunId);
         if (allowed.isEmpty()) return;
-        String current = Client.deployedAmmo.getOrDefault(gunId, allowed.getFirst());
+        String current = Client.deployedAmmo.getOrDefault(gunId, allowed.get(0));
         int next = (allowed.indexOf(current) + 1) % allowed.size();
         Client.deployedAmmo.put(gunId, allowed.get(next));
         rememberLoadout();
@@ -165,8 +165,8 @@ final class BattleScreen extends FrontScreen {
             tactical2=Engine.str(me,"tactical2","");
         }
         if(next!=null){
-            if(!gunAllowed(next,true,primary))primary=next.options(true).getFirst();
-            if(!gunAllowed(next,false,secondary))secondary=next.options(false).getFirst();
+            if(!gunAllowed(next,true,primary))primary=next.options(true).get(0);
+            if(!gunAllowed(next,false,secondary))secondary=next.options(false).get(0);
             boolean prunesMelee=arena!=null&&!arena.isTraining();
             if(saved==null||(prunesMelee&&!melee.isEmpty()&&!meleeAllowed(next,melee)))melee=next.melee==null?"":next.melee;
             // Never leave the melee slot empty by accident: memory, then the class default, then the first
@@ -180,7 +180,7 @@ final class BattleScreen extends FrontScreen {
             }
             if(melee.isEmpty()){
                 if(next.melee!=null&&!next.melee.isEmpty())melee=next.melee;
-                else if(!next.meleeOptions().isEmpty())melee=next.meleeOptions().getFirst();
+                else if(!next.meleeOptions().isEmpty())melee=next.meleeOptions().get(0);
                 else if(meleeAllowed(next,previousMelee))melee=previousMelee;
             }
             // Only a normal map prunes an unauthorised throwable. On a firing range (or before the arena has
@@ -474,20 +474,20 @@ final class BattleScreen extends FrontScreen {
             // deleted, a weapon the kit no longer authorises, or a spawn on the wrong team all have
             // to fall back here, where the player can see the result.
             if (arena.kits.stream().noneMatch(k -> k.id.equals(kitId))) {
-                kitId = arena.kits.isEmpty() ? "" : arena.kits.getFirst().id;
+                kitId = arena.kits.isEmpty() ? "" : arena.kits.get(0).id;
                 primary = "";
                 secondary = "";
             }
             Model.Kit kit = kit();
             if (kit != null) {
-                if (!gunAllowed(kit,true,primary)) primary = kit.options(true,team()).getFirst();
-                if (!gunAllowed(kit,false,secondary)) secondary = kit.options(false,team()).getFirst();
+                if (!gunAllowed(kit,true,primary)) primary = kit.options(true,team()).get(0);
+                if (!gunAllowed(kit,false,secondary)) secondary = kit.options(false,team()).get(0);
                 if(!melee.isEmpty()&&!meleeAllowed(kit,melee))melee=kit.melee==null?"":kit.melee;
                 // A firing range accepts any item, so the whitelist must not reset the choice back to empty.
                 if(!throwable.isEmpty()&&!(arena!=null&&arena.isTraining())&&!kit.throwableOptions(team()).contains(throwable))throwable=kit.throwable==null?"":kit.throwable;
             }
             List<String> spawns = spawns();
-            if (!spawns.contains(spawn)) spawn = spawns.isEmpty() ? "" : spawns.getFirst();
+            if (!spawns.contains(spawn)) spawn = spawns.isEmpty() ? "" : spawns.get(0);
             if (!arena.vehiclesFor(team()).contains(vehicle)) vehicle = "";
             // Re-reconcile after the snapshot: a site can disappear (a capture point lost, a stage
             // advanced) or the vehicle list can change, either of which can leave the pair inconsistent.
@@ -704,7 +704,7 @@ final class BattleScreen extends FrontScreen {
         if (allSites.isEmpty()) {
             f.caption("本阶段没有你可用的部署点，请联系管理员检查地图。", Ui.TEXT_WARN);
         } else {
-            if (allSites.stream().noneMatch(s -> s.id().equals(spawn))) spawn = allSites.getFirst().id();
+            if (allSites.stream().noneMatch(s -> s.id().equals(spawn))) spawn = allSites.get(0).id();
             Deploy.Site current = site(spawn);
             row(f,"部署点",current==null?"请选择":current.label(),()->pick("选择部署目标",
                     allSites.stream().map(site->new ChoiceScreen.Choice(site.id(),site.label()+" · "+site.kind(),"")).toList(),
@@ -1346,8 +1346,8 @@ final class BattleScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
-        if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
+    public boolean mouseScrolled(double mouseX, double mouseY, double vertical) {
+        if(dropdownOpen())return super.mouseScrolled(mouseX, mouseY, vertical);
         if(fullBattlefield()){
             if(overviewRight!=null&&overviewRight.wheel(mouseX,mouseY,vertical))return true;
             // Wheel zooms the overhead deploy camera: larger height = zoomed out.
@@ -1362,7 +1362,7 @@ final class BattleScreen extends FrontScreen {
             return true;
         }
         if (leftForm != null && leftForm.wheel(mouseX, mouseY, vertical)) return true;
-        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+        return super.mouseScrolled(mouseX, mouseY, vertical);
     }
 
     @Override
@@ -1559,6 +1559,19 @@ final class BattleScreen extends FrontScreen {
     private Form barForm;
     private boolean deployReady;
     private boolean spaceArmed;
+    private Boolean previousFullView;
+    private long transitionAt;
+    @Override protected void paintTransition(GuiGraphics graphics) {
+        boolean full=fullBattlefield();
+        long now=System.nanoTime();
+        if(previousFullView==null || previousFullView!=full) {
+            if(full || previousFullView!=null) transitionAt=now;
+            previousFullView=full;
+        }
+        if(transitionAt==0){super.paintTransition(graphics);return;}
+        double remaining=1-Cinematic.ease((now-transitionAt)/240_000_000.0);
+        if(remaining>0) graphics.fill(0,0,width,height,((int)(remaining*190)<<24)|0x080c11);
+    }
     @Override public void tick(){
         super.tick();
         if(!com.mojang.blaze3d.platform.InputConstants.isKeyDown(minecraft.getWindow().getWindow(),org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE))spaceArmed=true;

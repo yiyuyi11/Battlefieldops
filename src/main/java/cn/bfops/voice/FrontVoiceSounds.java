@@ -3,7 +3,7 @@ package cn.bfops.voice;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.DeferredRegister;
 
 /**
  * Registers the 149 front-voice sound events, kept separate from the parent mod's {@code Sounds}
@@ -28,7 +28,7 @@ public final class FrontVoiceSounds {
         for (String name : FrontVoiceSoundCatalog.ALL) {
             REGISTRY.register(name,
                     () -> SoundEvent.createVariableRangeEvent(
-                            ResourceLocation.fromNamespaceAndPath(VoiceMain.MODID, name)));
+                            new ResourceLocation(VoiceMain.MODID, name)));
         }
     }
 }

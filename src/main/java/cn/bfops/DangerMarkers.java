@@ -12,7 +12,7 @@ final class DangerMarkers {
   if(path.contains("smoke")||path.contains("decoy")||path.contains("stun")||path.contains("flash"))return e->false;
   if(name.startsWith("me.xjqsh.lrtactical.")){
    try{var damage=sample.getClass().getMethod("getDamage");return e->{try{return ((Number)damage.invoke(e)).doubleValue()>0;}catch(ReflectiveOperationException ex){return false;}};}catch(NoSuchMethodException ignored){}
-   try{var cloud=sample.getClass().getMethod("getCloudData");return e->{try{Object data=cloud.invoke(e);if(Boolean.TRUE.equals(data.getClass().getMethod("isIgnite").invoke(data)))return true;for(Object effect:(List<?>)data.getClass().getMethod("getEffectInstances").invoke(data))if(effect instanceof MobEffectInstance m&&m.getEffect().value().getCategory()==MobEffectCategory.HARMFUL)return true;}catch(ReflectiveOperationException|RuntimeException ignored){}return false;};}catch(NoSuchMethodException ignored){}
+   try{var cloud=sample.getClass().getMethod("getCloudData");return e->{try{Object data=cloud.invoke(e);if(Boolean.TRUE.equals(data.getClass().getMethod("isIgnite").invoke(data)))return true;for(Object effect:(List<?>)data.getClass().getMethod("getEffectInstances").invoke(data))if(effect instanceof MobEffectInstance m&&m.getEffect().getCategory()==MobEffectCategory.HARMFUL)return true;}catch(ReflectiveOperationException|RuntimeException ignored){}return false;};}catch(NoSuchMethodException ignored){}
    return e->false;
   }
   // TaCZ uses the same kinetic entity for ordinary and explosive rounds; read its actual flag.

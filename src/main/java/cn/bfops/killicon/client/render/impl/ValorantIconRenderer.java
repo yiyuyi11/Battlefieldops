@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.impl;
 
+import cn.bfops.Draw;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
 import com.mojang.blaze3d.platform.GlStateManager.SourceFactor;
@@ -706,15 +707,15 @@ public class ValorantIconRenderer implements IHudRenderer {
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
-            builder = tesselator.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+            builder = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
 
             for (int index = 1; index < xs.length - 1; index++) {
-               builder.addVertex(matrix, xs[0], ys[0], 0.0F).setColor(red, green, blue, a);
-               builder.addVertex(matrix, xs[index], ys[index], 0.0F).setColor(red, green, blue, a);
-               builder.addVertex(matrix, xs[index + 1], ys[index + 1], 0.0F).setColor(red, green, blue, a);
+               builder.vertex(matrix, xs[0], ys[0], 0.0F).color(red, green, blue, a);
+               builder.vertex(matrix, xs[index], ys[index], 0.0F).color(red, green, blue, a);
+               builder.vertex(matrix, xs[index + 1], ys[index + 1], 0.0F).color(red, green, blue, a);
             }
 
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            Draw.end(builder);
          }
       }
    }
@@ -786,7 +787,7 @@ public class ValorantIconRenderer implements IHudRenderer {
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            builder = tesselator.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+            builder = Draw.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
             for (int i = 0; i <= 72; i++) {
                float angle = (float) (Math.PI * 2) * (float)i / 72.0F + angleOffset;
@@ -800,11 +801,11 @@ public class ValorantIconRenderer implements IHudRenderer {
                float innerAlphaFactor = Mth.clamp((maxY - yi) / yRange, 0.0F, 1.0F);
                int ao = Mth.clamp((int)(focusAlpha * outerAlphaFactor * 255.0F), 0, 255);
                int ai = Mth.clamp((int)(focusAlpha * innerAlphaFactor * 255.0F), 0, 255);
-               builder.addVertex(matrix, xo, yo, 0.0F).setColor(red, green, blue, ao);
-               builder.addVertex(matrix, xi, yi, 0.0F).setColor(red, green, blue, ai);
+               builder.vertex(matrix, xo, yo, 0.0F).color(red, green, blue, ao);
+               builder.vertex(matrix, xi, yi, 0.0F).color(red, green, blue, ai);
             }
 
-            BufferUploader.drawWithShader(builder.buildOrThrow());
+            Draw.end(builder);
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
          }
       }
@@ -1157,12 +1158,12 @@ public class ValorantIconRenderer implements IHudRenderer {
          RenderSystem.setShader(GameRenderer::getPositionTexShader);
          RenderSystem.setShaderTexture(0, texture);
          RenderSystem.setShaderColor(red, green, blue, alpha);
-         builder = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-         builder.addVertex(matrix, x0, y1, 0.0F).setUv(u0, v1);
-         builder.addVertex(matrix, x1, y1, 0.0F).setUv(u1, v1);
-         builder.addVertex(matrix, x1, y0, 0.0F).setUv(u1, v0);
-         builder.addVertex(matrix, x0, y0, 0.0F).setUv(u0, v0);
-         BufferUploader.drawWithShader(builder.buildOrThrow());
+         builder = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
+         builder.vertex(matrix, x0, y1, 0.0F).uv(u0, v1);
+         builder.vertex(matrix, x1, y1, 0.0F).uv(u1, v1);
+         builder.vertex(matrix, x1, y0, 0.0F).uv(u1, v0);
+         builder.vertex(matrix, x0, y0, 0.0F).uv(u0, v0);
+         Draw.end(builder);
       }
    }
 

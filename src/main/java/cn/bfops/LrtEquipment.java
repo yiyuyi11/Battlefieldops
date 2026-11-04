@@ -35,7 +35,7 @@ final class LrtEquipment {
             try{for(Object index:indices(kind))if(id.equals(id(index))){
                 var stack=((ItemStack)index.getClass().getMethod("createItemStack").invoke(index)).copy();
                 if(stack.isEmpty())return ItemStack.EMPTY;
-                stack.setCount(Math.clamp(count,1,stack.getMaxStackSize()));return stack;
+                stack.setCount(cn.bfops.Java17.clamp(count,1,stack.getMaxStackSize()));return stack;
             }}catch(ClassNotFoundException absent){return ItemStack.EMPTY;}
             catch(ReflectiveOperationException|LinkageError ex){BattlefieldOps.LOG.warn("Unable to create LRTactical item {}",selection,ex);return ItemStack.EMPTY;}
         }

@@ -3,7 +3,7 @@
   "minVersion": "0.8",
   "package": "cn.bfops.mixin",
   "plugin": "cn.bfops.compat.BattlefieldMixinPlugin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
   "client": [
     "GameRendererMixin",
     "TeamOutlineMixin",
@@ -27,7 +27,7 @@
     "DownedJumpMixin",
     "BattleFoodMixin",
     "SupportBoundsMixin",
-    "RoomSystemMessageMixin",
-    "SableRapierNativeMixin"
-  ]
+    "RoomSystemMessageMixin"
+  ],
+  "refmap": "battlefield_ops.refmap.json"
 }

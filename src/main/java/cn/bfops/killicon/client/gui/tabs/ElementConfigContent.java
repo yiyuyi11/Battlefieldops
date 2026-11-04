@@ -624,7 +624,7 @@ public class ElementConfigContent extends ConfigTabContent {
          guiGraphics.drawString(this.minecraft.font, noContent, contentX, contentY, -5592406, true);
       } else {
          if (this.useDefaultScroll) {
-            float dt = this.minecraft.getTimer().getRealtimeDeltaTicks() / 20.0F;
+            float dt = this.minecraft.getDeltaFrameTime();
             if (this.isDragging) {
                double diff = (double)mouseY - this.lastMouseY;
                this.targetScrollY -= diff;

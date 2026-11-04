@@ -51,7 +51,7 @@ final class CombatHud {
     }
     static void scoreBar(GuiGraphics g,int x,int y,int width,double ratio,int color,boolean reverse,boolean active){
         g.fill(x-1,y-1,x+width+1,y+7,0x80101820);g.fill(x,y,x+width,y+6,0x50374854);
-        if(active){int fill=(int)Math.round(width*Math.clamp(ratio,0,1));g.fill(reverse?x+width-fill:x,y,reverse?x+width:x+fill,y+6,color);}
+        if(active){int fill=(int)Math.round(width*cn.bfops.Java17.clamp(ratio,0,1));g.fill(reverse?x+width-fill:x,y,reverse?x+width:x+fill,y+6,color);}
     }
     static boolean active(Model.Arena arena,Model.Point point,int stage){return !arena.isDeathmatch()&&(!arena.isStaged()||point.sector==stage);}
     static void draw(GuiGraphics g,TerrainPreview terrain,double swayX,double swayY){

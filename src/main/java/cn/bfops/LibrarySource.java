@@ -1,6 +1,6 @@
 package cn.bfops;
 import java.util.*;
-import net.neoforged.fml.ModList;
+import net.minecraftforge.fml.ModList;
 
 final class LibrarySource {
     private static final Map<String,String> names=new HashMap<>();

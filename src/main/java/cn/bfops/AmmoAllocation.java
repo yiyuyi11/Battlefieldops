@@ -1,7 +1,7 @@
 package cn.bfops;
 import java.util.*;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.items.IItemHandler;
 
 final class AmmoAllocation {
     static int target(int total,int types){return types<=0?0:Math.max(1,total/types);}
@@ -15,7 +15,7 @@ final class AmmoAllocation {
                 int have=0;
                 for(int slot=0;slot<inventory.getSlots();slot++){
                     ItemStack stack=inventory.getStackInSlot(slot);
-                    if(ItemStack.isSameItemSameComponents(stack,template))have+=stack.getCount();
+                    if(ItemStack.isSameItemSameTags(stack,template))have+=stack.getCount();
                 }
                 int count=Math.min(template.getMaxStackSize(),Math.max(0,quota-have));
                 if(count==0)continue;

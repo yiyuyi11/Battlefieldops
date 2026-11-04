@@ -68,7 +68,7 @@ final class VehicleEquip {
                         consumer.getClass().getMethod("init").invoke(consumer);
                         ItemStack stack = (ItemStack) consumer.getClass().getMethod("getStack").invoke(consumer);
                         if (!stack.isEmpty() && stacks.stream()
-                                .noneMatch(s -> ItemStack.isSameItemSameComponents(s, stack))) {
+                                .noneMatch(s -> ItemStack.isSameItemSameTags(s, stack))) {
                             stacks.add(stack.copyWithCount(1));
                         }
                     }
@@ -287,7 +287,7 @@ final class VehicleEquip {
                     for(Object consumer:(Iterable<?>)weapon.getClass().getMethod("getProcessedAmmoConsumers").invoke(weapon)){
                         consumer.getClass().getMethod("init").invoke(consumer);
                         ItemStack stack=(ItemStack)consumer.getClass().getMethod("getStack").invoke(consumer);
-                        if(!stack.isEmpty()&&stacks.stream().noneMatch(s->ItemStack.isSameItemSameComponents(s,stack)))stacks.add(stack.copyWithCount(1));
+                        if(!stack.isEmpty()&&stacks.stream().noneMatch(s->ItemStack.isSameItemSameTags(s,stack)))stacks.add(stack.copyWithCount(1));
                     }
                 }catch(ReflectiveOperationException ex){BattlefieldOps.LOG.warn("Cannot resolve vehicle weapon ammunition",ex);}
             }
@@ -300,7 +300,7 @@ final class VehicleEquip {
     static int topUp(Entity vehicle,List<ItemStack> ammo,int total){
         try{
             Object raw=vehicle.getClass().getMethod("getInventory").invoke(vehicle);
-            if(!(raw instanceof net.neoforged.neoforge.items.IItemHandler inventory))return 0;
+            if(!(raw instanceof net.minecraftforge.items.IItemHandler inventory))return 0;
             return AmmoAllocation.topUp(inventory,ammo,total);
         }catch(ReflectiveOperationException ex){BattlefieldOps.LOG.warn("Cannot supply vehicle ammunition",ex);return 0;}
     }

@@ -54,7 +54,7 @@ public abstract class TaczLocalPlayerCrawlMixin {
          if(cn.bfops.MatchView.clearingProne()){ci.cancel();return;}
          if(cn.bfops.MatchView.canProne()){
             var packet=cn.bfops.Client.request("prone",cn.bfops.Client.currentMap());packet.addProperty("value",isCrawl);cn.bfops.Client.send(packet);
-         }else net.neoforged.neoforge.network.PacketDistributor.sendToServer(new ClientMessagePlayerCrawl(isCrawl));
+         }else cn.bfops.Network.sendToServer(new ClientMessagePlayerCrawl(isCrawl));
          ci.cancel();
       }
    }

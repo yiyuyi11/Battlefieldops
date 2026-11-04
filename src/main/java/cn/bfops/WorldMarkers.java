@@ -74,16 +74,16 @@ final class WorldMarkers {
         }
         if(state.has("hazards"))for(var value:state.getAsJsonArray("hazards")){
             var hazard=value.getAsJsonObject();double x=hazard.get("x").getAsDouble(),y=hazard.get("y").getAsDouble(),z=hazard.get("z").getAsDouble();
-            var entity=mc.level.getEntity(Engine.num(hazard,"id",-1));if(entity!=null&&entity.getUUID().toString().equals(Engine.str(hazard,"uuid",""))){var pos=entity.getPosition(mc.getTimer().getGameTimeDeltaPartialTick(false));x=pos.x;y=pos.y+.3;z=pos.z;}
+            var entity=mc.level.getEntity(Engine.num(hazard,"id",-1));if(entity!=null&&entity.getUUID().toString().equals(Engine.str(hazard,"uuid",""))){var pos=entity.getPosition(mc.getFrameTime());x=pos.x;y=pos.y+.3;z=pos.z;}
             double distance=camera.getPosition().distanceTo(new net.minecraft.world.phys.Vec3(x,y,z));if(distance>32)continue;var at=project(mc,camera,x,y,z);if(at==null)continue;
-            tactical(g,at.x(),at.y(),.95f,1,(float)Math.clamp(1-distance/60,.45,.95),MarkerVisualType.GRENADE_HOSTILE,"");
+            tactical(g,at.x(),at.y(),.95f,1,(float)cn.bfops.Java17.clamp(1-distance/60,.45,.95),MarkerVisualType.GRENADE_HOSTILE,"");
             focusLabel(g,mc,"敌方危险物 · "+Math.round(distance)+"m",at.x(),at.y(),.95f,TacticalColors.ENEMY);
         }
         if(state.has("marks"))for(var item:state.getAsJsonArray("marks")){
             var mark=item.getAsJsonObject();float opacity=Minimap.fade(mark);if(opacity<=.02f)continue;
             double x=mark.get("x").getAsDouble(),y=mark.get("y").getAsDouble(),z=mark.get("z").getAsDouble();
             if(mark.has("entityId")){var entity=mc.level.getEntity(Engine.num(mark,"entityId",-1));
-                if(entity!=null&&entity.getUUID().toString().equals(Engine.str(mark,"target",""))){var pos=entity.getPosition(mc.getTimer().getGameTimeDeltaPartialTick(false));x=pos.x;y=pos.y+entity.getBbHeight()+.35;z=pos.z;}}
+                if(entity!=null&&entity.getUUID().toString().equals(Engine.str(mark,"target",""))){var pos=entity.getPosition(mc.getFrameTime());x=pos.x;y=pos.y+entity.getBbHeight()+.35;z=pos.z;}}
             var at=project(mc,camera,x,y,z);if(at==null)continue;
             String kind=Engine.str(mark,"kind","POSITION");
             double distance=camera.getPosition().distanceTo(new net.minecraft.world.phys.Vec3(x,y,z));
@@ -108,7 +108,7 @@ final class WorldMarkers {
             if(mate.has("alive")&&!mate.get("alive").getAsBoolean())continue;
             String uuid=Engine.str(mate,"uuid",""),name=Engine.str(mate,"name","");if(uuid.equals(mc.player.getUUID().toString())||name.equals(mc.player.getScoreboardName()))continue;
             double x=mate.get("x").getAsDouble(),y=mate.get("y").getAsDouble()+2.3,z=mate.get("z").getAsDouble();
-            try{var entity=mc.level.getPlayerByUUID(java.util.UUID.fromString(uuid));if(entity!=null){var pos=entity.getPosition(mc.getTimer().getGameTimeDeltaPartialTick(false));x=pos.x;y=pos.y+entity.getBbHeight()+.55;z=pos.z;}}catch(IllegalArgumentException ignored){}
+            try{var entity=mc.level.getPlayerByUUID(java.util.UUID.fromString(uuid));if(entity!=null){var pos=entity.getPosition(mc.getFrameTime());x=pos.x;y=pos.y+entity.getBbHeight()+.55;z=pos.z;}}catch(IllegalArgumentException ignored){}
             var at=project(mc,camera,x,y,z);if(at==null)continue;
             boolean squad=mate.has("squad")&&mate.get("squad").getAsBoolean(),down=mate.has("downed")&&mate.get("downed").getAsBoolean();
             if(down&&(!mate.has("rescuable")||!mate.get("rescuable").getAsBoolean()||camera.getPosition().distanceTo(new net.minecraft.world.phys.Vec3(x,y,z))>96))continue;

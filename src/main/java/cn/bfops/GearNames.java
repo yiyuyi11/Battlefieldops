@@ -15,7 +15,7 @@ final class GearNames {
         try{
             if(kind.equals("attachment")||kind.equals("gun")){
                 Class<?> api=Class.forName("com.tacz.guns.api.TimelessAPI");
-                var index=(Optional<?>)api.getMethod(kind.equals("attachment")?"getClientAttachmentIndex":"getClientGunIndex",ResourceLocation.class).invoke(null,ResourceLocation.parse(id));
+                var index=(Optional<?>)api.getMethod(kind.equals("attachment")?"getClientAttachmentIndex":"getClientGunIndex",ResourceLocation.class).invoke(null,new ResourceLocation(id));
                 if(index.isPresent()){String raw=(String)index.get().getClass().getMethod("getName").invoke(index.get());if(raw!=null&&!raw.isBlank())result=I18n.exists(raw)?I18n.get(raw):raw;}
             }
             if(result==null){ResourceLocation resource=ResourceLocation.tryParse(id);if(resource!=null&&BuiltInRegistries.ITEM.containsKey(resource)){String value=new ItemStack(BuiltInRegistries.ITEM.get(resource)).getHoverName().getString();if(!value.isBlank())result=value;}}

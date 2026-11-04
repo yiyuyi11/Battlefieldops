@@ -1,5 +1,6 @@
 package cn.bfops.conquest.client.marker;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -13,23 +14,23 @@ import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
 public final class TacticalMarkerRenderer {
-   private static final ResourceLocation TEX_ASSAULT_TEAM = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_assault_team.png");
-   private static final ResourceLocation TEX_ASSAULT_SQUAD = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_assault_squad.png");
-   private static final ResourceLocation TEX_ENGINEER_TEAM = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_engineer_team.png");
-   private static final ResourceLocation TEX_ENGINEER_SQUAD = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_engineer_squad.png");
-   private static final ResourceLocation TEX_RECON_TEAM = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_recon_team.png");
-   private static final ResourceLocation TEX_RECON_SQUAD = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_recon_squad.png");
-   private static final ResourceLocation TEX_SUPPORT_TEAM = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_support_team.png");
-   private static final ResourceLocation TEX_SUPPORT_SQUAD = ResourceLocation.parse("battlefield_ops:textures/gui/marker_class_support_squad.png");
-   private static final ResourceLocation TEX_NEED_AMMO = ResourceLocation.parse("battlefield_ops:textures/gui/marker_ammo_box.png");
-   private static final ResourceLocation TEX_DOWNED_MEDICAL = ResourceLocation.parse("battlefield_ops:textures/gui/marker_med_box.png");
-   private static final ResourceLocation TEX_HUD_AMMO_BOX = ResourceLocation.parse("battlefield_ops:textures/gui/hud_ammo_box.png");
-   private static final ResourceLocation TEX_HUD_MEDICAL_BOX = ResourceLocation.parse("battlefield_ops:textures/gui/hud_medical_box.png");
-   private static final ResourceLocation TEX_HUD_AMMO_BAG = ResourceLocation.parse("battlefield_ops:textures/gui/hud_ammo_bag.png");
-   private static final ResourceLocation TEX_HUD_MEDIC_BAG = ResourceLocation.parse("battlefield_ops:textures/gui/hud_medic_bag.png");
-   private static final ResourceLocation TEX_HUD_GRENADE = ResourceLocation.parse("battlefield_ops:textures/gui/hud_grenade.png");
-   private static final ResourceLocation TEX_HUD_CLAYMORE_MINE = ResourceLocation.parse("battlefield_ops:textures/gui/hud_claymore_mine.png");
-   private static final ResourceLocation TEX_HUD_BEACON = ResourceLocation.parse("battlefield_ops:textures/gui/hud_beacon.png");
+   private static final ResourceLocation TEX_ASSAULT_TEAM = new ResourceLocation("battlefield_ops:textures/gui/marker_class_assault_team.png");
+   private static final ResourceLocation TEX_ASSAULT_SQUAD = new ResourceLocation("battlefield_ops:textures/gui/marker_class_assault_squad.png");
+   private static final ResourceLocation TEX_ENGINEER_TEAM = new ResourceLocation("battlefield_ops:textures/gui/marker_class_engineer_team.png");
+   private static final ResourceLocation TEX_ENGINEER_SQUAD = new ResourceLocation("battlefield_ops:textures/gui/marker_class_engineer_squad.png");
+   private static final ResourceLocation TEX_RECON_TEAM = new ResourceLocation("battlefield_ops:textures/gui/marker_class_recon_team.png");
+   private static final ResourceLocation TEX_RECON_SQUAD = new ResourceLocation("battlefield_ops:textures/gui/marker_class_recon_squad.png");
+   private static final ResourceLocation TEX_SUPPORT_TEAM = new ResourceLocation("battlefield_ops:textures/gui/marker_class_support_team.png");
+   private static final ResourceLocation TEX_SUPPORT_SQUAD = new ResourceLocation("battlefield_ops:textures/gui/marker_class_support_squad.png");
+   private static final ResourceLocation TEX_NEED_AMMO = new ResourceLocation("battlefield_ops:textures/gui/marker_ammo_box.png");
+   private static final ResourceLocation TEX_DOWNED_MEDICAL = new ResourceLocation("battlefield_ops:textures/gui/marker_med_box.png");
+   private static final ResourceLocation TEX_HUD_AMMO_BOX = new ResourceLocation("battlefield_ops:textures/gui/hud_ammo_box.png");
+   private static final ResourceLocation TEX_HUD_MEDICAL_BOX = new ResourceLocation("battlefield_ops:textures/gui/hud_medical_box.png");
+   private static final ResourceLocation TEX_HUD_AMMO_BAG = new ResourceLocation("battlefield_ops:textures/gui/hud_ammo_bag.png");
+   private static final ResourceLocation TEX_HUD_MEDIC_BAG = new ResourceLocation("battlefield_ops:textures/gui/hud_medic_bag.png");
+   private static final ResourceLocation TEX_HUD_GRENADE = new ResourceLocation("battlefield_ops:textures/gui/hud_grenade.png");
+   private static final ResourceLocation TEX_HUD_CLAYMORE_MINE = new ResourceLocation("battlefield_ops:textures/gui/hud_claymore_mine.png");
+   private static final ResourceLocation TEX_HUD_BEACON = new ResourceLocation("battlefield_ops:textures/gui/hud_beacon.png");
    private static final float MAX_MARKER_VISUAL_OPACITY = 1.0F;
    private static final float TRIANGLE_BASE_Y = 4.0F;
    private static final float TRIANGLE_HALF_WIDTH = 3.0F;
@@ -193,10 +194,10 @@ public final class TacticalMarkerRenderer {
       String lowerClass = targetClass.toLowerCase(Locale.ROOT);
 
       return switch (lowerClass) {
-         case "assault" -> ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/class_assault.png");
-         case "engineer" -> ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/class_engineer.png");
-         case "recon" -> ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/class_recon.png");
-         case "support" -> ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/class_support.png");
+         case "assault" -> new ResourceLocation("battlefield_ops","textures/gui/class_assault.png");
+         case "engineer" -> new ResourceLocation("battlefield_ops","textures/gui/class_engineer.png");
+         case "recon" -> new ResourceLocation("battlefield_ops","textures/gui/class_recon.png");
+         case "support" -> new ResourceLocation("battlefield_ops","textures/gui/class_support.png");
          default -> null;
       };
    }
@@ -217,13 +218,13 @@ public final class TacticalMarkerRenderer {
       RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
       RenderSystem.setShaderTexture(0, texture);
       BufferBuilder buffer;
-      buffer = Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+      buffer = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
       float halfSize = halfSizeBase * scale;
-      buffer.addVertex(matrix, -halfSize, -halfSize, 0.0F).setUv(0.0F, 0.0F).setColor(r, g, b, alpha);
-      buffer.addVertex(matrix, -halfSize, halfSize, 0.0F).setUv(0.0F, 1.0F).setColor(r, g, b, alpha);
-      buffer.addVertex(matrix, halfSize, halfSize, 0.0F).setUv(1.0F, 1.0F).setColor(r, g, b, alpha);
-      buffer.addVertex(matrix, halfSize, -halfSize, 0.0F).setUv(1.0F, 0.0F).setColor(r, g, b, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer.vertex(matrix, -halfSize, -halfSize, 0.0F).uv(0.0F, 0.0F).color(r, g, b, alpha);
+      buffer.vertex(matrix, -halfSize, halfSize, 0.0F).uv(0.0F, 1.0F).color(r, g, b, alpha);
+      buffer.vertex(matrix, halfSize, halfSize, 0.0F).uv(1.0F, 1.0F).color(r, g, b, alpha);
+      buffer.vertex(matrix, halfSize, -halfSize, 0.0F).uv(1.0F, 0.0F).color(r, g, b, alpha);
+      Draw.end(buffer);
    }
 
    private static void drawCenterOverlay(GuiGraphics gui, Matrix4f matrix, ResourceLocation texture, float scale, float alpha) {
@@ -231,30 +232,30 @@ public final class TacticalMarkerRenderer {
          RenderSystem.setShader(GameRenderer::getPositionTexColorShader);
          RenderSystem.setShaderTexture(0, texture);
          BufferBuilder buffer;
-         buffer = Tesselator.getInstance().begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+         buffer = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
          float halfSize = 2.75F * scale;
-         buffer.addVertex(matrix, -halfSize, -halfSize, 0.0F).setUv(0.0F, 0.0F).setColor(1.0F, 1.0F, 1.0F, alpha);
-         buffer.addVertex(matrix, -halfSize, halfSize, 0.0F).setUv(0.0F, 1.0F).setColor(1.0F, 1.0F, 1.0F, alpha);
-         buffer.addVertex(matrix, halfSize, halfSize, 0.0F).setUv(1.0F, 1.0F).setColor(1.0F, 1.0F, 1.0F, alpha);
-         buffer.addVertex(matrix, halfSize, -halfSize, 0.0F).setUv(1.0F, 0.0F).setColor(1.0F, 1.0F, 1.0F, alpha);
-         BufferUploader.drawWithShader(buffer.buildOrThrow());
+         buffer.vertex(matrix, -halfSize, -halfSize, 0.0F).uv(0.0F, 0.0F).color(1.0F, 1.0F, 1.0F, alpha);
+         buffer.vertex(matrix, -halfSize, halfSize, 0.0F).uv(0.0F, 1.0F).color(1.0F, 1.0F, 1.0F, alpha);
+         buffer.vertex(matrix, halfSize, halfSize, 0.0F).uv(1.0F, 1.0F).color(1.0F, 1.0F, 1.0F, alpha);
+         buffer.vertex(matrix, halfSize, -halfSize, 0.0F).uv(1.0F, 0.0F).color(1.0F, 1.0F, 1.0F, alpha);
+         Draw.end(buffer);
       }
    }
 
    private static void drawFilledCircle(Matrix4f matrix, float radius, float red, float green, float blue, float alpha, int segments) {
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
       BufferBuilder buffer;
-      buffer = Tesselator.getInstance().begin(Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, 0.0F, 0.0F, 0.0F).setColor(red, green, blue, alpha);
+      buffer = Draw.begin(Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, 0.0F, 0.0F, 0.0F).color(red, green, blue, alpha);
 
       for (int i = 0; i <= segments; i++) {
          double angle = (Math.PI * 2) * (double)i / (double)Math.max(segments, 3);
          float x = (float)(Math.cos(angle) * (double)radius);
          float y = (float)(Math.sin(angle) * (double)radius);
-         buffer.addVertex(matrix, x, y, 0.0F).setColor(red, green, blue, alpha);
+         buffer.vertex(matrix, x, y, 0.0F).color(red, green, blue, alpha);
       }
 
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      Draw.end(buffer);
    }
 
    private static void drawInvertedTriangle(
@@ -262,37 +263,37 @@ public final class TacticalMarkerRenderer {
    ) {
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
       BufferBuilder buffer;
-      buffer = Tesselator.getInstance().begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, centerX - halfWidth, centerY - height * 0.5F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX + halfWidth, centerY - height * 0.5F, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX, centerY + height * 0.5F, 0.0F).setColor(red, green, blue, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, centerX - halfWidth, centerY - height * 0.5F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX + halfWidth, centerY - height * 0.5F, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX, centerY + height * 0.5F, 0.0F).color(red, green, blue, alpha);
+      Draw.end(buffer);
    }
 
    private static void drawDiamond(Matrix4f matrix, float centerX, float centerY, float halfDiagonal, float red, float green, float blue, float alpha) {
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
       BufferBuilder buffer;
-      buffer = Tesselator.getInstance().begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, centerX, centerY - halfDiagonal, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX + halfDiagonal, centerY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX, centerY + halfDiagonal, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX, centerY - halfDiagonal, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX, centerY + halfDiagonal, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, centerX - halfDiagonal, centerY, 0.0F).setColor(red, green, blue, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, centerX, centerY - halfDiagonal, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX + halfDiagonal, centerY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX, centerY + halfDiagonal, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX, centerY - halfDiagonal, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX, centerY + halfDiagonal, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, centerX - halfDiagonal, centerY, 0.0F).color(red, green, blue, alpha);
+      Draw.end(buffer);
    }
 
    private static void drawQuad(Matrix4f matrix, float minX, float minY, float maxX, float maxY, float red, float green, float blue, float alpha) {
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
       BufferBuilder buffer;
-      buffer = Tesselator.getInstance().begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-      buffer.addVertex(matrix, minX, minY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, maxX, minY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, maxX, maxY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, minX, minY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, maxX, maxY, 0.0F).setColor(red, green, blue, alpha);
-      buffer.addVertex(matrix, minX, maxY, 0.0F).setColor(red, green, blue, alpha);
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      buffer = Draw.begin(Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+      buffer.vertex(matrix, minX, minY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, maxX, minY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, maxX, maxY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, minX, minY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, maxX, maxY, 0.0F).color(red, green, blue, alpha);
+      buffer.vertex(matrix, minX, maxY, 0.0F).color(red, green, blue, alpha);
+      Draw.end(buffer);
    }
 
    private static enum MarkerShape {

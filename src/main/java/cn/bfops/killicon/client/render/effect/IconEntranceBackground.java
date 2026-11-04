@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.effect;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -118,7 +119,7 @@ public final class IconEntranceBackground {
       RenderSystem.disableDepthTest();
       RenderSystem.disableCull();
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
-      builder = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+      builder = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
       quad(builder, matrix, leftOuter, topOuter, rightOuter, topInner, r, g, b, a);
       quad(builder, matrix, leftOuter, bottomInner, rightOuter, bottomOuter, r, g, b, a);
       quad(builder, matrix, leftOuter, topInner, leftInner, bottomInner, r, g, b, a);
@@ -128,7 +129,7 @@ public final class IconEntranceBackground {
       lineQuad(builder, matrix, centerX, centerY, centerX + rayProj, centerY - rayProj, halfThickness, r, g, b, a);
       lineQuad(builder, matrix, centerX, centerY, centerX + rayProj, centerY + rayProj, halfThickness, r, g, b, a);
       lineQuad(builder, matrix, centerX, centerY, centerX - rayProj, centerY + rayProj, halfThickness, r, g, b, a);
-      BufferUploader.drawWithShader(builder.buildOrThrow());
+      Draw.end(builder);
       RenderSystem.enableCull();
       RenderSystem.enableDepthTest();
       RenderSystem.disableBlend();
@@ -141,18 +142,18 @@ public final class IconEntranceBackground {
       if (!(len < 1.0E-4F)) {
          float nx = -dy / len * halfThickness;
          float ny = dx / len * halfThickness;
-         builder.addVertex(matrix, ax + nx, ay + ny, 0.0F).setColor(r, g, b, a);
-         builder.addVertex(matrix, ax - nx, ay - ny, 0.0F).setColor(r, g, b, a);
-         builder.addVertex(matrix, bx - nx, by - ny, 0.0F).setColor(r, g, b, a);
-         builder.addVertex(matrix, bx + nx, by + ny, 0.0F).setColor(r, g, b, a);
+         builder.vertex(matrix, ax + nx, ay + ny, 0.0F).color(r, g, b, a);
+         builder.vertex(matrix, ax - nx, ay - ny, 0.0F).color(r, g, b, a);
+         builder.vertex(matrix, bx - nx, by - ny, 0.0F).color(r, g, b, a);
+         builder.vertex(matrix, bx + nx, by + ny, 0.0F).color(r, g, b, a);
       }
    }
 
    private static void quad(BufferBuilder builder, Matrix4f matrix, float x1, float y1, float x2, float y2, int r, int g, int b, int a) {
-      builder.addVertex(matrix, x1, y1, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x2, y1, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x2, y2, 0.0F).setColor(r, g, b, a);
-      builder.addVertex(matrix, x1, y2, 0.0F).setColor(r, g, b, a);
+      builder.vertex(matrix, x1, y1, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x2, y1, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x2, y2, 0.0F).color(r, g, b, a);
+      builder.vertex(matrix, x1, y2, 0.0F).color(r, g, b, a);
    }
 
    public static int parseColor(String hex, int fallback) {

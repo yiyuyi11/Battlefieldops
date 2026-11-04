@@ -4,3 +4,9 @@
 *.class
 logs/
 run/
+
+.gradle/
+build/
+libs/
+run/
+logs/

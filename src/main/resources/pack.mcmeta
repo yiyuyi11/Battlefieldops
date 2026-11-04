@@ -1,1 +1,6 @@
-{"pack":{"pack_format":34,"description":"Battlefield Ops resources"}}
+{
+  "pack": {
+    "pack_format": 15,
+    "description": "Battlefield Ops resources"
+  }
+}

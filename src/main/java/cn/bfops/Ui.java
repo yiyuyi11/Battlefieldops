@@ -50,6 +50,70 @@ final class Ui {
     // ---------------------------------------------------------------- panels
 
     /** Opaque framed surface. The 1px border is what makes two panes read as one window. */
+
+    /**
+     * 1.20.1 has no {@code GuiGraphics.blitSprite}: that arrived with the sprite-atlas rework. The mod's
+     * sprites are plain PNGs under {@code textures/gui/sprites}, so they can be blitted directly once
+     * their pixel size is known.
+     */
+    private static final java.util.Map<String, int[]> SPRITE_SIZES = new java.util.HashMap<>();
+    private static final java.util.Map<String, Integer> SPRITE_BORDERS = new java.util.HashMap<>();
+
+    static void sprite(GuiGraphics g, net.minecraft.resources.ResourceLocation id, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        String path = "textures/gui/sprites/" + id.getPath() + ".png";
+        var texture = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(id.getNamespace(), path);
+        int[] size = SPRITE_SIZES.get(path);
+        if (size == null) {
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            try (var stream = mc.getResourceManager().getResource(texture).orElseThrow().open()) {
+                var image = com.mojang.blaze3d.platform.NativeImage.read(stream);
+                size = new int[]{image.getWidth(), image.getHeight()};
+                image.close();
+            } catch (Exception ex) {
+                return;
+            }
+            SPRITE_SIZES.put(path, size);
+        }
+        int border = spriteBorder(id, path, size);
+        if (border <= 0 || w <= border * 2 || h <= border * 2) {
+            g.blit(texture, x, y, w, h, 0, 0, size[0], size[1], size[0], size[1]);
+            return;
+        }
+        int tw = size[0], th = size[1];
+        int right = x + w, bottom = y + h;
+        int innerW = w - border * 2, innerH = h - border * 2;
+        // corners
+        g.blit(texture, x, y, border, border, 0, 0, border, border, tw, th);
+        g.blit(texture, right - border, y, border, border, tw - border, 0, border, border, tw, th);
+        g.blit(texture, x, bottom - border, border, border, 0, th - border, border, border, tw, th);
+        g.blit(texture, right - border, bottom - border, border, border, tw - border, th - border, border, border, tw, th);
+        // edges keep their thickness, the middle stretches
+        g.blit(texture, x + border, y, innerW, border, border, 0, tw - border * 2, border, tw, th);
+        g.blit(texture, x + border, bottom - border, innerW, border, border, th - border, tw - border * 2, border, tw, th);
+        g.blit(texture, x, y + border, border, innerH, 0, border, border, th - border * 2, tw, th);
+        g.blit(texture, right - border, y + border, border, innerH, tw - border, border, border, th - border * 2, tw, th);
+        // centre
+        g.blit(texture, x + border, y + border, innerW, innerH, border, border, tw - border * 2, th - border * 2, tw, th);
+    }
+
+    /** Border width from the sprite's own {@code .mcmeta}; defaults to one pixel. */
+    private static int spriteBorder(net.minecraft.resources.ResourceLocation id, String path, int[] size) {
+        Integer cached = SPRITE_BORDERS.get(path);
+        if (cached != null) return cached;
+        int border = 1;
+        var mc = net.minecraft.client.Minecraft.getInstance();
+        var meta = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(id.getNamespace(), path + ".mcmeta");
+        try (var stream = mc.getResourceManager().getResource(meta).orElseThrow().open()) {
+            var json = com.google.gson.JsonParser.parseString(new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            border = json.getAsJsonObject("gui").getAsJsonObject("scaling").get("border").getAsInt();
+        } catch (Exception ignored) {
+            border = 1;
+        }
+        border = Math.max(0, Math.min(border, Math.min(size[0], size[1]) / 2));
+        SPRITE_BORDERS.put(path, border);
+        return border;
+    }
     static void panel(GuiGraphics g, Layout.Rect r) {
         if (r.w() <= 0 || r.h() <= 0) return;
         if(bf1){ // Reference style: a translucent plate and one hairline, no raised bevel.
@@ -59,7 +123,7 @@ final class Ui {
         }
         g.fill(r.x(), r.y(), r.right(), r.bottom(), PANEL);
         g.fill(r.x(),r.y(),r.right(),r.y()+1,FRAME);
-        g.blitSprite(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("battlefield_ops","bf1/card"),r.x(),r.y(),r.w(),r.h());
+        Ui.sprite(g, new net.minecraft.resources.ResourceLocation("battlefield_ops","bf1/card"),r.x(),r.y(),r.w(),r.h());
 
     }
 

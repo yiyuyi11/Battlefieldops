@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.impl;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -374,7 +375,7 @@ public class ComboSubtitleRenderer implements IHudRenderer {
             RenderSystem.enableBlend();
             RenderSystem.defaultBlendFunc();
             RenderSystem.setShader(GameRenderer::getPositionColorShader);
-            buffer = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+            buffer = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
             float halfHeight = (float)this.lightHeight / 2.0F;
             float yOffset = 1.0F;
             int r = 255;
@@ -382,15 +383,15 @@ public class ComboSubtitleRenderer implements IHudRenderer {
             int b = 255;
             int aCenter = (int)(200.0F * baseAlpha);
             int aEdge = 0;
-            buffer.addVertex(poseStack.last().pose(), 0.0F, -halfHeight + yOffset, 0.0F).setColor(r, g, b, aCenter);
-            buffer.addVertex(poseStack.last().pose(), -currentScanX, -halfHeight + yOffset, 0.0F).setColor(r, g, b, aEdge);
-            buffer.addVertex(poseStack.last().pose(), -currentScanX, halfHeight + yOffset, 0.0F).setColor(r, g, b, aEdge);
-            buffer.addVertex(poseStack.last().pose(), 0.0F, halfHeight + yOffset, 0.0F).setColor(r, g, b, aCenter);
-            buffer.addVertex(poseStack.last().pose(), currentScanX, -halfHeight + yOffset, 0.0F).setColor(r, g, b, aEdge);
-            buffer.addVertex(poseStack.last().pose(), 0.0F, -halfHeight + yOffset, 0.0F).setColor(r, g, b, aCenter);
-            buffer.addVertex(poseStack.last().pose(), 0.0F, halfHeight + yOffset, 0.0F).setColor(r, g, b, aCenter);
-            buffer.addVertex(poseStack.last().pose(), currentScanX, halfHeight + yOffset, 0.0F).setColor(r, g, b, aEdge);
-            BufferUploader.drawWithShader(buffer.buildOrThrow());
+            buffer.vertex(poseStack.last().pose(), 0.0F, -halfHeight + yOffset, 0.0F).color(r, g, b, aCenter);
+            buffer.vertex(poseStack.last().pose(), -currentScanX, -halfHeight + yOffset, 0.0F).color(r, g, b, aEdge);
+            buffer.vertex(poseStack.last().pose(), -currentScanX, halfHeight + yOffset, 0.0F).color(r, g, b, aEdge);
+            buffer.vertex(poseStack.last().pose(), 0.0F, halfHeight + yOffset, 0.0F).color(r, g, b, aCenter);
+            buffer.vertex(poseStack.last().pose(), currentScanX, -halfHeight + yOffset, 0.0F).color(r, g, b, aEdge);
+            buffer.vertex(poseStack.last().pose(), 0.0F, -halfHeight + yOffset, 0.0F).color(r, g, b, aCenter);
+            buffer.vertex(poseStack.last().pose(), 0.0F, halfHeight + yOffset, 0.0F).color(r, g, b, aCenter);
+            buffer.vertex(poseStack.last().pose(), currentScanX, halfHeight + yOffset, 0.0F).color(r, g, b, aEdge);
+            Draw.end(buffer);
          }
       }
    }

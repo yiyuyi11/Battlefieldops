@@ -130,19 +130,19 @@ final class Deploy {
     static String siteFor(List<Site> sites, String current, String vehicle, char vehicleClass) {
         if (sites.isEmpty()) return "";
         if (vehicle == null || vehicle.isEmpty()) {
-            return sites.stream().anyMatch(s -> s.id().equals(current)) ? current : sites.getFirst().id();
+            return sites.stream().anyMatch(s -> s.id().equals(current)) ? current : sites.get(0).id();
         }
         Site selected=sites.stream().filter(s->s.id().equals(current)).findFirst().orElse(null);
         if(selected!=null&&SquadRules.dynamic(selected.kind())||!DeploymentRules.prefixKind(current).isEmpty())return current;
         List<Site> capable = sitesFor(sites, vehicleClass);
         if (capable.isEmpty()) return current;
         if (capable.stream().anyMatch(s -> s.id().equals(current))) return current;
-        return capable.getFirst().id();
+        return capable.get(0).id();
     }
 
     /** First non-air spawn, used as the fallback when a requested site disappears. */
     static Site first(List<Site> sites) {
-        return sites.isEmpty() ? null : sites.getFirst();
+        return sites.isEmpty() ? null : sites.get(0);
     }
 
     /**
@@ -155,9 +155,9 @@ final class Deploy {
         if (sites.isEmpty()) return null;
         if (needsVehicle) {
             List<Site> matching = sitesFor(sites, vehicleClass);
-            if (!matching.isEmpty()) return matching.getFirst();
+            if (!matching.isEmpty()) return matching.get(0);
         }
-        return sites.getFirst();
+        return sites.get(0);
     }
 
     /** Owner array from a live ruleset, for the server side. */

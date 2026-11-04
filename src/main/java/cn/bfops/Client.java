@@ -6,15 +6,16 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.network.PacketDistributor;
+import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -124,17 +125,14 @@ public final class Client {
 
     static JsonObject state = new JsonObject(), catalog = new JsonObject();
 
-    /** Wall clock before which the client keeps the death view rather than opening the deploy map. */
-    static long deathHoldUntil;
+    static boolean holdingDeathView() {return DeathCard.blockingDeploy();}
+    private static boolean deathSkipArmed;
 
-    /** True while the reference's death sequence should still own the screen. */
-    static boolean holdingDeathView() {
-        return deathHoldUntil > 0 && System.currentTimeMillis() < deathHoldUntil;
-    }
-
-    /** Space is the "I have read this" key: it lets the deploy map open immediately. */
-    static void releaseDeathHold() {
-        deathHoldUntil = 0;
+    private static void focusDeath(Minecraft mc, Vec3 killer) {
+        if (mc.screen instanceof DeathPreviewScreen) mc.setScreen(null);
+        DeathCard.begin(true);
+        if (mc.player != null) Cinematic.startDeath(mc.player.getX(), mc.player.getEyeY(), mc.player.getZ(),
+                mc.player.getYRot(), mc.player.getXRot(), killer);
     }
     static JsonObject lobby=new JsonObject();
     private static long snapshotNanos=System.nanoTime();
@@ -217,34 +215,6 @@ public final class Client {
         bakedFailedAt = 0;
     }
 
-
-    @SubscribeEvent
-    public static void keys(RegisterKeyMappingsEvent event) {
-        event.register(OPEN);event.register(MINIMAP_SETTINGS);event.register(MINIMAP_ZOOM_IN);event.register(MINIMAP_ZOOM_OUT);
-        event.register(ELITE_PICKUP);
-        event.register(SCORES);
-        event.register(MINIMAP_CORNER);
-        event.register(MINIMAP_TOGGLE);
-        event.register(MARK);
-        event.register(MAP_ROTATION);
-        event.register(KILL_ICON_STYLE);
-        event.register(KILL_ICON_PICKER);
-        event.register(AUDIO);
-        // The 656 leaderboard's own key. It lived in KeyBindings but was never registered with the
-        // game, so pressing its bound key did nothing at all; registering it here is what makes
-        // "open the standings with a key, from any screen or no screen" true.
-        for (var mapping : cn.bfops.killicon.client.KeyBindings.all()) event.register(mapping);
-    }
-
-    @SubscribeEvent
-    public static void referenceReload(net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent event){
-        event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)manager->{Minecraft.getInstance().execute(()->{FactionArt.clear();AssetIcons.clear();NativeAudioBank.clear();NativeBattleAudio.reset();});ReferenceProps.clear();GearNames.clear();EquipmentStatistics.clear();BoundaryEffect.reset();NearMissEffect.reset();MusicDirector.silence();});
-    }
-
-    @SubscribeEvent
-    public static void setup(FMLClientSetupEvent event) {
-        event.enqueueWork(() -> {Network.receiver = Client::receive;Network.modeReceiver=Client::mode;LoadoutProfiles.load();LobbyAccess.clientOpen=()->{if(serverSupported())LobbyScreen.open();};NativeKillIcons.init();});
-    }
 
     /**
      * The sound cue for an award icon kind.
@@ -362,11 +332,13 @@ public final class Client {
                 if(mc.screen instanceof AttachmentRulesScreen screen)screen.receive(payload);return;
             }
             if(Engine.str(payload,"type","").equals("downedCard")){
-                DeathCard.show(payload);return;
+                DeathCard.show(payload);Cinematic.downed(Cinematic.focusTarget(payload));return;
             }
             if(Engine.str(payload,"type","").equals("deathStats")){
                 NativeKillIcons.deathStats(Engine.str(payload,"killer",""));
-                DeathCard.show(payload);return;
+                if (mc.screen instanceof DeathPreviewScreen) mc.setScreen(null);
+                if (!DeathCard.blockingDeploy() && !Cinematic.inDeathSequence()) deathSkipArmed=false;
+                DeathCard.show(payload);focusDeath(mc,Cinematic.focusTarget(payload));return;
             }
             if(Engine.str(payload,"type","").equals("fittings")){
                 if(mc.screen instanceof FittingScreen screen)screen.receive(payload);
@@ -382,7 +354,28 @@ public final class Client {
             // `state = payload` replaces the scores array with the new (empty) one, and before
             // clearRoomData drops the in-memory copy.
             if(leftMatch)NativeKillIcons.archiveRoom();
+            JsonObject previousMember = state.has("me") && state.get("me").isJsonObject()
+                    ? state.getAsJsonObject("me") : null;
+            JsonObject meNow = payload.has("me") && payload.get("me").isJsonObject()
+                    ? payload.getAsJsonObject("me") : null;
             state = payload;
+            // Start before honoring the open-screen flag in this packet.
+            if (previousMember != null && meNow != null
+                    && Engine.str(previousMember,"map","").equals(Engine.str(meNow,"map",""))) {
+                boolean wasLiving = previousMember.has("alive") && previousMember.get("alive").getAsBoolean();
+                boolean living = meNow.has("alive") && meNow.get("alive").getAsBoolean();
+                boolean beforeDown = previousMember.has("downed") && previousMember.get("downed").getAsBoolean();
+                boolean nowDown = meNow.has("downed") && meNow.get("downed").getAsBoolean();
+                if (wasLiving && !living) {
+                    if (!Cinematic.inDeathSequence()) deathSkipArmed=false;
+                    focusDeath(mc,null);
+                } else if (living && nowDown && !beforeDown) {
+                    DeathCard.begin(false);
+                } else if (living && !nowDown && (!wasLiving || beforeDown)) {
+                    DeathCard.reset();
+                    Cinematic.recoverDowned();
+                }
+            }
             if(EntryScene.receive(payload))return;
             boolean deployed=Events.confirmDeployment(mc,payload);
             if(leftMatch){MatchView.leftMatch();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();NativeKillIcons.reset();cn.bfops.killicon.client.gui.tabs.ScoreboardTab.clearRoomData();}
@@ -399,7 +392,7 @@ public final class Client {
             } else if (mc.screen instanceof OpsScreen screen) {
                 screen.updated();
             } else if (!(mc.screen instanceof DeathPreviewScreen) && !(mc.screen instanceof GunModifyScreen) && !(mc.screen instanceof FittingScreen) && !(mc.screen instanceof LoadoutScreen) && !(mc.screen instanceof ConfirmActionScreen) && !(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen) && !deployed && payload.has("open") && payload.get("open").getAsBoolean()
-                    && !holdingDeathView()) {
+                    && !holdingDeathView() && !DeathCard.blockingDeploy()) {
                 mc.setScreen(new BattleScreen());
             }
         } catch (Exception ex) {
@@ -408,6 +401,7 @@ public final class Client {
     }
 
     static void mode(boolean enabled){
+        BattlefieldOps.LOG.info("[bfops] mode packet received: enabled={}", enabled);
         BattleServerMode.clientActive=enabled;if(!enabled)EntryScene.clear();
         if(enabled)return;
         var mc=Minecraft.getInstance();
@@ -415,15 +409,16 @@ public final class Client {
             var folder=mc.gameDirectory.toPath().resolve("battlefield_ops");java.nio.file.Files.createDirectories(folder);
             java.nio.file.Files.writeString(folder.resolve("mode-off-map-draft.json"),BattlefieldOps.GSON.toJson(editor.draft));
         }catch(java.io.IOException ex){BattlefieldOps.LOG.error("Cannot preserve map draft before mode shutdown",ex);}
-        state=new JsonObject();lobby=new JsonObject();awards.clear();Cinematic.clear();MatchView.leftMatch();
+        state=new JsonObject();lobby=new JsonObject();awards.clear();Cinematic.clear();DeathCard.reset();deathSkipArmed=false;MatchView.leftMatch();
         NativeKillIcons.reset();NativeBattleAudio.reset();MusicDirector.silence();ProneControls.reset();BoundaryEffect.reset();NearMissEffect.reset();WorldMarkers.reset();
         if(mc.screen instanceof FrontScreen)mc.setScreen(null);
     }
     static boolean serverSupported() {
         var connection = Minecraft.getInstance().getConnection();
         if (connection == null) return false;
-        var listener = (net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)connection;
-        return BattleServerMode.clientActive&&listener.hasChannel(Network.Request.TYPE) && listener.hasChannel(Network.State.TYPE);
+        // Either the explicit mode packet, or a snapshot that only a running engine can produce. The second
+        // check is the self-healing path: a lost mode packet must not lock the whole UI out.
+        return BattleServerMode.clientActive || (state.has("maps") && state.has("roomExists"));
     }
 
     public static void send(JsonObject request) {
@@ -434,7 +429,7 @@ public final class Client {
         }
         String json = request.toString();
         if(Engine.str(request,"op","").equals("save")&&(json.length()>20000||json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>28000)){
-            PacketDistributor.sendToServer(new Network.MapSave(MapTransfer.pack(json)));return;
+            Network.sendToServer(new Network.MapSave(MapTransfer.pack(json)));return;
         }
         if (json.length()>20000 || json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 28000) {
             if (Minecraft.getInstance().screen instanceof OpsScreen screen) {
@@ -442,7 +437,7 @@ public final class Client {
             }
             return;
         }
-        PacketDistributor.sendToServer(new Network.Request(json));
+        Network.sendToServer(new Network.Request(json));
     }
 
     public static boolean matchMusicActive(){return MusicDirector.active();}
@@ -464,13 +459,13 @@ public final class Client {
         }
 
         @SubscribeEvent
-        public static void corpses(net.neoforged.neoforge.client.event.RenderLevelStageEvent event) {
-            if (event.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+        public static void corpses(net.minecraftforge.client.event.RenderLevelStageEvent event) {
+            if (event.getStage() == net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
                 CorpseRagdoll.render(event);
             }
         }
 
-        @SubscribeEvent public static void deployTravelMovement(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event){
+        @SubscribeEvent public static void deployTravelMovement(net.minecraftforge.client.event.MovementInputUpdateEvent event){
             if(!Cinematic.deployTravelLocked())return;
             var input=event.getInput();
             input.forwardImpulse=0.0F;
@@ -480,19 +475,19 @@ public final class Client {
             var player=event.getEntity();
             player.setDeltaMovement(0,player.getDeltaMovement().y,0);
         }
-        @SubscribeEvent public static void downedMovement(net.neoforged.neoforge.client.event.MovementInputUpdateEvent event){
+        @SubscribeEvent public static void downedMovement(net.minecraftforge.client.event.MovementInputUpdateEvent event){
             if(CrawlPose.downed(event.getEntity()))event.getInput().jumping=false;
         }
-        @SubscribeEvent(priority=net.neoforged.bus.api.EventPriority.LOWEST)
-        public static void enemyName(net.neoforged.neoforge.client.event.RenderNameTagEvent event){
+        @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.LOWEST)
+        public static void enemyName(net.minecraftforge.client.event.RenderNameTagEvent event){
             var mc=Minecraft.getInstance();
             if(mc.player==null||!(event.getEntity() instanceof net.minecraft.world.entity.player.Player other)
                     ||other==mc.player||!state.has("inMatch")||!state.get("inMatch").getAsBoolean()
                     ||!state.has("me")||Engine.num(state.getAsJsonObject("me"),"team",-1)<0)return;
-            if(!mc.player.isAlliedTo(other))event.setCanRender(net.neoforged.neoforge.common.util.TriState.FALSE);
+            if(!mc.player.isAlliedTo(other))event.setCanceled(true);
         }
         @SubscribeEvent
-        public static void referenceProps(net.neoforged.neoforge.client.event.RenderLivingEvent.Pre<?,?> event){
+        public static void referenceProps(net.minecraftforge.client.event.RenderLivingEvent.Pre<?,?> event){
             if(ReferenceProps.render(event))event.setCanceled(true);
         }
 
@@ -545,7 +540,8 @@ public final class Client {
         }
 
         @SubscribeEvent
-        public static void tick(ClientTickEvent.Post event) {
+        public static void tick(ClientTickEvent event) {
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
             NativeKillIcons.tick();
             CorpseRagdoll.track(Minecraft.getInstance());
             GunBallistics.bakeIfChanged();
@@ -574,9 +570,23 @@ public final class Client {
                 if(downed){mc.options.keyAttack.setDown(false);mc.player.stopUsingItem();}
                 wasDowned=downed;
                 if(!EntryScene.active())trackDeathAndDeploy(mc, me);
-                if(!EntryScene.active()&&DeploymentLock.required(state)&&!holdingDeathView()
-                        &&!Cinematic.inDeathSequence()&&!(mc.screen instanceof FrontScreen)&&!(mc.screen instanceof GunModifyScreen)&&!(mc.screen instanceof DeathPreviewScreen)&&!(mc.screen instanceof ConfirmActionScreen)&&!(mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen)&&!(mc.screen!=null&&mc.screen.getClass().getName().startsWith("xaero.")))
+                boolean dead = me != null && me.has("alive") && !me.get("alive").getAsBoolean() && !downed;
+                if (dead && holdingDeathView() && mc.screen == null) {
+                    boolean held = mc.options.keyJump.isDown();
+                    if (!held) deathSkipArmed = true;
+                    else if (deathSkipArmed) {
+                        deathSkipArmed = false;
+                        DeathCard.release();
+                    }
+                }
+                boolean blockedScreen = mc.screen instanceof FrontScreen || mc.screen instanceof GunModifyScreen
+                        || mc.screen instanceof DeathPreviewScreen || mc.screen instanceof ConfirmActionScreen
+                        || mc.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen
+                        || mc.screen instanceof net.minecraft.client.gui.screens.ChatScreen
+                        || (mc.screen != null && mc.screen.getClass().getName().startsWith("xaero."));
+                if (!EntryScene.active() && DeploymentLock.required(state) && !holdingDeathView() && !blockedScreen) {
                     mc.setScreen(new BattleScreen());
+                }
                 NativeBattleAudio.tick(state,System.currentTimeMillis());
                 MusicDirector.tick(state, System.currentTimeMillis());
                 TacticalParticles.tick();
@@ -917,7 +927,7 @@ public final class Client {
             if(!me.has("alive")||!me.get("alive").getAsBoolean()||!me.has("deploySequence")||me.get("deploySequence").getAsLong()<=0)return false;
             String key=Engine.str(snapshot,"selected","")+":"+me.get("deploySequence").getAsLong();
             if(key.equals(confirmedDeploy))return false;
-            confirmedDeploy=key;wasAlive=true;wasEverAlive=true;deployLaunched=false;overviewWarning="";
+            confirmedDeploy=key;DeathCard.reset();deathSkipArmed=false;wasAlive=true;wasEverAlive=true;deployLaunched=false;overviewWarning="";
             Cinematic.descend();DeployMarkers.select("");
             if(mc.screen instanceof BattleScreen||mc.screen instanceof LoadoutScreen||mc.screen instanceof FittingScreen||mc.screen instanceof GunModifyScreen)mc.setScreen(null);
             return true;
@@ -954,35 +964,27 @@ public final class Client {
 
             if (wasEverAlive && wasAlive && !alive) {
                 NativeKillIcons.death();MusicDirector.death();
-                // A genuine death: this client was alive and is now not. Start from the player's own last
-                // position and angles, which is what the camera is looking at right now — the alternative is
-                // to wait for the death packet to carry a body position, and by then the camera has already
-                // been re-parented to the spectator.
-                Cinematic.clear();
-                Cinematic.startDeath(mc.player.getX(), mc.player.getY() + 1.6, mc.player.getZ(),
-                        mc.player.getYRot(), mc.player.getXRot());
+                focusDeath(mc,null);
                 deployLaunched = false;
-                // Hold the deploy map back so the camera move and the death card are actually seen.
-                deathHoldUntil = System.currentTimeMillis() + 2600L;
             } else if (!wasAlive && alive) {
-                // Redeployed: descend to the body the server just placed.
                 Cinematic.descend();
                 deployLaunched = false;
-            } else if (!alive && !deployLaunched && !Cinematic.inDeathSequence()
+            } else if (!alive && !deployLaunched && !holdingDeathView()
+                    && ConfirmActionScreen.base(mc.screen) instanceof BattleScreen
                     && state.has("arena") && Engine.num(me,"team",-1)>=0) {
-                // Dead, and the death sequence has finished (or never ran, e.g. a spectator who just picked
-                // a team): rise to the overhead view of the deploy area and hold there.
                 Model.Arena arena=FactionArt.arena();
                 frameOverview(mc,me,arena);
                 deployLaunched = true;
             }
 
-            if(!alive&&deployLaunched&&!Cinematic.inDeathSequence()&&state.has("arena")&&!overviewKey.equals(overviewSignature(mc)))
+            if(!alive&&deployLaunched&&!holdingDeathView()&&ConfirmActionScreen.base(mc.screen) instanceof BattleScreen
+                    &&state.has("arena")&&!overviewKey.equals(overviewSignature(mc)))
                 frameOverview(mc,me,FactionArt.arena());
             wasAlive = alive;
         }
         private static String overviewSignature(Minecraft mc){return mc.getWindow().getGuiScaledWidth()+":"+mc.getWindow().getGuiScaledHeight()+":"+(ConfirmActionScreen.base(mc.screen) instanceof BattleScreen screen?screen.fullBattlefield():false)+":"+mc.options.fov().get()+":"+overviewZoom+":"+overviewPanX+":"+overviewPanZ;}
         private static void frameOverview(Minecraft mc,JsonObject me,Model.Arena arena){
+            if(arena==null)return;
             int w=mc.getWindow().getGuiScaledWidth(),h=mc.getWindow().getGuiScaledHeight();
             Layout.Rect viewport=ConfirmActionScreen.base(mc.screen) instanceof BattleScreen screen?screen.overviewViewport():new Layout.Rect(0,0,w,h);
             double ground=arena.spawns.stream().mapToDouble(s->s.y).max().orElse(64);
@@ -993,7 +995,8 @@ public final class Client {
                 ?new DeployView.Placement(arena.deployViewX,arena.deployViewY,arena.deployViewZ,arena.deployViewYaw,arena.deployViewPitch,true,0,0)
                 :DeployView.frame(arena.viewArea(Engine.num(me,"team",0)),ground,mc.options.fov().get(),w,h,viewport,mc.options.renderDistance().get()*16);
             // Apply the player's scroll zoom (camera height scale) and drag pan (world-block offset).
-            double lift=Math.max(8,view.headroom()*overviewZoom);
+            double baseLift=arena.customDeployView?view.y()-ground:view.headroom();
+            double lift=arena.customDeployView?baseLift*overviewZoom:Math.max(8,baseLift*overviewZoom);
             view=new DeployView.Placement(view.x()+overviewPanX,ground+lift,view.z()+overviewPanZ,
                     view.yaw(),view.pitch(),view.fits(),view.overflow(),lift);
             Cinematic.overview(view);overviewKey=overviewSignature(mc);

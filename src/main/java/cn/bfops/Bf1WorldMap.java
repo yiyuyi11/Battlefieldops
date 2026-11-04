@@ -22,6 +22,6 @@ public final class Bf1WorldMap {
    if(options.support)for(var pad:arena.supplyPoints())if(pad.team()<0||pad.team()==team){int[] at=project.apply(pad.x(),pad.z());if(at!=null)MapIcons.marker(g,at[0],at[1],0,pad.health()?cn.bfops.conquest.client.marker.TacticalMarkerRenderer.MarkerVisualType.MEDICAL_BOX:cn.bfops.conquest.client.marker.TacticalMarkerRenderer.MarkerVisualType.AMMO_BOX,"",1);}
    MapIcons.contacts(g,mc.font,state,project,0,options);
    int[] self=project.apply(mc.player.getX(),mc.player.getZ());if(self!=null)Bf1Players.draw(g,self[0],self[1],mc.player.getYRot(),true,false,1,PlayerMarkerSize.self(ClientPrefs.selfArrowSize()));
-  }finally{g.setColor(1,1,1,1);g.disableScissor();g.pose().popPose();}
+  }finally{g.setColor(1f,1f,1f,1f);g.disableScissor();g.pose().popPose();}
  }
 }

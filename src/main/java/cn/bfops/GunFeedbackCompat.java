@@ -4,8 +4,8 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.bus.api.Event;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.Event;
 import java.lang.reflect.Method;
 
 /** Optional gun API integration, without linking TaCZ classes on either physical side. */
@@ -29,11 +29,11 @@ final class GunFeedbackCompat {
         try {
             Class<? extends Event> type=(Class<? extends Event>)Class.forName("com.tacz.guns.api.event.common.EntityHurtByGunEvent$Pre");
             Method victim=type.getMethod("getHurtEntity"),attacker=type.getMethod("getAttacker"),head=type.getMethod("isHeadShot"),gunId=type.getMethod("getGunId"),bullet=type.getMethod("getBullet");
-            NeoForge.EVENT_BUS.addListener((Class)type,(java.util.function.Consumer<Event>)event->{
+            MinecraftForge.EVENT_BUS.addListener(net.minecraftforge.eventbus.api.EventPriority.NORMAL,false,(Class)type,(java.util.function.Consumer)event->{
                 try {
                     if(BattlefieldOps.engine!=null && attacker.invoke(event) instanceof ServerPlayer player
                             && victim.invoke(event) instanceof Entity raw && !raw.level().isClientSide()) {
-                        Entity target=raw instanceof net.neoforged.neoforge.entity.PartEntity<?> part?part.getParent():raw;
+                        Entity target=raw instanceof net.minecraftforge.entity.PartEntity<?> part?part.getParent():raw;
                         BattlefieldOps.engine.atmosphereHit((Entity)bullet.invoke(event));
                         BattlefieldOps.engine.gunEvidence(player,target,gunId.invoke(event).toString());
                         BattlefieldOps.engine.cosmeticKills.gunHit(target,player,(Boolean)head.invoke(event));
@@ -48,7 +48,7 @@ final class GunFeedbackCompat {
         try{
             Class<? extends Event> type=(Class<? extends Event>)Class.forName("com.tacz.guns.api.event.common.GunReloadEvent");
             Method entity=type.getMethod("getEntity");
-            NeoForge.EVENT_BUS.addListener((Class)type,(java.util.function.Consumer<Event>)event->{try{if(BattlefieldOps.engine!=null&&entity.invoke(event) instanceof ServerPlayer p)BattlefieldOps.engine.gunReload(p);}catch(ReflectiveOperationException ex){BattlefieldOps.LOG.debug("Cannot read reload event",ex);}});
+            MinecraftForge.EVENT_BUS.addListener(net.minecraftforge.eventbus.api.EventPriority.NORMAL,false,(Class)type,(java.util.function.Consumer)event->{try{if(BattlefieldOps.engine!=null&&entity.invoke(event) instanceof ServerPlayer p)BattlefieldOps.engine.gunReload(p);}catch(ReflectiveOperationException ex){BattlefieldOps.LOG.debug("Cannot read reload event",ex);}});
         }catch(ReflectiveOperationException|LinkageError ex){BattlefieldOps.LOG.debug("TaCZ reload bridge unavailable",ex);}
     }
     static boolean sniperAiming(ServerPlayer player){

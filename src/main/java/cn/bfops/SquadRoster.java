@@ -13,7 +13,7 @@ final class SquadRoster {
             var entry=value.getAsJsonObject();String name=Engine.str(entry,"name","");
             if(!name.isEmpty()&&result.stream().noneMatch(r->r.name.equals(name)))result.add(new Row(name,name.equals(self),bool(entry,"alive"),bool(entry,"downed"),Engine.str(entry,"kit",""),bool(entry,"leader")));
         }
-        if(!self.isEmpty()&&result.stream().noneMatch(Row::self))result.addFirst(new Row(self,true,bool(me,"alive"),bool(me,"downed"),Engine.str(me,"kit",""),false));
+        if(!self.isEmpty()&&result.stream().noneMatch(Row::self))result.add(0, new Row(self,true,bool(me,"alive"),bool(me,"downed"),Engine.str(me,"kit",""),false));
         result.sort(Comparator.comparing(Row::self).reversed().thenComparing(Row::name));return result.stream().limit(SquadRules.CAPACITY).toList();
     }
 

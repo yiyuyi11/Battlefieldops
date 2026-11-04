@@ -6,7 +6,7 @@ import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.entity.PartEntity;
+import net.minecraftforge.entity.PartEntity;
 
 final class PlayerPronePartEntity extends PartEntity<Player> {
    private final boolean headPart;
@@ -48,7 +48,7 @@ final class PlayerPronePartEntity extends PartEntity<Player> {
       return true;
    }
 
-   protected void defineSynchedData(net.minecraft.network.syncher.SynchedEntityData.Builder builder) {
+   protected void defineSynchedData() {
    }
 
    protected void readAdditionalSaveData(CompoundTag compoundTag) {

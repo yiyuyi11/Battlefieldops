@@ -103,7 +103,7 @@ final class KillIconStore {
         List<KillIconPresets.Preset> presets = new ArrayList<>();
         for (int index = 1; index <= 200; index++) {
             String id = String.format("%05d", index);
-            ResourceLocation location = ResourceLocation.fromNamespaceAndPath("battlefield_ops",
+            ResourceLocation location = new ResourceLocation("battlefield_ops",
                     PRESET_DIR + "/" + id + ".json");
             Optional<Resource> resource = mc.getResourceManager().getResource(location);
             if (resource.isEmpty()) continue;

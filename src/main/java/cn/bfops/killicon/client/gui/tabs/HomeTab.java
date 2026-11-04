@@ -25,8 +25,8 @@ public class HomeTab extends ConfigTabContent {
    private boolean isDragging3 = false;
    private double lastMouseY3 = 0.0;
    private long lastFrameTime = 0L;
-   private static final ResourceLocation ICON_NORMAL = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icon/gd656killicon_icon.png");
-   private static final ResourceLocation ICON_RARE = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icon/gd656killicon_656de_shuai_zhao.png");
+   private static final ResourceLocation ICON_NORMAL = new ResourceLocation("battlefield_ops", "icon/gd656killicon_icon.png");
+   private static final ResourceLocation ICON_RARE = new ResourceLocation("battlefield_ops", "icon/gd656killicon_656de_shuai_zhao.png");
    private ResourceLocation currentIcon = ICON_NORMAL;
    private int versionColor = -1;
 

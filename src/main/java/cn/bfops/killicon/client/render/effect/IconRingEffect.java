@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.effect;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -119,7 +120,7 @@ public final class IconRingEffect {
          Tesselator tesselator = Tesselator.getInstance();
          BufferBuilder builder;
          RenderSystem.setShader(GameRenderer::getPositionColorShader);
-         builder = tesselator.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+         builder = Draw.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
 
          for (int i = 0; i <= 72; i++) {
             float angle = (float)((Math.PI * 2) * (double)i / 72.0);
@@ -129,11 +130,11 @@ public final class IconRingEffect {
             float yo = centerY + sin * rOuter;
             float xi = centerX + cos * rInner;
             float yi = centerY + sin * rInner;
-            builder.addVertex(matrix, xo, yo, 0.0F).setColor(red, green, blue, a);
-            builder.addVertex(matrix, xi, yi, 0.0F).setColor(red, green, blue, a);
+            builder.vertex(matrix, xo, yo, 0.0F).color(red, green, blue, a);
+            builder.vertex(matrix, xi, yi, 0.0F).color(red, green, blue, a);
          }
 
-         BufferUploader.drawWithShader(builder.buildOrThrow());
+         Draw.end(builder);
       }
    }
 }

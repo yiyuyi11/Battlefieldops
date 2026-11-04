@@ -56,7 +56,7 @@ final class MapIcons {
             int color=squad?TacticalColors.MATE:visual==MarkerVisualType.ENEMY_TRACKED||visual==MarkerVisualType.ENEMY_GROUND||visual==MarkerVisualType.AUTO_ENEMY?TacticalColors.ENEMY:TacticalColors.FRIEND;
             int size=Math.max(8,Math.round((art.startsWith("kit_")?22:18)*scale));
             g.setColor((color>>16&255)/255f,(color>>8&255)/255f,(color&255)/255f,alpha);
-            try{Bf1Ui.icon(g,art,Math.round(x-size/2f),Math.round(y-size/2f),size);}finally{g.setColor(1,1,1,1);}
+            try{Bf1Ui.icon(g,art,Math.round(x-size/2f),Math.round(y-size/2f),size);}finally{g.setColor(1f,1f,1f,1f);}
             return;
         }
         g.flush();RenderSystem.setShaderColor(1,1,1,1);
@@ -94,7 +94,7 @@ final class MapIcons {
         int rgb=(friendly?TacticalColors.FRIEND:TacticalColors.ENEMY)&0xffffff;
         g.flush();RenderSystem.setShaderColor(1,1,1,1);
         try {g.setColor((rgb>>16&255)/255f,(rgb>>8&255)/255f,(rgb&255)/255f,1);
-            Bf1Ui.icon(g,"vehicles_tank_default_default",x-7,y-7,14);g.setColor(1,1,1,1);
+            Bf1Ui.icon(g,"vehicles_tank_default_default",x-7,y-7,14);g.setColor(1f,1f,1f,1f);
             if(selected)SelectionReticle.draw(g,x,y,9);}
         finally {g.flush();RenderSystem.defaultBlendFunc();RenderSystem.enableDepthTest();RenderSystem.enableCull();RenderSystem.setShaderColor(1,1,1,1);}
     }

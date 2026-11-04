@@ -1,5 +1,6 @@
 package cn.bfops.killicon.client.render.impl;
 
+import cn.bfops.Draw;
 import com.mojang.blaze3d.vertex.BufferUploader;
 import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.GlStateManager.DestFactor;
@@ -408,7 +409,7 @@ public class CardBarRenderer implements IHudRenderer {
       Tesselator tesselator = Tesselator.getInstance();
       BufferBuilder buffer;
       RenderSystem.setShader(GameRenderer::getPositionColorShader);
-      buffer = tesselator.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
+      buffer = Draw.begin(Mode.TRIANGLE_STRIP, DefaultVertexFormat.POSITION_COLOR);
       int segments = 50;
       float coreRatio = 0.5F;
 
@@ -425,11 +426,11 @@ public class CardBarRenderer implements IHudRenderer {
          }
 
          int a = (int)(alphaVal * 255.0F * alphaMultiplier);
-         buffer.addVertex(guiGraphics.pose().last().pose(), x, -halfHeight, 0.0F).setColor(r, g, b, a);
-         buffer.addVertex(guiGraphics.pose().last().pose(), x, halfHeight, 0.0F).setColor(r, g, b, a);
+         buffer.vertex(guiGraphics.pose().last().pose(), x, -halfHeight, 0.0F).color(r, g, b, a);
+         buffer.vertex(guiGraphics.pose().last().pose(), x, halfHeight, 0.0F).color(r, g, b, a);
       }
 
-      BufferUploader.drawWithShader(buffer.buildOrThrow());
+      Draw.end(buffer);
    }
 
    private int parseColor(String hex) {
@@ -565,7 +566,7 @@ public class CardBarRenderer implements IHudRenderer {
          RenderSystem.defaultBlendFunc();
          RenderSystem.setShader(GameRenderer::getPositionColorShader);
          RenderSystem.disableDepthTest();
-         buffer = tesselator.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+         buffer = Draw.begin(Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
 
          for (float x = -halfWidth; x <= halfWidth; x++) {
             float distFromCenter = Math.abs(x);
@@ -598,25 +599,25 @@ public class CardBarRenderer implements IHudRenderer {
                   float yBottom = 0.5F;
                   float yTop = -0.5F - stretch;
                   float xRight = x + 1.0F;
-                  buffer.addVertex(guiGraphics.pose().last().pose(), xRight, yBottom, 0.0F).setColor(r, g, b, aBottom);
-                  buffer.addVertex(guiGraphics.pose().last().pose(), xRight, yTop, 0.0F).setColor(r, g, b, aTop);
-                  buffer.addVertex(guiGraphics.pose().last().pose(), x, yTop, 0.0F).setColor(r, g, b, aTop);
-                  buffer.addVertex(guiGraphics.pose().last().pose(), x, yBottom, 0.0F).setColor(r, g, b, aBottom);
+                  buffer.vertex(guiGraphics.pose().last().pose(), xRight, yBottom, 0.0F).color(r, g, b, aBottom);
+                  buffer.vertex(guiGraphics.pose().last().pose(), xRight, yTop, 0.0F).color(r, g, b, aTop);
+                  buffer.vertex(guiGraphics.pose().last().pose(), x, yTop, 0.0F).color(r, g, b, aTop);
+                  buffer.vertex(guiGraphics.pose().last().pose(), x, yBottom, 0.0F).color(r, g, b, aBottom);
                   if (flashAlpha > 0.01F) {
                      int faBottom = (int)(finalAlpha * flashAlpha * 255.0F);
                      int faTop = 0;
                      if (faBottom > 0) {
-                        buffer.addVertex(guiGraphics.pose().last().pose(), xRight, yBottom, 0.0F).setColor(fr, fg, fb, faBottom);
-                        buffer.addVertex(guiGraphics.pose().last().pose(), xRight, yTop, 0.0F).setColor(fr, fg, fb, faTop);
-                        buffer.addVertex(guiGraphics.pose().last().pose(), x, yTop, 0.0F).setColor(fr, fg, fb, faTop);
-                        buffer.addVertex(guiGraphics.pose().last().pose(), x, yBottom, 0.0F).setColor(fr, fg, fb, faBottom);
+                        buffer.vertex(guiGraphics.pose().last().pose(), xRight, yBottom, 0.0F).color(fr, fg, fb, faBottom);
+                        buffer.vertex(guiGraphics.pose().last().pose(), xRight, yTop, 0.0F).color(fr, fg, fb, faTop);
+                        buffer.vertex(guiGraphics.pose().last().pose(), x, yTop, 0.0F).color(fr, fg, fb, faTop);
+                        buffer.vertex(guiGraphics.pose().last().pose(), x, yBottom, 0.0F).color(fr, fg, fb, faBottom);
                      }
                   }
                }
             }
          }
 
-         BufferUploader.drawWithShader(buffer.buildOrThrow());
+         Draw.end(buffer);
          RenderSystem.enableDepthTest();
       }
 

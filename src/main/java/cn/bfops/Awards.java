@@ -61,7 +61,7 @@ final class Awards {
      */
     static double lastHitY(List<Hit> hits) {
         if (hits == null || hits.isEmpty()) return Double.NaN;
-        return hits.getFirst().hitY();
+        return hits.get(0).hitY();
     }
 
     /** Appends a hit, dropping the oldest beyond {@link #MAX_RECORDS}. */

@@ -26,7 +26,7 @@ final class FittingScreen extends FrontScreen {
      */
     static Screen open(Screen parent,String map,String id,String kind,Map<String,String> target,String kit){
         boolean gun="gun".equals(kind);
-        if(gun){try{if(net.neoforged.fml.ModList.get().isLoaded("tacz"))return new GunModifyScreen(parent,map,id,target,kit);}catch(LinkageError|RuntimeException ignored){}}
+        if(gun){try{if(net.minecraftforge.fml.ModList.get().isLoaded("tacz"))return new GunModifyScreen(parent,map,id,target,kit);}catch(LinkageError|RuntimeException ignored){}}
         return new FittingScreen(parent,map,id,kind,target,kit);
     }
     FittingScreen(Screen parent,String map,String id,String kind,Map<String,String> target){
@@ -84,7 +84,7 @@ final class FittingScreen extends FrontScreen {
         TacticalColors.label(g,font,(map.isEmpty()?"大厅全解锁":"等级 "+level)+" · 已选 "+working.size()+" 项",pane.cx(),pane.bottom()-12,Ui.ACCENT);
         slots.render(g,mx,my,dt);bar.render(g,mx,my,dt);
     }
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return slots.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return slots.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     @Override
     public boolean mouseDragged(double x,double y,int button,double dx,double dy){
         // Drag the gun model: horizontal turns it, vertical tilts it. Same feel as TaCZ's refit screen.

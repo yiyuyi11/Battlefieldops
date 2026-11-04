@@ -32,7 +32,7 @@ public final class NativeKillIcons {
     };
     public static void init(){
         if(ready)return;
-        boolean migrate=!Files.exists(net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get().resolve("battlefield_ops/client_config.json"));
+        boolean migrate=!Files.exists(net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve("battlefield_ops/client_config.json"));
         ClientSetup.initializeClient();ready=true;
         if(migrate){ConfigManager.setCurrentPresetId(ClientPrefs.killIconPreset());ClientConfigManager.saveGlobalConfig();}
         lastPreset=ConfigManager.getCurrentPresetId();
@@ -156,7 +156,7 @@ public final class NativeKillIcons {
         ScoreboardTab.careerScope(true);
         ScoreboardTab.updateData(rows,Engine.num(payload,"offset",0),Engine.num(payload,"total",0),payload.get("requestId").getAsLong(),2,new String[]{"在线玩家","离线玩家","",""});
     }
-    private static int bounded(JsonObject e,String key){return (int)Math.clamp(e.get(key).getAsLong(),0,Integer.MAX_VALUE);}
+    private static int bounded(JsonObject e,String key){return (int)cn.bfops.Java17.clamp(e.get(key).getAsLong(),0,Integer.MAX_VALUE);}
     public static void scoreboard(ScoreboardRequestPacket request){
         ScoreboardTab.careerScope(!inMatch());
         if(!inMatch()){
@@ -195,7 +195,7 @@ public final class NativeKillIcons {
                 graphics.pose().scale(scale,scale,1);
                 graphics.pose().translate(-(bounds[0]+bounds[1])/2f,-(bounds[2]+bounds[3])/2f,0);
             }
-            HudElementManager.onRenderGuiOverlay(graphics,mc.getTimer().getGameTimeDeltaPartialTick(false),true);
+            HudElementManager.onRenderGuiOverlay(graphics,mc.getFrameTime(),true);
         }finally{
             graphics.flush();if(vehicle)graphics.disableScissor();graphics.pose().popPose();
             RenderSystem.setShaderColor(1,1,1,1);RenderSystem.defaultBlendFunc();RenderSystem.enableDepthTest();RenderSystem.enableCull();

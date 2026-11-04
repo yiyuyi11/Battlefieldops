@@ -2,8 +2,8 @@ package cn.bfops;
 
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Item;
-import net.neoforged.neoforge.registries.DeferredItem;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,8 +15,8 @@ import java.util.Map;
  * {@code battlefield_ops:medic_bag} is both the registry name and what the editor stores.
  */
 public final class SupportItems {
-    static final DeferredRegister.Items REGISTRY = DeferredRegister.createItems("battlefield_ops");
-    private static final Map<SupportRules.Kind, DeferredItem<SupportItem>> BY_KIND = new LinkedHashMap<>();
+    static final DeferredRegister<Item> REGISTRY = DeferredRegister.create(Registries.ITEM,"battlefield_ops");
+    private static final Map<SupportRules.Kind, RegistryObject<SupportItem>> BY_KIND = new LinkedHashMap<>();
 
     /**
      * The deployment terminal handed out on a firing range.
@@ -24,16 +24,14 @@ public final class SupportItems {
      * <p>Its own item rather than a vanilla one: on a server, a plugin or another mod can claim right-click on
      * common items (a compass in particular), and a registered item with a unique id cannot be intercepted.
      */
-    static final DeferredItem<Item> DEPLOY_TERMINAL = REGISTRY.registerSimpleItem("deploy_terminal",
-            new Item.Properties().stacksTo(1));
+    static final RegistryObject<Item> DEPLOY_TERMINAL = REGISTRY.register("deploy_terminal", () -> new Item(new Item.Properties().stacksTo(1)));
 
     static void registerAll() {
         if (!BY_KIND.isEmpty()) return;
         for (SupportRules.Kind kind : SupportRules.Kind.values()) {
             // Every support item stacks to 64 now: an operator who configures "3 med boxes" should get one
             // stack, not three inventory cells.
-            BY_KIND.put(kind, REGISTRY.registerItem(kind.id,
-                    properties -> new SupportItem(kind, properties), new Item.Properties().stacksTo(64)));
+            BY_KIND.put(kind, REGISTRY.register(kind.id, () -> new SupportItem(kind, new Item.Properties().stacksTo(64))));
         }
     }
 
@@ -54,7 +52,7 @@ public final class SupportItems {
     /** Every registered support item, in declaration order. */
     public static java.util.List<SupportItem> all() {
         java.util.List<SupportItem> out = new java.util.ArrayList<>();
-        for (DeferredItem<SupportItem> holder : BY_KIND.values()) {
+        for (RegistryObject<SupportItem> holder : BY_KIND.values()) {
             SupportItem item = holder.get();
             if (item != null) out.add(item);
         }
@@ -63,7 +61,7 @@ public final class SupportItems {
 
     /** The registered item for a kind, or {@code null} before registration has run. */
     static SupportItem item(SupportRules.Kind kind) {
-        DeferredItem<SupportItem> holder = BY_KIND.get(kind);
+        RegistryObject<SupportItem> holder = BY_KIND.get(kind);
         return holder == null ? null : holder.get();
     }
 

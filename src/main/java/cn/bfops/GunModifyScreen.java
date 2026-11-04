@@ -109,7 +109,7 @@ final class GunModifyScreen extends Screen {
         groups = Arrays.asList(BattlefieldOps.GSON.fromJson(data.get("groups"), Fittings.Group[].class));
         loaded = true;
         if (selectedGroup.isEmpty() || groups.stream().noneMatch(g -> g.id().equals(selectedGroup))) {
-            selectedGroup = groups.isEmpty() ? "" : groups.getFirst().id();
+            selectedGroup = groups.isEmpty() ? "" : groups.get(0).id();
         }
         ok(groups.isEmpty() ? "此武器没有可配置项目" : "选择左侧槽位，再挑一个配件");
     }
@@ -206,7 +206,7 @@ final class GunModifyScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double vertical) {
         if (vertical == 0) return false;
         float x = canvasX(mouseX), y = canvasY(mouseY);
         if (inStage(x, y)) {
@@ -218,7 +218,7 @@ final class GunModifyScreen extends Screen {
             listScroll = Math.max(0, Math.min(overflow, listScroll + (vertical > 0 ? -1 : 1)));
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, horizontal, vertical);
+        return super.mouseScrolled(mouseX, mouseY, vertical);
     }
 
     @Override
@@ -337,7 +337,7 @@ final class GunModifyScreen extends Screen {
 
     private void blitBackdrop(GuiGraphics g) {
         g.fill(0, 0, width, height, 0xff05070a);
-        var texture = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+        var texture = new net.minecraft.resources.ResourceLocation(
                 "battlefield_ops", "textures/gui/bf1/modify_background.png");
         double k = Math.max(width / 1600.0, height / 900.0);
         int w = (int) Math.ceil(1600 * k), h = (int) Math.ceil(900 * k);
@@ -385,13 +385,13 @@ final class GunModifyScreen extends Screen {
 
     private void drawSlotIcon(GuiGraphics g, Fittings.Group group, int x, int y, int size, boolean selected) {
         if (group.options().isEmpty()) return;
-        var first = group.options().getFirst();
+        var first = group.options().get(0);
         float tint = selected ? .12f : .9f;
         g.setColor(tint, tint, tint, 1f);
         try {
             AssetIcons.draw(g, first.kind(), first.icon(), x, y, size, size);
         } finally {
-            g.setColor(1, 1, 1, 1);
+            g.setColor(1f, 1f, 1f, 1f);
         }
     }
 
@@ -432,7 +432,7 @@ final class GunModifyScreen extends Screen {
                 try {
                     AssetIcons.draw(g, option.kind(), option.icon(), LIST_X + 8, top + 3, 16, 16);
                 } finally {
-                    g.setColor(1, 1, 1, 1);
+                    g.setColor(1f, 1f, 1f, 1f);
                 }
             }
             String label = Ui.clip(font, clean(option), LIST_W - 60);
@@ -675,7 +675,7 @@ final class GunModifyScreen extends Screen {
 
     private Fittings.Group selected() {
         for (Fittings.Group group : groups) if (group.id().equals(selectedGroup)) return group;
-        return groups.isEmpty() ? null : groups.getFirst();
+        return groups.isEmpty() ? null : groups.get(0);
     }
 
     private Fittings.Group groupAt(float mx, float my) {

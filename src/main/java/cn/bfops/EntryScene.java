@@ -2,9 +2,9 @@ package cn.bfops;
 
 import com.google.gson.JsonObject;
 import net.minecraft.client.Minecraft;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.bus.api.SubscribeEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /** Server-timed room briefing. Periodic snapshots correct the local presentation clock. */
 @EventBusSubscriber(modid="battlefield_ops",value=Dist.CLIENT)
@@ -25,7 +25,7 @@ public final class EntryScene {
         }
         var data=state.getAsJsonObject("entry");String id=Engine.str(data,"token","");
         if(id.isEmpty())return false;
-        int length=Math.clamp(Engine.num(data,"duration",140),20,1200);
+        int length=cn.bfops.Java17.clamp(Engine.num(data,"duration",140),20,1200);
         int progress=Math.max(0,length+20-Engine.num(data,"remaining",length+20));
         boolean fresh=!id.equals(token)||!active();
         copy=data;duration=length;elapsed=fresh?progress:Math.max(elapsed,progress);token=id;
@@ -40,13 +40,14 @@ public final class EntryScene {
         var mc=Minecraft.getInstance();if(was)Cinematic.clear();
         if(mc.screen instanceof EntryScreen)mc.setScreen(null);
     }
-    @SubscribeEvent public static void tick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event){
+    @SubscribeEvent public static void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
         if(!active())return;
         var mc=Minecraft.getInstance();
         if(mc.player==null||!Client.serverSupported()){clear();return;}
         elapsed=Math.min(duration+20,elapsed+1);
         if(!(mc.screen instanceof EntryScreen))mc.setScreen(new EntryScreen());
     }
-    @SubscribeEvent public static void hide(net.neoforged.neoforge.client.event.RenderGuiEvent.Pre event){if(active())event.setCanceled(true);}
+    @SubscribeEvent public static void hide(net.minecraftforge.client.event.RenderGuiEvent.Pre event){if(active())event.setCanceled(true);}
     private EntryScene(){}
 }

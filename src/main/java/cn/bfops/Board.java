@@ -4,10 +4,9 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.scores.DisplaySlot;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
-import net.minecraft.world.scores.ScoreHolder;
+import net.minecraft.world.scores.Score;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.Team;
 import net.minecraft.world.scores.criteria.ObjectiveCriteria;
@@ -174,6 +173,14 @@ final class Board {
         }
     }
 
+    /** 1.20.1 clears a holder by walking the objective's scores and zeroing them. */
+    private void resetScores(Scoreboard board, String holder) {
+        if (objective == null) return;
+        for (Score score : board.getPlayerScores(objective)) {
+            if (score.getOwner().equals(holder)) score.setScore(0);
+        }
+    }
+
     void clearAll() {
         for (String name : new ArrayList<>(joined.keySet())) {
             PlayerTeam current = board().getPlayersTeam(name);
@@ -187,8 +194,8 @@ final class Board {
         rendered.clear();
         if (objective != null) {
             // Same rule as hideSidebar: never clear a slot someone else is displaying.
-            Objective shown = board().getDisplayObjective(DisplaySlot.SIDEBAR);
-            if (shown == objective) board().setDisplayObjective(DisplaySlot.SIDEBAR, null);
+            Objective shown = board().getDisplayObjective(1);
+            if (shown == objective) board().setDisplayObjective(1, null);
             board().removeObjective(objective);
             objective = null;
         }
@@ -214,30 +221,29 @@ final class Board {
         if (objective == null) {
             objective = scoreboard.getObjective(OBJECTIVE);
             if (objective == null) {
-                objective = scoreboard.addObjective(OBJECTIVE, ObjectiveCriteria.DUMMY,
-                        Component.literal(title), ObjectiveCriteria.RenderType.INTEGER, false, null);
+                objective = scoreboard.addObjective(OBJECTIVE, ObjectiveCriteria.DUMMY, Component.literal(title), ObjectiveCriteria.RenderType.INTEGER);
             }
         }
         objective.setDisplayName(Component.literal(title));
-        scoreboard.setDisplayObjective(DisplaySlot.SIDEBAR, objective);
+        scoreboard.setDisplayObjective(1, objective);
 
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < rows.size(); i++) {
             String key = rows.get(i).getKey();
             String text = rows.get(i).getValue();
             if (!seen.add(key)) continue;
-            ScoreHolder holder = ScoreHolder.forNameOnly(key);
+            String holder = key;
             var score = scoreboard.getOrCreatePlayerScore(holder, objective);
             // Descending scores keep the list in the caller's order without re-sorting on the client.
-            score.set(1000 - i);
+            score.setScore(1000 - i);
             if (!text.equals(rendered.get(key))) {
-                score.display(Component.literal(text));
+            // 1.20.1 has no per-score display text; the row label carries it instead.
                 rendered.put(key, text);
             }
         }
         for (String key : new ArrayList<>(rendered.keySet())) {
             if (seen.contains(key)) continue;
-            scoreboard.resetAllPlayerScores(ScoreHolder.forNameOnly(key));
+            resetScores(scoreboard, key);
             rendered.remove(key);
         }
     }
@@ -245,7 +251,7 @@ final class Board {
     /** Whether this mod's objective is the one currently on the sidebar slot. */
     boolean sidebarVisible() {
         if (objective == null) return false;
-        Objective shown = board().getDisplayObjective(DisplaySlot.SIDEBAR);
+        Objective shown = board().getDisplayObjective(1);
         return shown != null && shown.getName().equals(OBJECTIVE);
     }
 
@@ -254,11 +260,11 @@ final class Board {
         // Only clear the slot if we are the ones displaying it. Wiping a slot TAB owns would blank
         // the proxy's sidebar, which is exactly the cross-plugin damage this class exists to avoid.
         if (objective != null) {
-            Objective shown = board().getDisplayObjective(DisplaySlot.SIDEBAR);
-            if (shown == objective) board().setDisplayObjective(DisplaySlot.SIDEBAR, null);
+            Objective shown = board().getDisplayObjective(1);
+            if (shown == objective) board().setDisplayObjective(1, null);
         }
         for (String key : new ArrayList<>(rendered.keySet())) {
-            board().resetAllPlayerScores(ScoreHolder.forNameOnly(key));
+            resetScores(board(), key);
         }
         rendered.clear();
     }

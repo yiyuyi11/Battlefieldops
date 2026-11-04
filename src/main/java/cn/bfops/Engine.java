@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -51,10 +52,8 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Act
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.DamageTypeTags;
@@ -89,6 +88,10 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.HitResult.Type;
 
 public final class Engine {
+   /** 1.20.1 addresses attribute modifiers by UUID, so the crawl modifier is one stable instance. */
+   private static final AttributeModifier BF_CRAWL = new AttributeModifier(
+           java.util.UUID.nameUUIDFromBytes("bfops:crawl".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+           "bfops.crawl", -0.75, AttributeModifier.Operation.MULTIPLY_TOTAL);
   /** Server tick of the last hit each player took; medical support stops while this is recent. */
   private final java.util.Map<java.util.UUID,Integer> damageTicks = new java.util.HashMap<>();
    private static final double VEHICLE_ORPHAN_RANGE = 64.0;
@@ -122,11 +125,58 @@ public final class Engine {
    private final Map<UUID, Engine.Beacon> beacons = new LinkedHashMap<>();
    private final Map<UUID, Integer> beaconUses = new HashMap<>();
    private final Map<UUID, Float> beaconHealth = new HashMap<>();
-   private static final ResourceLocation CRAWL_SPEED = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "downed_crawl");
+   private static final ResourceLocation CRAWL_SPEED = new ResourceLocation("battlefield_ops", "downed_crawl");
    private final Map<UUID, ServerPlayer> recentAttacker = new HashMap<>();
    private final Map<UUID, Long> recentAttackerAt = new HashMap<>();
    private static final long RECENT_ATTACKER_TICKS = 300L;
    final CosmeticKills cosmeticKills = new CosmeticKills();
+   private GroupRooms groupRooms;
+
+   void enableGroupRooms() {
+      if (groupRooms == null) groupRooms = GroupRooms.configured(server);
+   }
+
+   boolean canTransfer(ServerPlayer player) {
+      return Network.supported(player) && player.isAlive() && !player.isPassenger()
+            && !EditorFlight.active(player) && !members.containsKey(player.getUUID());
+   }
+
+   void groupArrived(ServerPlayer player) {
+      if (groupRooms != null && Network.supported(player)) groupRooms.arrived(this, player);
+   }
+
+   void groupJoin(ServerPlayer player, String map) {
+      try {
+         join(player, map);
+         state(player, map, true, "已跨服进入房间，请选择阵营");
+      } catch (IOException | RuntimeException error) {
+         if (members.containsKey(player.getUUID())) state(player, map, true, "已切服");
+         else lobby(player, true, "操作失败：已切服，无法加入目标房间（" + error.getMessage() + "）");
+      }
+   }
+
+   void groupTransferFailed(ServerPlayer player) {
+      lobby(player, false, "操作失败：无法提交跨服请求，请联系管理员检查共享目录");
+   }
+
+   private List<GroupRooms.Room> groupSnapshot() {
+      List<GroupRooms.Room> rooms = new ArrayList<>();
+      for (var entry : matches.entrySet()) {
+         var match = entry.getValue();
+         var map = match.rules.map;
+         int blue = 0, red = 0, waiting = 0;
+         for (var member : members.values()) {
+            if (member.bot || !entry.getKey().equals(member.map)) continue;
+            if (member.team == 0) blue++;
+            else if (member.team == 1) red++;
+            else waiting++;
+         }
+         rooms.add(new GroupRooms.Room(entry.getKey(), map.name, map.mode, map.modeName(),
+               Factions.name(map,0), Factions.name(map,1), match.running, blue+red+waiting,
+               map.maxPlayers, blue, red, waiting));
+      }
+      return rooms;
+   }
 
    Engine(MinecraftServer var1) {
       this.server = var1;
@@ -194,13 +244,13 @@ public final class Engine {
 
    ServerLevel level(Model.Arena var1) {
       Model.require(var1 != null, "内部错误：未指定地图，无法定位维度");
-      ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var1.dimension)));
+      ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(var1.dimension)));
       Model.require(var2 != null, "地图维度未加载：" + var1.dimension);
       return var2;
    }
 
    private ServerLevel levelOrNull(Model.Arena var1) {
-      return var1 == null ? null : this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var1.dimension)));
+      return var1 == null ? null : this.server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(var1.dimension)));
    }
 
    public cn.bfops.voice.common.audio.CampType voiceCamp(ServerPlayer player){
@@ -302,6 +352,11 @@ public final class Engine {
                   case "lobbyCreate":
                      this.createRoom(var3, var1);
                      this.lobby(var1, false, "房间已创建，玩家可进入后选队");
+                     break;
+                  case "lobbyTransfer":
+                     Model.require(this.groupRooms != null && canTransfer(var1), "请退出房间、载具和编辑模式后再切服");
+                     this.groupRooms.connect(this, var1, str(var5, "backend", ""), var3);
+                     this.lobby(var1, false, "正在切换子服…");
                      break;
                   case "lobbyStart":
                      this.requireRoomControl(var1, var3);
@@ -647,7 +702,7 @@ public final class Engine {
 
    private Map<String, Object> armamentInfo(String var1) {
       try {
-         EntityType var2 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(var1));
+         EntityType var2 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(var1));
          if (var2 == null) {
             return null;
          } else {
@@ -861,8 +916,8 @@ public final class Engine {
       }
 
       Model.require(var8.gear().accessories.isEmpty() || CuriosSupport.available(), "未安装饰品支持，无法完整领取此套精英装备");
-      var var18 = new ArrayList<>(this.catalog.gunRounds(var1, var8.options(true).getFirst(), ammoStacks(var8, var8.options(true).getFirst())));
-      var18.addAll(this.catalog.gunRounds(var1, var8.options(false).getFirst(), ammoStacks(var8, var8.options(false).getFirst())));
+      var var18 = new ArrayList<>(this.catalog.gunRounds(var1, var8.options(true).get(0), ammoStacks(var8, var8.options(true).get(0))));
+      var18.addAll(this.catalog.gunRounds(var1, var8.options(false).get(0), ammoStacks(var8, var8.options(false).get(0))));
       var18.addAll(KitItems.build(var8, var1));
       Model.require(!var18.isEmpty() || !var8.gear().armour.isEmpty(), "精英兵须配置有效武器、物品或护甲");
       Model.require(var18.size() <= 35, "精英装备超过背包容量");
@@ -1108,13 +1163,12 @@ public final class Engine {
    private static int ammoStacks(Model.Kit var0, String var1) {
       Integer var2 = var0.itemCounts == null ? null : var0.itemCounts.get(var1);
       int ammoStacksResolved = var2 != null ? Math.max(1, Math.min(64, var2)) : ammoStacks(var0);
-      BattlefieldOps.LOG.info("[bfops] ammo for {}: configured={} -> {} rounds", var1, var2, ammoStacksResolved);
       return ammoStacksResolved;
    }
 
    private static void applyAmmoType(Model.Kit var0, String var1, List<ItemStack> var2) {
       if (var0 != null && var1 != null && !var2.isEmpty()) {
-         ItemStack var3 = (ItemStack)var2.getFirst();
+         ItemStack var3 = (ItemStack)var2.get(0);
          if (SuperbAmmo.isGun(var3)) {
             SuperbAmmo.logOnce(var3, var1);
             int var4 = var0.countFor(var1);
@@ -1155,86 +1209,62 @@ public final class Engine {
       }
    }
 
-   private static ItemStack issueCounted(ServerPlayer var0, String var1, int var2) {
-      if (var1 != null && !var1.isEmpty() && var2 > 0) {
-         ItemStack var3 = KitItems.resolve(var1, var2);
-         if (var3.isEmpty()) {
-            return var3;
-         } else {
-            int var4 = var2 - var3.getCount();
-            int var5 = Math.max(1, var3.getMaxStackSize());
-
-            while (var4 > 0) {
-               ItemStack var6 = var3.copy();
-               int var7 = Math.min(var4, var5);
-               var6.setCount(var7);
-               giveToBackpack(var0, var6);
-               var4 -= var7;
-            }
-
-            return var3;
+   /** Give each weapon one spare stack before the next pass, then allow training extras. */
+   @SafeVarargs
+   private static List<ItemStack> prioritizeSpares(int capacity, List<ItemStack>... groups) {
+      List<ItemStack> result = new ArrayList<>();
+      for (int index = 0; result.size() < capacity; index++) {
+         boolean found = false;
+         for (List<ItemStack> group : groups) {
+            if (index >= group.size()) continue;
+            found = true;
+            ItemStack stack = group.get(index);
+            if (!stack.isEmpty()) result.add(stack);
+            if (result.size() == capacity) break;
          }
-      } else {
-         return ItemStack.EMPTY;
+         if (!found) break;
       }
+      return result;
    }
 
-   private static int topUp(ServerPlayer var0, Item var1, int var2) {
-      return topUp(var0, var1, var2, -1);
+   private static List<ItemStack> spares(List<ItemStack> bundle) {
+      return bundle.size() > 1 ? bundle.subList(1, bundle.size()) : List.of();
    }
 
-   private static int topUp(ServerPlayer var0, Item var1, int var2, int var3) {
-      if (var2 > 0 && var1 != null) {
-         Inventory var4 = var0.getInventory();
-         int var5 = 0;
-
-         for (int var6 = 0; var6 < var4.getContainerSize() && var2 > 0; var6++) {
-            ItemStack var7 = var4.getItem(var6);
-            if (!var7.isEmpty() && var7.is(var1)) {
-               int var8 = var7.getMaxStackSize() - var7.getCount();
-               if (var8 > 0) {
-                  int var9 = Math.min(var8, var2);
-                  var7.grow(var9);
-                  var2 -= var9;
-                  var5 += var9;
-               }
-            }
-         }
-
-         boolean var10 = true;
-
-         while (var2 > 0) {
-            int var11 = Math.max(1, var1.getDefaultMaxStackSize());
-            int var12 = Math.min(var2, var11);
-            ItemStack var13 = new ItemStack(var1, var12);
-            if (var10) {
-               giveToSlot(var0, var13, var3);
-               var10 = false;
-            } else {
-               giveToBackpack(var0, var13);
-            }
-
-            var2 -= var12;
-            var5 += var12;
-         }
-
-         return var5;
-      } else {
-         return 0;
+   private static void recordAmmo(Member member, String gunId, List<ItemStack> bundle, List<ItemStack> issued) {
+      if (gunId == null || gunId.isEmpty() || spares(bundle).isEmpty()
+            || gunIdOf(bundle.get(0)).isEmpty()) return;
+      int rounds = 0;
+      for (ItemStack stack : spares(bundle)) {
+         if (issued.contains(stack)) rounds += stack.getCount();
       }
+      member.issuedAmmo.merge(gunId, rounds, Math::max);
+      member.ammoTemplates.put(gunId, bundle.get(1).copyWithCount(1));
    }
 
-   private static void giveToSlot(ServerPlayer var0, ItemStack var1, int var2) {
-      if (!var1.isEmpty()) {
-         Inventory var3 = var0.getInventory();
-         if (var2 >= 0 && var2 < 36 && var3.getItem(var2).isEmpty()) {
-            var3.setItem(var2, var1);
-         } else if (var2 >= 0 && var2 < 9 && var3.getItem(var2).isEmpty()) {
-            var3.setItem(var2, var1);
-         } else {
-            giveToBackpack(var0, var1);
-         }
+   /** Insert only into actual storage. A full backpack neither drops supplies nor consumes a box use. */
+   private static int insertSupply(Inventory inventory, ItemStack template, int amount, int preferred) {
+      if (template.isEmpty() || amount <= 0) return 0;
+      int left = amount;
+      for (int slot = 0; slot < 36 && left > 0; slot++) {
+         ItemStack stack = inventory.getItem(slot);
+         if (!ItemStack.isSameItemSameTags(stack, template)) continue;
+         int add = Math.min(left, Math.max(0, stack.getMaxStackSize() - stack.getCount()));
+         stack.grow(add);
+         left -= add;
       }
+      if (preferred >= 0 && preferred < 36 && left > 0 && inventory.getItem(preferred).isEmpty()) {
+         int add = Math.min(left, template.getMaxStackSize());
+         inventory.setItem(preferred, template.copyWithCount(add));
+         left -= add;
+      }
+      for (int slot = 9; slot < 36 && left > 0; slot++) {
+         if (!inventory.getItem(slot).isEmpty()) continue;
+         int add = Math.min(left, template.getMaxStackSize());
+         inventory.setItem(slot, template.copyWithCount(add));
+         left -= add;
+      }
+      return amount - left;
    }
 
    private static void giveToBackpack(ServerPlayer var0, ItemStack var1) {
@@ -1258,14 +1288,14 @@ public final class Engine {
       var var3 = var0 == null ? List.of() : var0.ammoWhitelist(var1);
       if (var3.isEmpty()) {
          var var4 = SuperbAmmo.gunBundle(var1, 0);
-         var3 = var4.isEmpty() ? List.of() : SuperbAmmo.ammoIds((ItemStack)var4.getFirst());
+         var3 = var4.isEmpty() ? List.of() : SuperbAmmo.ammoIds((ItemStack)var4.get(0));
       }
 
       String var6 = str(var2, "ammo_" + var1, "");
       if (var6.isEmpty() || !var3.isEmpty() && !var3.contains(var6)) {
          String var5 = var0 != null && var0.gunAmmoType != null ? var0.gunAmmoType.getOrDefault(var1, "") : "";
          if (var5.isEmpty() || !var3.isEmpty() && !var3.contains(var5)) {
-            return var3.isEmpty() ? "" : (String)var3.getFirst();
+            return var3.isEmpty() ? "" : (String)var3.get(0);
          } else {
             return var5;
          }
@@ -1300,7 +1330,7 @@ public final class Engine {
          var1.marks.removeIf(var2x -> var2x == null || !var2x.active(var2));
 
          while (var1.marks.size() > 32) {
-            var1.marks.removeFirst();
+            var1.marks.remove(0);
          }
       }
    }
@@ -1494,7 +1524,7 @@ public final class Engine {
       Path var4 = this.folder.resolve("players").resolve(var1.getUUID() + ".nbt");
       Model.require(!Files.exists(var4), "尚有未恢复的背包备份，请先联系管理员处理");
       Path var5 = var4.resolveSibling(var4.getFileName() + ".tmp");
-      NbtIo.writeCompressed(var2, var5);
+      NbtIo.writeCompressed(var2, var5.toFile());
       Files.move(var5, var4);
    }
 
@@ -1504,8 +1534,8 @@ public final class Engine {
          Path var2 = this.folder.resolve("players").resolve(var1.getUUID() + ".nbt");
          if (Files.exists(var2)) {
             try {
-               CompoundTag var3 = NbtIo.readCompressed(var2, NbtAccounter.unlimitedHeap());
-               ServerLevel var4 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var3.getString("dimension"))));
+               CompoundTag var3 = NbtIo.readCompressed(var2.toFile());
+               ServerLevel var4 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(var3.getString("dimension"))));
                Model.require(var4 != null, "原维度不存在，备份已保留等待恢复");
                var1.closeContainer();
                var1.stopRiding();
@@ -1728,17 +1758,15 @@ public final class Engine {
       int var10Rounds = ammoStacks(var6, var10);
       var var12 = this.catalog.gunRounds(var1, var10, var10Rounds);
       applyAmmoType(var6, var10, var12);
-      var3.issuedAmmo.put(var9, var9Rounds);
-      var3.issuedAmmo.put(var10, var10Rounds);
-      ItemStack var13 = var11.isEmpty() ? ItemStack.EMPTY : (ItemStack)var11.getFirst();
-      ItemStack var14 = var12.isEmpty() ? ItemStack.EMPTY : (ItemStack)var12.getFirst();
+      ItemStack var13 = var11.isEmpty() ? ItemStack.EMPTY : (ItemStack)var11.get(0);
+      ItemStack var14 = var12.isEmpty() ? ItemStack.EMPTY : (ItemStack)var12.get(0);
       String var15 = str(var2, "melee", "");
       ItemStack var16 = ItemStack.EMPTY;
       if (!var15.isEmpty()) {
          if (this.catalog.isGun(var15)) {
             var var17 = this.catalog.gun(var1, var15, 0);
             if (!var17.isEmpty()) {
-               var16 = (ItemStack)var17.getFirst();
+               var16 = (ItemStack)var17.get(0);
             }
          } else {
             var16 = KitItems.resolve(var15, 1);
@@ -1746,39 +1774,15 @@ public final class Engine {
       }
 
       String var35 = str(var2, "throwable", "");
-      ItemStack var18 = ItemStack.EMPTY;
-      if (!var35.isEmpty()) {
-         var18 = issueCounted(var1, var35, var6.countFor(var35));
-      }
+      List<ItemStack> throwables = countedStacks(var35, var6.countFor(var35));
+      ItemStack var18 = throwables.isEmpty() ? ItemStack.EMPTY : throwables.get(0);
 
-      var var19 = new ArrayList();
-      var var20 = var11.size() <= 1 ? List.of() : var11.subList(1, var11.size());
-      var var21 = var12.size() <= 1 ? List.of() : var12.subList(1, var12.size());
       var var22 = this.tacticalStacks(var1, var6, var5, var2, "tactical1");
       var var23 = this.tacticalStacks(var1, var6, var5, var2, "tactical2");
-      ItemStack var24 = var22.isEmpty() ? ItemStack.EMPTY : (ItemStack)var22.getFirst();
-      ItemStack var25 = var23.isEmpty() ? ItemStack.EMPTY : (ItemStack)var23.getFirst();
-      if (var22.size() > 1) {
-         var19.addAll(var22.subList(1, var22.size()));
-      }
-
-      if (var23.size() > 1) {
-         var19.addAll(var23.subList(1, var23.size()));
-      }
-
-      LinkedHashMap var26 = new LinkedHashMap();
-
-      for (KitGear.Entry var28 : var6.gear().deduplicatedItems()) {
-         var26.put(var28.id, var28);
-      }
-
-      for (String var41 : var6.issueOrder()) {
-         if (var41.equals("main_ammo")) {
-            var19.addAll(var20);
-         } else if (var41.equals("side_ammo")) {
-            var19.addAll(var21);
-         }
-      }
+      ItemStack var24 = var22.isEmpty() ? ItemStack.EMPTY : var22.get(0);
+      ItemStack var25 = var23.isEmpty() ? ItemStack.EMPTY : var23.get(0);
+      List<ItemStack> var19 = prioritizeSpares(27, spares(var11), spares(var12),
+            spares(var22), spares(var23), spares(throwables));
 
       if (var2.has("trainingItems")) {
          for (JsonElement var42 : var2.getAsJsonArray("trainingItems")) {
@@ -1795,6 +1799,7 @@ public final class Engine {
 
       var1.closeContainer();
       var1.getInventory().clearContent();
+      var3.issuedSlots.clear();
       var1.getInventory().setItem(0, var13);
       var1.getInventory().setItem(1, var14);
       var1.getInventory().setItem(2, var16);
@@ -1825,6 +1830,12 @@ public final class Engine {
 
       CuriosSupport.clear(var1);
       KitItems.wear(var6, var1);
+      var3.issuedAmmo.clear();
+      var3.ammoTemplates.clear();
+      recordAmmo(var3, var9, var11, var19);
+      recordAmmo(var3, var10, var12, var19);
+      recordAmmo(var3, str(var2, "tactical1", ""), var22, var19);
+      recordAmmo(var3, str(var2, "tactical2", ""), var23, var19);
       var3.kit = var6.id;
       var3.lastKit = var6.id;
       var3.lastPrimary = var9;
@@ -1852,20 +1863,7 @@ public final class Engine {
          }
       }
 
-      var3.ammoTemplates.clear();
-
-      for (String var32 : new String[]{var9, var10, var3.tactical1, var3.tactical2}) {
-         if (var32 != null && !var32.isEmpty() && this.catalog.isGun(var32)) {
-            try {
-               var var33 = this.catalog.gun(var1, var32, 1);
-               if (var33.size() > 1) {
-                  var3.ammoTemplates.put(var32, ((ItemStack)var33.get(1)).copyWithCount(1));
-               }
-            } catch (RuntimeException | ReflectiveOperationException var34) {
-            }
-         }
-      }
-
+      var3.tactical2 = var25.isEmpty() ? "" : str(var2, "tactical2", "");
       var3.gunAmmo.clear();
 
       for (String var52 : new String[]{var9, var10, var3.tactical1, var3.tactical2}) {
@@ -1877,7 +1875,8 @@ public final class Engine {
          }
       }
 
-      var3.tactical2 = var25.isEmpty() ? "" : str(var2, "tactical2", "");
+      var1.getInventory().setChanged();
+      var1.inventoryMenu.broadcastChanges();
    }
 
    private void changeSquad(ServerPlayer var1, int var2) {
@@ -1966,136 +1965,107 @@ public final class Engine {
   /** TaCZ registers one ammunition item and distinguishes types by the AmmoId in its custom data. */
   private static String ammoIdOf(ItemStack stack) {
     if (stack == null || stack.isEmpty()) return null;
-    var data = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
-    if (data == null) return null;
-    var tag = data.copyTag();
+    var tag = stack.getTag();
+    if (tag == null) return null;
     return tag.contains("AmmoId") ? tag.getString("AmmoId") : null;
   }
 
   /** How many rounds of this exact ammunition the player is carrying. */
-  private static int countAmmo(ServerPlayer player, ItemStack template) {
-    int total = 0;
-    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-      ItemStack stack = player.getInventory().getItem(slot);
-      if (sameAmmo(stack, template)) total += stack.getCount();
-    }
-    return total;
-  }
-
   /** Same ammunition: same item and, when TaCZ tags it, the same AmmoId. Stack size etc. are ignored. */
   private static boolean sameAmmo(ItemStack a, ItemStack b) {
     if (a == null || b == null || a.isEmpty() || b.isEmpty()) return false;
     if (!a.is(b.getItem())) return false;
     String left = ammoIdOf(a), right = ammoIdOf(b);
-    if (left == null || right == null) return ItemStack.isSameItemSameComponents(a, b);
+    if (left == null || right == null) return ItemStack.isSameItemSameTags(a, b);
     return left.equals(right);
   }
 
-  /** Set while an ammunition bag tops up, so only gun ammunition is handed out. */
-  private boolean bagGunsOnly;
-
-  /** Ammunition bag variant: main and secondary weapons only, no throwables, no gadgets. */
-  /** True when this gun is the player's primary or secondary, as opposed to a tactical-slot launcher. */
-  private static boolean isMainOrSecondary(Engine.Member member, Model.Kit kit, String gunId) {
-    if (gunId == null || gunId.isEmpty()) return false;
-    if (gunId.equals(member.lastPrimary) || gunId.equals(member.lastSecondary)) return true;
-    if (kit == null) return false;
-    return gunId.equals(kit.primary) || gunId.equals(kit.secondary);
+  private record SupplyStock(ItemStack stack, int target, int preferredSlot, boolean ammunition) {
+    boolean matches(ItemStack other) {
+      return ammunition ? sameAmmo(stack, other) : ItemStack.isSameItemSameTags(stack, other);
+    }
   }
 
-  /**
-   * One unit of ammunition: a single magazine-sized stack for the first gun that is short, otherwise a
-   * single round of the first throwable or tactical item that is short. The box calls this once per
-   * configured interval so "one item every N seconds" really means one item.
-   */
-  /** True when there is anything at all for a supply point to hand this player. */
-  boolean supportNeeded(ServerPlayer player) throws ReflectiveOperationException {
-    Engine.Member member = this.members.get(player.getUUID());
-    if (member == null || !this.supportActive(member) || !member.alive || member.downed) return false;
-    Model.Kit kit = this.matches.get(member.map).rules.map.kits.stream()
-        .filter(k -> k.id.equals(member.kit)).findFirst().orElse(null);
-    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-      ItemStack gun = player.getInventory().getItem(slot);
-      String gunId = gunIdOf(gun);
-      if (gunId.isEmpty() || !this.catalog.isGun(gunId)) continue;
-      List<ItemStack> bundle;
-      try {
-        bundle = this.catalog.gun(player, gunId, 1);
-      } catch (RuntimeException missing) {
-        continue;
+  private static void addSupplyStock(List<SupplyStock> stocks, SupplyStock incoming) {
+    for (int index = 0; index < stocks.size(); index++) {
+      SupplyStock old = stocks.get(index);
+      if (old.ammunition == incoming.ammunition && old.matches(incoming.stack)) {
+        if (incoming.target > old.target) stocks.set(index, incoming);
+        return;
       }
-      if (bundle.size() < 2) continue;
-      Integer recorded = member.issuedAmmo == null ? null : member.issuedAmmo.get(gunId);
-      int want = Math.max(1, recorded != null ? recorded : ammoStacks(kit, gunId));
-      if (countAmmo(player, bundle.get(1)) < want) return true;
     }
-    for (String id : new String[]{member.throwable, member.tactical1, member.tactical2}) {
-      if (id == null || id.isEmpty()) continue;
-      if (this.catalog.isGun(id) || SuperbAmmo.isGunId(id)) continue;
-      if (ConquestEquipment.kind(id) != null || SupportItems.isSupportId(id)) continue;
-      int want = kit == null ? 1 : kit.countFor(id);
-      int have = 0;
-      for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-        ItemStack stack = player.getInventory().getItem(slot);
-        if (!stack.isEmpty() && net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(id)) have += stack.getCount();
+    stocks.add(incoming);
+  }
+
+  private List<SupplyStock> supplyStocks(ServerPlayer player, boolean gunsOnly) throws ReflectiveOperationException {
+    Member member = this.members.get(player.getUUID());
+    if (!this.supportActive(member) || !member.alive || member.downed) return List.of();
+    Model.Kit kit = this.matches.get(member.map).rules.map.kits.stream()
+        .filter(candidate -> candidate.id.equals(member.kit)).findFirst().orElse(null);
+    List<SupplyStock> stocks = new ArrayList<>();
+    Set<String> seen = new java.util.HashSet<>();
+    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
+      ItemStack weapon = player.getInventory().getItem(slot);
+      if (weapon.isEmpty()) continue;
+      String gunId = gunIdOf(weapon);
+      if (!gunId.isEmpty()) {
+        if (gunsOnly && !gunId.equals(member.lastPrimary) && !gunId.equals(member.lastSecondary)) continue;
+        if (!seen.add(gunId)) continue;
+        ItemStack ammo = member.ammoTemplates.getOrDefault(gunId, ItemStack.EMPTY);
+        if (ammo.isEmpty() && this.catalog.isGun(gunId)) {
+          try {
+            List<ItemStack> bundle = this.catalog.gun(player, gunId, 1);
+            if (bundle.size() > 1) ammo = bundle.get(1);
+          } catch (ReflectiveOperationException | RuntimeException ex) {
+            BattlefieldOps.LOG.debug("Cannot resolve ammunition for {}", gunId, ex);
+          }
+        }
+        if (!ammo.isEmpty()) {
+          Integer issued = member.issuedAmmo.get(gunId);
+          int target = issued != null ? issued : kit == null ? 1 : ammoStacks(kit, gunId);
+          addSupplyStock(stocks, new SupplyStock(ammo, target, -1, true));
+        }
+      } else if (SuperbAmmo.isGun(weapon)) {
+        String id = BuiltInRegistries.ITEM.getKey(weapon.getItem()).toString();
+        if (gunsOnly && !id.equals(member.lastPrimary) && !id.equals(member.lastSecondary)) continue;
+        String configured = member.gunAmmo.get(id);
+        if (configured == null && kit != null && kit.gunAmmoType != null) configured = kit.gunAmmoType.get(id);
+        String chosen = SuperbAmmo.chosen(weapon, configured);
+        ResourceLocation ammoId = ResourceLocation.tryParse(chosen);
+        if (ammoId == null || !BuiltInRegistries.ITEM.containsKey(ammoId)) continue;
+        int target = kit == null ? 1 : kit.itemCounts != null && kit.itemCounts.containsKey(chosen)
+            ? kit.countFor(chosen) : kit.countFor(id);
+        addSupplyStock(stocks, new SupplyStock(new ItemStack(BuiltInRegistries.ITEM.get(ammoId)), target, -1, true));
       }
-      if (have < want) return true;
+    }
+    if (gunsOnly || kit == null) return stocks;
+    Set<String> gadgets = new LinkedHashSet<>(Arrays.asList(member.throwable, member.tactical1, member.tactical2));
+    gadgets.addAll(member.issuedTemplates.keySet());
+    for (String id : gadgets) {
+      if (id == null || id.isEmpty() || this.catalog.isGun(id) || SuperbAmmo.isGunId(id)
+          || ConquestEquipment.kind(id) != null || SupportItems.isSupportId(id)) continue;
+      ItemStack stack = member.issuedTemplates.getOrDefault(id, ItemStack.EMPTY);
+      if (stack.isEmpty()) stack = KitItems.resolve(id, 1);
+      if (!stack.isEmpty()) addSupplyStock(stocks, new SupplyStock(
+          stack, kit.countFor(id), member.issuedSlots.getOrDefault(id, -1), false));
+    }
+    return stocks;
+  }
+
+  private static int supplyDeficit(ServerPlayer player, SupplyStock stock) {
+    int remaining = stock.target;
+    for (int slot = 0; slot < player.getInventory().getContainerSize() && remaining > 0; slot++) {
+      ItemStack existing = player.getInventory().getItem(slot);
+      if (stock.matches(existing)) remaining -= existing.getCount();
+    }
+    return Math.max(0, remaining);
+  }
+
+  boolean supportNeeded(ServerPlayer player) throws ReflectiveOperationException {
+    for (SupplyStock stock : supplyStocks(player, false)) {
+      if (supplyDeficit(player, stock) > 0) return true;
     }
     return false;
-  }
-
-  int supportAmmoUnit(ServerPlayer player) throws ReflectiveOperationException {
-    Engine.Member member = this.members.get(player.getUUID());
-    if (!this.supportActive(member) || !member.alive || member.downed) return 0;
-    Model.Kit kit = this.matches.get(member.map).rules.map.kits.stream()
-        .filter(k -> k.id.equals(member.kit)).findFirst().orElse(null);
-    if (kit == null) return 0;
-
-    for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-      ItemStack gun = player.getInventory().getItem(slot);
-      if (gun.isEmpty() || !this.catalog.isGun(gunIdOf(gun))) continue;
-      String gunId = gunIdOf(gun);
-      List<ItemStack> bundle;
-      try {
-        bundle = this.catalog.gun(player, gunId, 1);
-      } catch (RuntimeException missing) {
-        continue;
-      }
-      if (bundle.size() < 2) continue;
-      ItemStack template = bundle.get(1);
-      Integer recorded = member.issuedAmmo == null ? null : member.issuedAmmo.get(gunId);
-      int want = Math.max(1, recorded != null ? recorded : ammoStacks(kit, gunId));
-      int have = countAmmo(player, template);
-      if (have >= want) continue;
-      int give = Math.min(want - have, Math.max(1, template.getMaxStackSize()));
-      ItemStack stack = template.copyWithCount(give);
-      giveToBackpack(player, stack);
-      int added = give - stack.getCount();
-      if (added > 0) {
-        BattlefieldOps.LOG.info("[bfops] box unit: {} +{} (want={} have={})", gunId, added, want, have);
-        return added;
-      }
-    }
-
-    for (String id : new String[]{member.throwable, member.tactical1, member.tactical2}) {
-      if (id == null || id.isEmpty() || this.catalog.isGun(id) || SuperbAmmo.isGunId(id)) continue;
-      if (ConquestEquipment.kind(id) != null || SupportItems.isSupportId(id)) continue;
-      int want = kit.countFor(id);
-      int have = 0;
-      for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-        ItemStack stack = player.getInventory().getItem(slot);
-        if (!stack.isEmpty() && net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString().equals(id)) have += stack.getCount();
-      }
-      if (have >= want) continue;
-      ItemStack one = KitItems.resolve(id, 1);
-      if (one.isEmpty()) continue;
-      giveToBackpack(player, one);
-      if (one.isEmpty()) {
-        BattlefieldOps.LOG.info("[bfops] box unit: {} +1", id);
-        return 1;
-      }
-    }
-    return 0;
   }
 
   private static String gunIdOf(ItemStack stack) {
@@ -2119,372 +2089,25 @@ public final class Engine {
   }
 
   int supportAmmoBag(ServerPlayer player) throws ReflectiveOperationException {
-    this.bagGunsOnly = true;
-    try {
-      int added = supportAmmo(player);
-      BattlefieldOps.LOG.info("[bfops] ammo bag for {} -> {} units", player.getScoreboardName(), added);
-      return added;
-    } finally {
-      this.bagGunsOnly = false;
+    return replenish(player, true);
+  }
+
+  int supportAmmo(ServerPlayer player) throws ReflectiveOperationException {
+    return replenish(player, false);
+  }
+
+  private int replenish(ServerPlayer player, boolean gunsOnly) throws ReflectiveOperationException {
+    int added = 0;
+    for (SupplyStock stock : supplyStocks(player, gunsOnly)) {
+      int amount = Math.min(supplyDeficit(player, stock), 2 * stock.stack.getMaxStackSize());
+      added += insertSupply(player.getInventory(), stock.stack, amount, stock.preferredSlot);
     }
-  }
-
-  /**
-   * Ammunition belongs in the hotbar or the backpack, never in the three right-hand slots (6-8) that the
-   * HUD uses for gadgets: anything that landed there is moved into the backpack.
-   */
-  private static void relocateColumnAmmo(ServerPlayer player) {
-    var inventory = player.getInventory();
-    for (int slot = 0; slot <= 8; slot++) {
-      ItemStack stack = inventory.getItem(slot);
-      if (stack.isEmpty() || !looksLikeAmmo(stack)) continue;
-      ItemStack moving = stack.copy();
-      inventory.setItem(slot, ItemStack.EMPTY);
-      // Only the backpack rows: add() would put it straight back into the hotbar.
-      for (int target = 9; target < inventory.getContainerSize() && !moving.isEmpty(); target++) {
-        ItemStack existing = inventory.getItem(target);
-        if (!existing.isEmpty() && sameAmmo(existing, moving)) {
-          int room = existing.getMaxStackSize() - existing.getCount();
-          if (room > 0) {
-            int moved = Math.min(room, moving.getCount());
-            existing.grow(moved);
-            moving.shrink(moved);
-          }
-        }
-      }
-      for (int target = 9; target < inventory.getContainerSize() && !moving.isEmpty(); target++) {
-        if (inventory.getItem(target).isEmpty()) {
-          inventory.setItem(target, moving.copy());
-          moving.setCount(0);
-        }
-      }
-      if (!moving.isEmpty()) player.drop(moving, false);
+    if (added > 0) {
+      player.getInventory().setChanged();
+      player.inventoryMenu.broadcastChanges();
     }
+    return added;
   }
-
-  /** Ammunition is tagged by TaCZ / Superb Warfare with an AmmoId in its custom data. */
-  private static boolean looksLikeAmmo(ItemStack stack) {
-    if (stack == null || stack.isEmpty()) return false;
-    String full = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-    // Class gear is never ammunition, whatever its name says: ammo_bag and ammo_box used to be moved into
-    // the backpack mid-use, which left the consumed stack untouched and duplicated the item.
-    if (SupportItems.isSupportId(full) || ConquestEquipment.kind(full) != null) return false;
-    if (ammoIdOf(stack) != null) return true;
-    String path = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
-    if (path.endsWith("_bag") || path.endsWith("_box") || path.startsWith("ammo_")) return false;
-    return path.contains("ammo") || path.contains("rocket") || path.contains("magazine");
-  }
-
-  /**
-   * Hard cap: whatever the counters thought, the player never carries more than the configured amount of
-   * one ammunition type. Excess is removed from the backpack first, then from the hotbar.
-   */
-  private static void capAmmo(ServerPlayer player, ItemStack template, int want) {
-    var inventory = player.getInventory();
-    int total = countAmmo(player, template);
-    for (int slot = inventory.getContainerSize() - 1; slot >= 0 && total > want; slot--) {
-      ItemStack stack = inventory.getItem(slot);
-      if (!sameAmmo(stack, template)) continue;
-      int excess = Math.min(stack.getCount(), total - want);
-      stack.shrink(excess);
-      total -= excess;
-      if (stack.isEmpty()) inventory.setItem(slot, ItemStack.EMPTY);
-    }
-  }
-
-  /** The map's configured amount for this gun, or 0 when it is not configured at all. */
-  private static int kitCount(Model.Kit kit, String gunId) {
-    if (kit == null || kit.itemCounts == null) return 0;
-    Integer configured = kit.itemCounts.get(gunId);
-    return configured == null ? 0 : Math.max(0, configured);
-  }
-
-
-  int supportAmmo(ServerPlayer var1) throws ReflectiveOperationException {
-    BattlefieldOps.LOG.info("[bfops] supportAmmo start for {}", var1.getScoreboardName());
-      Engine.Member var2 = this.members.get(var1.getUUID());
-    // Elite kits carry ordinary guns too, so they get ammunition as well; the old elite check made the
-    // ammo bag silently do nothing on those classes.
-    if (this.supportActive(var2) && var2.alive && !var2.downed) {
-         Model.Kit var3 = this.matches.get(var2.map).rules.map.kits.stream().filter(var1x -> var1x.id.equals(var2.kit)).findFirst().orElse(null);
-    BattlefieldOps.LOG.info("[bfops] supportAmmo kit={} throwable={} t1={} t2={}", var3 == null ? "null" : var3.id, var2.throwable, var2.tactical1, var2.tactical2);
-    java.util.Set<String> countedGuns = new java.util.HashSet<>();
-         int var4 = 0;
-         LinkedHashMap var5 = new LinkedHashMap();
-         LinkedHashMap var6 = new LinkedHashMap();
-
-         Class var7;
-         try {
-            var7 = Class.forName("com.tacz.guns.api.item.IGun");
-         } catch (ClassNotFoundException var22) {
-            return 0;
-         }
-
-      for (int var8 = 0; var8 < var1.getInventory().getContainerSize(); var8++) {
-        ItemStack var9 = var1.getInventory().getItem(var8);
-        if (var9.isEmpty() || !var7.isInstance(var9.getItem())) continue;
-        String gunId;
-        try {
-          gunId = var7.getMethod("getGunId", ItemStack.class).invoke(var9.getItem(), var9).toString();
-        } catch (ReflectiveOperationException unreadable) {
-          continue;
-        }
-        if (this.bagGunsOnly && !isMainOrSecondary(var2, var3, gunId)) {
-          // The bag feeds the primary and secondary only; launchers in the tactical category are left alone.
-          continue;
-        }
-        BattlefieldOps.LOG.info("[bfops] resupply sees gun {} (catalog={})", gunId, this.catalog.guns.contains(gunId));
-        List<ItemStack> bundle;
-        try {
-          bundle = this.catalog.gun(var1, gunId, 1);
-        } catch (RuntimeException notIndexed) {
-          BattlefieldOps.LOG.info("[bfops] resupply cannot build {}: {}", gunId, notIndexed.getMessage());
-          continue;
-        }
-        if (bundle.size() > 1) {
-          countedGuns.add(gunId);
-          String templateKey = bundle.get(1).getComponents().toString();
-          var5.putIfAbsent(templateKey, bundle.get(1));
-          // Target for an ammunition item that came straight from the inventory scan, not from the cached
-          // deploy-time map: without this the loop below has a template but no wanted amount.
-          // Shared ammunition: two guns drawing on one stock must not double the reserve, so the larger
-          // requirement wins instead of the sum (which turned 180 into 360).
-          // Top up to what this player actually deployed with, not to the map's default: a weapon issued with
-          // 2 rounds must come back with 2, not with 64 or 180.
-          Integer recorded = var2.issuedAmmo == null ? null : var2.issuedAmmo.get(gunId);
-          // No record (deployed before this field existed): fall back to the same number deployment uses,
-          // i.e. the map's configured carry amount. It must not drift with whatever the player happens to hold.
-          int issued = recorded != null ? recorded : ammoStacks(var3, gunId);
-var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Integer)b));
-        } else {
-          BattlefieldOps.LOG.info("[bfops] resupply {} built no ammunition", gunId);
-        }
-      }
-
-    if (var3 != null && !this.bagGunsOnly) {
-            LinkedHashSet var23 = new LinkedHashSet();
-            if (!var2.throwable.isEmpty()) {
-               var23.add(var2.throwable);
-            }
-
-            if (!var2.tactical1.isEmpty()) {
-               var23.add(var2.tactical1);
-            }
-
-            if (!var2.tactical2.isEmpty()) {
-               var23.add(var2.tactical2);
-               // Everything else actually issued at deploy: a C4 in slot 5 or a med bag in slot 4 counts too.
-               if (var2.issuedTemplates != null) {
-                 for (String issuedId : var2.issuedTemplates.keySet()) {
-                   if (issuedId == null || issuedId.isEmpty()) continue;
-                   if (this.catalog.isGun(issuedId) || SuperbAmmo.isGunId(issuedId)) continue;
-                   if (ConquestEquipment.kind(issuedId) != null || SupportItems.isSupportId(issuedId)) continue;
-                   var23.add(issuedId);
-                 }
-               }
-            }
-
-            Iterator var27 = var23.iterator();
-
-            label339:
-            while (true) {
-               String var31;
-               ResourceLocation var35;
-               do {
-                  if (!var27.hasNext()) {
-                     break label339;
-                  }
-
-                  var31 = (String)var27.next();
-                  if (LrtEquipment.explicit(var31)) {
-                     break;
-                  }
-
-                  var35 = ResourceLocation.tryParse(var31);
-               } while (var35 == null || !BuiltInRegistries.ITEM.containsKey(var35));
-
-               if (!var31.isEmpty() && !this.catalog.isGun(var31) && !SuperbAmmo.isGunId(var31) && ConquestEquipment.kind(var31) == null && !SupportItems.isSupportId(var31)) {
-                  int var36 = var3.countFor(var31);
-                  ItemStack var12 = var2.issuedTemplates == null ? ItemStack.EMPTY : var2.issuedTemplates.get(var31);
-                  ItemStack var13 = !var12.isEmpty() ? var12 : KitItems.resolve(var31, 1);
-                  int var14 = 0;
-
-                  for (int var15 = 0; var15 < var1.getInventory().getContainerSize(); var15++) {
-                     ItemStack var16 = var1.getInventory().getItem(var15);
-                     if (!var16.isEmpty() && !var13.isEmpty() && ItemStack.isSameItemSameComponents(var16, var13)) {
-                        var14 += var16.getCount();
-                     }
-                  }
-
-                  int var47 = var36 - var14;
-                  if (var47 > 0) {
-                     if (!var12.isEmpty()) {
-                        int var52 = var47;
-
-                        for (int var56 = 0; var56 < var1.getInventory().getContainerSize() && var52 > 0; var56++) {
-                           ItemStack var59 = var1.getInventory().getItem(var56);
-                           if (!var59.isEmpty() && ItemStack.isSameItemSameComponents(var59, var12)) {
-                              int var63 = var59.getMaxStackSize() - var59.getCount();
-                              if (var63 > 0) {
-                                 int var20 = Math.min(var63, var52);
-                                 var59.grow(var20);
-                                 var52 -= var20;
-                                 var4 += var20;
-                              }
-                           }
-                        }
-
-                        int var57 = var2.issuedSlots == null ? -1 : var2.issuedSlots.getOrDefault(var31, -1);
-                        boolean var60 = true;
-
-                        while (var52 > 0) {
-                           int var64 = Math.min(var52, Math.max(1, var12.getMaxStackSize()));
-                           ItemStack var67 = var12.copyWithCount(var64);
-                           if (var60) {
-                              giveToSlot(var1, var67, var57);
-                              var60 = false;
-                           } else {
-                              giveToBackpack(var1, var67);
-                           }
-
-                           var52 -= var64;
-                           var4 += var64;
-                        }
-                     } else if (LrtEquipment.explicit(var31)) {
-                        for (int var51 = 0; var51 < var1.getInventory().getContainerSize() && var47 > 0; var51++) {
-                           ItemStack var55 = var1.getInventory().getItem(var51);
-                           if (!var55.isEmpty() && var31.equals(LrtEquipment.idOf(var55))) {
-                              int var18 = var55.getMaxStackSize() - var55.getCount();
-                              if (var18 > 0) {
-                                 int var19 = Math.min(var18, var47);
-                                 var55.grow(var19);
-                                 var47 -= var19;
-                                 var4 += var19;
-                              }
-                           }
-                        }
-                     } else {
-                        ItemStack var50 = KitItems.resolve(var31, 1);
-                        int var17 = var2.issuedSlots == null ? -1 : var2.issuedSlots.getOrDefault(var31, -1);
-                        if (!var50.isEmpty()) {
-                           var4 += topUp(var1, var50.getItem(), var47, var17);
-                        }
-                     }
-                  }
-               }
-            }
-         }
-
-         for (int var24 = 0; var24 < var1.getInventory().getContainerSize(); var24++) {
-            ItemStack var28 = var1.getInventory().getItem(var24);
-            if (SuperbAmmo.isGun(var28)) {
-               String var32 = BuiltInRegistries.ITEM.getKey(var28.getItem()).toString();
-               if (this.bagGunsOnly && !isMainOrSecondary(var2, var3, var32)) continue;   // bag: primary and secondary only
-               String var37 = var2.gunAmmo.get(var32);
-               boolean var39 = var3 != null && var3.itemCounts != null && var37 != null && var3.itemCounts.containsKey(var37);
-               int var41 = var3 == null ? 1 : (var39 ? var3.countFor(var37) : var3.countFor(var32));
-               if (var37 == null) {
-                  var37 = var3 != null && var3.gunAmmoType != null ? var3.gunAmmoType.get(var32) : null;
-               }
-
-               String var44 = SuperbAmmo.chosen(var28, var37);
-               if (!var44.isEmpty()) {
-                  ResourceLocation var48 = ResourceLocation.tryParse(var44);
-                  if (var48 != null && BuiltInRegistries.ITEM.containsKey(var48)) {
-                     Item var53 = (Item)BuiltInRegistries.ITEM.get(var48);
-                     int var58 = 0;
-
-                     for (int var61 = 0; var61 < var1.getInventory().getContainerSize(); var61++) {
-                        ItemStack var65 = var1.getInventory().getItem(var61);
-                        if (!var65.isEmpty() && var65.is(var53)) {
-                           var58 += var65.getCount();
-                        }
-                     }
-
-                     int var62 = var41 - var58;
-                     if (var62 > 0) {
-                        int var66 = Math.max(1, var53.getDefaultMaxStackSize());
-
-                        while (var62 > 0) {
-                           int var68 = Math.min(var62, var66);
-                           ItemStack var21 = new ItemStack(var53, var68);
-                           giveToBackpack(var1, var21);
-                           var62 -= var68;
-                           var4 += var68;
-                        }
-                     }
-                  }
-               }
-            }
-         }
-
-         if (var2.ammoTemplates != null) {
-            for (Entry var29 : var2.ammoTemplates.entrySet()) {
-              // A gun that was replaced by a later deploy must not keep feeding its old ammunition.
-              if (var2.issuedAmmo != null && !var2.issuedAmmo.containsKey((String)var29.getKey())) continue;
-               if (var29.getValue() != null && !((ItemStack)var29.getValue()).isEmpty()) {
-                  String var33 = ((ItemStack)var29.getValue()).getComponents().toString();
-                  var5.putIfAbsent(var33, (ItemStack)var29.getValue());
-                  // Sum the wants of every gun that shares this ammunition item: counting by item is accurate, but
-        // several guns (or a tactical launcher and a rifle) can draw on the same stock, and taking only
-        // the first gun's number made the crate stop feeding the rest.
-        Integer recordedCached = var2.issuedAmmo == null ? null : var2.issuedAmmo.get((String)var29.getKey());
-        int issuedCached = recordedCached != null ? recordedCached
-            : ammoStacks(var3, (String)var29.getKey());
-        var6.merge(var33, Math.max(1, issuedCached), (a, b) -> Math.max((Integer)a, (Integer)b));
-               }
-            }
-         }
-
-    BattlefieldOps.LOG.info("[bfops] supportAmmo ammo templates: {} entries", var5.size());
-         for (Entry var30 : (java.lang.Iterable<Entry>)(var5.entrySet())) {
-            ItemStack var34 = (ItemStack)var30.getValue();
-            int var38 = var3 == null ? 1 : Math.max(1, ((Integer)var6.getOrDefault(var30.getKey(), ammoStacks(var3))));
-            int var40 = 0;
-
-            for (int var42 = 0; var42 < var1.getInventory().getContainerSize(); var42++) {
-               ItemStack var45 = var1.getInventory().getItem(var42);
-        // Count by item *and* AmmoId: TaCZ uses a single ammunition item for every calibre, so comparing by
-        // item alone made every type count as one and the crate thought the rockets were full.
-        if (sameAmmo(var45, var34)) {
-                  var40 += var45.getCount();
-               }
-            }
-
-            // ammoStacks is a round count now, not a stack count: multiplying by the stack size refilled the whole
-      // backpack (4 x 64 rockets) instead of the configured four rounds.
-      int var43 = Math.max(0, var38 - var40);
-      // Diagnostic: shows exactly what the crate wants, sees and hands over for each ammunition type.
-      BattlefieldOps.LOG.info("[bfops] resupply {}: want={} have={} give={}", var30.getKey(), var38, var40, var43);
-      // Safety: never hand out more than two stacks in one pass, whatever the numbers say.
-      var43 = Math.min(var43, 2 * Math.max(1, var34.getMaxStackSize()));
-
-            while (var43 > 0) {
-               int var46 = Math.min(var43, var34.getMaxStackSize());
-               ItemStack var49 = var34.copyWithCount(var46);
-               var1.getInventory().add(var49);
-               int var54 = var46 - var49.getCount();
-               var4 += var54;
-               var43 -= var54;
-               if (var54 == 0) {
-                  break;
-               }
-      capAmmo(var1, var34, var38);
-            }
-         }
-
-         if (var4 > 0) {
-      relocateColumnAmmo(var1);
-            var1.inventoryMenu.broadcastChanges();
-            var1.getInventory().setChanged();
-         }
-
-         return var4;
-      } else {
-         return 0;
-      }
-
-   }
 
    void supportCredit(ServerPlayer var1, ServerPlayer var2, String var3) {
       if (var1 != var2) {
@@ -2535,7 +2158,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
             .add(new Spotting.Mark(var3.team, var2.getX(), var2.getZ(), System.currentTimeMillis() + 2000L, Spotting.Kind.ENEMY, var6, var2.getY() + 2.0));
 
          while (var5.marks.size() > 32) {
-            var5.marks.removeFirst();
+            var5.marks.remove(0);
          }
       }
    }
@@ -2890,7 +2513,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          var10.vehicles.removeIf(var1x -> this.findEntity(var1x) == null);
          Model.require(this.teamVehicles(var10, var9.team) < var11.vehicleLimitFor(var9.team), "本方载具名额已满");
          var21 = this.catalog.vehicleClass(var4);
-         var22 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(var4));
+         var22 = (EntityType)BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(var4));
          Model.require(var22 != null, "载具实体未注册：" + var4);
          Model.require(var19.allows(var21), var21 == 'A' ? var19.id() + " 不是飞机点位，无法放飞航空器" : var19.id() + " 不提供载具刷新");
       }
@@ -2919,15 +2542,12 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
 
       String var64 = var11.isTraining() && this.catalog.guns.contains(var5) ? var5 : var12.select(true, var5, var9.team);
       String var30 = var11.isTraining() && this.catalog.guns.contains(var6) ? var6 : var12.select(false, var6, var9.team);
-      var9.issuedAmmo.clear();
       int var31Rounds = ammoStacks(var12, var64);
       var var31 = this.catalog.gunRounds(var1, var64, var31Rounds);
       applyAmmoType(var12, var64, var31);
       int var32Rounds = ammoStacks(var12, var30);
       var var32 = this.catalog.gunRounds(var1, var30, var32Rounds);
       applyAmmoType(var12, var30, var32);
-      var9.issuedAmmo.put(var64, var31Rounds);
-      var9.issuedAmmo.put(var30, var32Rounds);
       var var33 = selections(var8, "primaryFittings");
       var var34 = selections(var8, "secondaryFittings");
       var var35 = selections(var8, "vehicleFittings");
@@ -2937,13 +2557,13 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       InfantryAttachments.authorize(var12, var64, var33, var36, this.catalog.gunFittings.getOrDefault(var64, List.of()));
       InfantryAttachments.authorize(var12, var30, var34, var36, this.catalog.gunFittings.getOrDefault(var30, List.of()));
       if (!var31.isEmpty()) {
-         Fittings.applyGun((ItemStack)var31.getFirst(), var33, var1.registryAccess());
+         Fittings.applyGun((ItemStack)var31.get(0), var33, var1.level().registryAccess());
       } else {
          Model.require(var33.isEmpty(), "没有主武器可改装");
       }
 
       if (!var32.isEmpty()) {
-         Fittings.applyGun((ItemStack)var32.getFirst(), var34, var1.registryAccess());
+         Fittings.applyGun((ItemStack)var32.get(0), var34, var1.level().registryAccess());
       } else {
          Model.require(var34.isEmpty(), "没有副武器可改装");
       }
@@ -2959,16 +2579,16 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          Model.require(var35.isEmpty(), "未选择载具");
       }
 
-      ItemStack var65 = var31.isEmpty() ? ItemStack.EMPTY : (ItemStack)var31.getFirst();
-      ItemStack var66 = var32.isEmpty() ? ItemStack.EMPTY : (ItemStack)var32.getFirst();
-      var var67 = var31.size() <= 1 ? List.of() : var31.subList(1, var31.size());
-      var var40 = var32.size() <= 1 ? List.of() : var32.subList(1, var32.size());
+      ItemStack var65 = var31.isEmpty() ? ItemStack.EMPTY : (ItemStack)var31.get(0);
+      ItemStack var66 = var32.isEmpty() ? ItemStack.EMPTY : (ItemStack)var32.get(0);
+      List<ItemStack> var67 = spares(var31);
+      List<ItemStack> var40 = spares(var32);
       ItemStack var41 = ItemStack.EMPTY;
       if (var7 != null && !var7.isEmpty()) {
          if (this.catalog.isGun(var7)) {
             var var42 = this.catalog.gun(var1, var7, 0);
             if (!var42.isEmpty()) {
-               var41 = (ItemStack)var42.getFirst();
+               var41 = (ItemStack)var42.get(0);
             }
          } else {
             var41 = KitItems.resolve(var7, 1);
@@ -2977,69 +2597,20 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          Model.require(!var41.isEmpty(), "所选近身武器无法生成，请确认服务端已加载对应刀包：" + var7);
       }
 
-      var var68 = new ArrayList();
-      LinkedHashMap var43 = new LinkedHashMap();
-
-      for (KitGear.Entry var45 : var12.gear().deduplicatedItems()) {
-         var43.put(var45.id, var45);
-      }
-
-      for (String var72 : var12.issueOrder()) {
-         if (var72.equals("main_ammo")) {
-            var68.addAll(var67);
-         } else if (var72.equals("side_ammo")) {
-            var68.addAll(var40);
-         }
-      }
-
-      if (var11.isTraining() && var8.has("trainingItems")) {
-         for (JsonElement var73 : var8.getAsJsonArray("trainingItems")) {
-            if (var68.size() >= 24) {
-               break;
-            }
-
-            ItemStack var46 = KitItems.resolve(var73.getAsString(), 1);
-            if (!var46.isEmpty()) {
-               var68.add(var46);
-            }
-         }
-      }
-
-      ItemStack var71 = ItemStack.EMPTY;
-      if (var13 != null && !var13.isEmpty()) {
-         var71 = KitItems.resolve(var13, var12.countFor(var13));
-      }
-
+      ItemStack var71 = var13 == null || var13.isEmpty()
+         ? ItemStack.EMPTY : KitItems.resolve(var13, var12.countFor(var13));
       var var74 = this.tacticalStacks(var1, var12, var11, var8, "tactical1");
       var var75 = this.tacticalStacks(var1, var12, var11, var8, "tactical2");
-      ItemStack var47 = var74.isEmpty() ? ItemStack.EMPTY : (ItemStack)var74.getFirst();
-      ItemStack var48 = var75.isEmpty() ? ItemStack.EMPTY : (ItemStack)var75.getFirst();
-      if (var74.size() > 1) {
-         var68.addAll(var74.subList(1, var74.size()));
-      }
-
-      if (var75.size() > 1) {
-         var68.addAll(var75.subList(1, var75.size()));
-      }
-
-      int var49 = (var65.isEmpty() ? 0 : 1)
-         + (var66.isEmpty() ? 0 : 1)
-         + (var41.isEmpty() ? 0 : 1)
-         + (var71.isEmpty() ? 0 : 1)
-         + (var47.isEmpty() ? 0 : 1)
-         + (var48.isEmpty() ? 0 : 1)
-         + var68.size();
-      if (var49 > 35) {
-         int core = var49 - var68.size();
-         int room = Math.max(0, 35 - core);
-         if (var68.size() > room) {
-            BattlefieldOps.LOG.warn("[bfops] deploy kit for {} dropped {} spare stacks (core {} slots)",
-                    var1.getScoreboardName(), var68.size() - room, core);
-            var68 = new ArrayList(var68.subList(0, room));
-            var49 = core + var68.size();
+      ItemStack var47 = var74.isEmpty() ? ItemStack.EMPTY : var74.get(0);
+      ItemStack var48 = var75.isEmpty() ? ItemStack.EMPTY : var75.get(0);
+      List<ItemStack> var68 = prioritizeSpares(27, var67, var40, spares(var74), spares(var75));
+      if (var11.isTraining() && var8.has("trainingItems")) {
+         for (JsonElement extra : var8.getAsJsonArray("trainingItems")) {
+            if (var68.size() >= 24) break;
+            ItemStack stack = KitItems.resolve(extra.getAsString(), 1);
+            if (!stack.isEmpty()) var68.add(stack);
          }
       }
-      Model.require(var49 <= 35, "配装超过背包容量");
       ServerLevel var50 = this.level(var11);
       var50.getChunkAt(BlockPos.containing(var27.x(), var27.y(), var27.z()));
       Model.Spawn var51 = var27.asSpawn(var9.team);
@@ -3081,6 +2652,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       this.releaseElite(var1.getUUID(), var9);
       var1.closeContainer();
       var1.getInventory().clearContent();
+      var9.issuedSlots.clear();
       var1.getInventory().setItem(0, var65);
       var1.getInventory().setItem(1, var66);
       var1.getInventory().setItem(2, var41);
@@ -3120,6 +2692,12 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       var1.clearFire();
       var1.getFoodData().setFoodLevel(20);
       var1.getFoodData().setSaturation(var11.defaultSaturation ? 20.0F : 5.0F);
+      var9.issuedAmmo.clear();
+      var9.ammoTemplates.clear();
+      recordAmmo(var9, var64, var31, var68);
+      recordAmmo(var9, var30, var32, var68);
+      recordAmmo(var9, str(var8, "tactical1", ""), var74, var68);
+      recordAmmo(var9, str(var8, "tactical2", ""), var75, var68);
       var9.alive = true;
       var9.downed = false;
       var9.noRevive = false;
@@ -3134,7 +2712,6 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       var9.tactical1 = var47.isEmpty() ? "" : str(var8, "tactical1", "");
       var9.throwable = var71.isEmpty() ? "" : str(var8, "throwable", "");
       var9.issuedTemplates.clear();
-      var9.ammoTemplates.clear();
       var var80 = var9.issuedTemplates;
       String var82 = str(var8, "throwable", "");
       if (!var82.isEmpty() && !var71.isEmpty()) {
@@ -3152,20 +2729,6 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          String var83 = str(var8, "tactical2", "");
          if (!var83.isEmpty()) {
             var80.put(var83, var48.copyWithCount(1));
-         }
-      }
-
-      var9.ammoTemplates.clear();
-
-      for (String var95 : new String[]{var64, var30, var9.tactical1, var9.tactical2}) {
-         if (var95 != null && !var95.isEmpty() && this.catalog.isGun(var95)) {
-            try {
-               var var98 = this.catalog.gun(var1, var95, 1);
-               if (var98.size() > 1) {
-                  var9.ammoTemplates.put(var95, ((ItemStack)var98.get(1)).copyWithCount(1));
-               }
-            } catch (RuntimeException | ReflectiveOperationException var60) {
-            }
          }
       }
 
@@ -3283,7 +2846,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                return "载具超出部署范围，请扩大范围或选择其他部署点";
             } else if (!Model.contains(var3.boundary, var9.getX(), var9.getZ())) {
                return "载具刷新点在地图边界外";
-            } else if (!var2.noBlockCollision(var9, var9.getBoundingBox())) {
+            } else if (!var2.noCollision(var9, var9.getBoundingBox())) {
                return "刷新点空间不足以放下载具";
             } else {
                try {
@@ -3548,7 +3111,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                   }
 
                   this.state(var1, var4.map, false, "");
-                  Network.send(var1, Map.of("type", "downedCard", "killer", var4.downedByName,
+                  sendDeathCard(var1, var2, Map.of("type", "downedCard", "killer", var4.downedByName,
                      "kit", var6 == null || var6.lastKit == null ? "" : var6.lastKit,
                      "weapon", deathWeapon(var2),
                      "distance", var2 == null ? 0 : (int)Math.round(Math.sqrt(var2.distanceToSqr(var1))),
@@ -3569,12 +3132,12 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       if (var0 != null) {
          AttributeInstance var2 = var0.getAttribute(Attributes.MOVEMENT_SPEED);
          if (var2 != null) {
-            if (var1 && !var2.hasModifier(CRAWL_SPEED)) {
-               var2.addTransientModifier(new AttributeModifier(CRAWL_SPEED, -0.75, Operation.ADD_MULTIPLIED_TOTAL));
+            if (var1 && !var2.hasModifier(BF_CRAWL)) {
+               var2.addTransientModifier(BF_CRAWL);
             }
 
             if (!var1) {
-               var2.removeModifier(CRAWL_SPEED);
+               var2.removeModifier(BF_CRAWL);
             }
          }
 
@@ -3727,6 +3290,20 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
    }
 
    public void death(ServerPlayer var1, ServerPlayer var2) {
+      death(var1, var2, var2);
+   }
+
+   private static void sendDeathCard(ServerPlayer victim, Entity source, Map<String, Object> fields) {
+      var payload = new LinkedHashMap<>(fields);
+      if (source != null && source != victim && source.level() == victim.level()) {
+         payload.put("focusX", source.getX());
+         payload.put("focusY", source.getY() + source.getBbHeight() * .72);
+         payload.put("focusZ", source.getZ());
+      }
+      Network.send(victim, payload);
+   }
+
+   public void death(ServerPlayer var1, ServerPlayer var2, Entity focus) {
       Engine.Member var3 = this.members.get(var1.getUUID());
       if (var3 != null) {
          Engine.Match var4 = this.matches.get(var3.map);
@@ -3752,7 +3329,9 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                downPose(var1, false);
                this.clearReviver(var1.getUUID());
                var3.deaths++;
-               Network.send(var1, Map.of("type", "deathStats", "killer", var5,
+               if (focus == null && var3.downedBy != null) focus = this.server.getPlayerList().getPlayer(var3.downedBy);
+               String cardKiller = focus != null && focus != var1 ? focus.getDisplayName().getString() : var5;
+               sendDeathCard(var1, focus, Map.of("type", "deathStats", "killer", cardKiller,
                      "kit", killerKit, "weapon", killerWeapon, "distance", killerDistance,
                      "killerHealth", var2 == null ? -1f : var2.getHealth(),
                      "killerMaxHealth", var2 == null ? -1f : var2.getMaxHealth()));
@@ -4049,16 +3628,14 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
    private void spawnBotPlayer(Engine.Match var1, ServerLevel var2, int var3, String var4, Model.Spawn var5) {
       ServerPlayer var6;
       try {
-         var6 = new ServerPlayer(this.server, var2, new GameProfile(UUID.randomUUID(), var4), ClientInformation.createDefault());
+         var6 = new ServerPlayer(this.server, var2, new GameProfile(UUID.randomUUID(), var4));
       } catch (Exception var11) {
          BattlefieldOps.LOG.warn("Cannot create bot player", var11);
          return;
       }
 
       try {
-         var6.connection = new ServerGamePacketListenerImpl(
-            this.server, new Engine.BotConnection(), var6, CommonListenerCookie.createInitial(var6.getGameProfile(), false)
-         );
+         var6.connection = new ServerGamePacketListenerImpl(this.server, new Engine.BotConnection(), var6);
          var6.moveTo(var5.x, var5.y, var5.z, var5.yaw, 0.0F);
          if (!var2.addFreshEntity(var6)) {
             BattlefieldOps.LOG.warn("Cannot add bot player to the map dimension");
@@ -4290,7 +3867,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                this.bakes.remove(var4);
                this.terrainWaiters.remove(var4);
             } else {
-               ServerLevel var7 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(var6.dimension)));
+               ServerLevel var7 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(var6.dimension)));
                boolean var8 = var7 != null && var5.step(var7);
                if (var5.abandoned()) {
                   this.bakes.remove(var4);
@@ -4718,7 +4295,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
                );
 
             while (var4.marks.size() > 32) {
-               var4.marks.removeFirst();
+               var4.marks.remove(0);
             }
 
             if (var25 == Spotting.Kind.ENEMY && var5 - var3.rewardedMarks.getOrDefault(var29, 0L) >= 30000L) {
@@ -4764,7 +4341,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          );
 
       while (var3.marks.size() > 32) {
-         var3.marks.removeFirst();
+         var3.marks.remove(0);
       }
 
       boolean var8 = var5 == Spotting.Kind.ENEMY;
@@ -4834,6 +4411,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
    public void tick() {
       this.cosmeticKills.tick();
       this.ticks++;
+      if (this.groupRooms != null && this.ticks % 60L == 1L) this.groupRooms.refresh(groupSnapshot());
       if (this.ticks % 20L == 0L) {
          for (Entry var2 : this.members.entrySet()) {
             ServerPlayer var3 = this.server.getPlayerList().getPlayer((UUID)var2.getKey());
@@ -5272,6 +4850,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
    }
 
    public void shutdown() {
+      if (groupRooms != null) {groupRooms.close(); groupRooms = null;}
       this.career.save();
       this.support.close();
       this.refills.clear();
@@ -5320,7 +4899,7 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
       if (this.lobbySettings.enabled
          && !this.members.containsKey(var1.getUUID())
          && !Files.exists(this.folder.resolve("players").resolve(var1.getUUID() + ".nbt"))) {
-         ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(this.lobbySettings.dimension)));
+         ServerLevel var2 = this.server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(this.lobbySettings.dimension)));
          if (var2 == null) {
             var1.sendSystemMessage(Component.literal("大厅维度不可用，已保留原位置"));
          } else {
@@ -5372,6 +4951,12 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          }
       }
 
+      if (groupRooms != null) {
+         var11.put("backend", groupRooms.backend());
+         var remote = groupRooms.entries();
+         var11.put("remoteRooms", remote.size());
+         var5.addAll(remote);
+      }
       var11.put("rooms", var5);
       var11.put("membership", var4 == null ? "" : var4.map);
       var11.put("hubEnabled", this.lobbySettings.enabled);
@@ -5408,7 +4993,11 @@ var6.merge(templateKey, Math.max(1, issued), (a, b) -> Math.max((Integer)a, (Int
          var7.put("type", "state");
          var7.put("open", var3);
          var7.put("message", var4);
-         var7.put("admin", var1.hasPermissions(2));
+         var7.put("admin", var1.hasPermissions(2)
+            // The host of an integrated server owns the world: without this, a singleplayer world
+            // without cheats hides the editor's whole save row.
+            || (this.server.isSingleplayer() && this.server.getSingleplayerProfile() != null
+                && this.server.getSingleplayerProfile().getId().equals(var1.getUUID())));
          var7.put(
             "maps",
             this.maps

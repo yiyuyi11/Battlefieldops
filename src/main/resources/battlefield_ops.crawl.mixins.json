@@ -2,7 +2,7 @@
   "required": false,
   "minVersion": "0.8",
   "package": "cn.bfops.crawl.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_17",
   "mixins": [
     "accessor.LivingEntityJumpingAccessor",
     "common.EntityProneMovementMixin",
@@ -16,5 +16,8 @@
     "client.TaczMouseHandlerMixin",
     "client.TaczLocalPlayerShootMixin"
   ],
-  "injectors": { "defaultRequire": 0 }
+  "injectors": {
+    "defaultRequire": 0
+  },
+  "refmap": "battlefield_ops.refmap.json"
 }

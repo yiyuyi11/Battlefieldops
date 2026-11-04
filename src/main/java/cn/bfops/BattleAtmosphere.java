@@ -31,7 +31,7 @@ final class BattleAtmosphere {
         for(ServerPlayer target:shooter.serverLevel().getEntitiesOfClass(ServerPlayer.class,new AABB(start,end).inflate(4))){
             Engine.Member other=engine.members.get(target.getUUID());
             if(target==shooter||!engine.supportActive(other)||!other.map.equals(member.map)||other.team==member.team||!other.alive||other.downed||target.isSpectator()||t.heard.contains(target.getUUID()))continue;
-            Vec3 eye=target.getEyePosition();double at=Math.clamp(eye.subtract(start).dot(line)/length,0,1);Vec3 near=start.add(line.scale(at));
+            Vec3 eye=target.getEyePosition();double at=cn.bfops.Java17.clamp(eye.subtract(start).dot(line)/length,0,1);Vec3 near=start.add(line.scale(at));
             if(near.distanceToSqr(eye)>16||!target.getBoundingBox().inflate(2).clip(start,end).isPresent())continue;
             var obstruction=target.serverLevel().clip(new ClipContext(start,near,ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,raw));
             if(obstruction.getType()==HitResult.Type.BLOCK&&obstruction.getLocation().distanceToSqr(start)+.01<near.distanceToSqr(start))continue;

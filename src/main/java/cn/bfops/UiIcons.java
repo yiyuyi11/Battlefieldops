@@ -22,7 +22,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class UiIcons {
     private static final ResourceLocation ATLAS =
-            ResourceLocation.fromNamespaceAndPath("battlefield_ops", "textures/gui/tactical_icons.png");
+            new ResourceLocation("battlefield_ops", "textures/gui/tactical_icons.png");
 
     /** One 16x16 cell per icon, in sheet order. */
     public static final int CELL = 16;

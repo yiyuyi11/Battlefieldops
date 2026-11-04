@@ -237,7 +237,7 @@ public class ExternalTextureManager {
    }
 
    public static ResourceLocation getTexture(String path) {
-      ResourceLocation empty=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/empty_preview.png");
+      ResourceLocation empty=new ResourceLocation("battlefield_ops","textures/gui/empty_preview.png");
       if(path==null||path.isBlank())return empty;
       if (isVanillaTexturePath(path)) {
          ResourceLocation vanilla = getVanillaTextureLocation(path);
@@ -262,7 +262,7 @@ public class ExternalTextureManager {
       } else {
          ResourceLocation fallback = ResourceLocation.tryBuild("battlefield_ops", "icons/" + resolvedPath);
          if(fallback==null||Minecraft.getInstance().getResourceManager().getResource(fallback).isEmpty())
-            fallback=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/empty_preview.png");
+            fallback=new ResourceLocation("battlefield_ops","textures/gui/empty_preview.png");
          applyTextureFilter(fallback);
          return fallback;
       }
@@ -296,7 +296,7 @@ public class ExternalTextureManager {
       if (Files.exists(file)) {
          return Files.readAllBytes(file);
       } else {
-         ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/" + path);
+         ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "icons/" + path);
 
          try {
             byte[] var20;
@@ -729,7 +729,7 @@ public class ExternalTextureManager {
       if (cached != null) {
          return cached;
       } else {
-         ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/" + textureName);
+         ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "icons/" + textureName);
 
          try {
             byte[] var14;
@@ -831,7 +831,7 @@ public class ExternalTextureManager {
             }
          }
 
-         ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/" + path);
+         ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "icons/" + path);
 
          try {
             ExternalTextureManager.TextureDimensions var42;
@@ -1191,7 +1191,7 @@ public class ExternalTextureManager {
             }
 
             if (forceReset || !Files.exists(targetPath)) {
-               ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/" + texturePath);
+               ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "icons/" + texturePath);
 
                try (InputStream stream = ((Resource)Minecraft.getInstance().getResourceManager().getResource(resourceLocation).get()).open()) {
                   Files.copy(stream, targetPath, StandardCopyOption.REPLACE_EXISTING);

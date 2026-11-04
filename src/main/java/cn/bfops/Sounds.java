@@ -3,8 +3,8 @@ package cn.bfops;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.RegistryObject;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -35,7 +35,7 @@ final class Sounds {
             DeferredRegister.create(Registries.SOUND_EVENT, "battlefield_ops");
 
     /** Name to holder, filled by {@link #registerAll()}. */
-    private static final Map<String, DeferredHolder<SoundEvent, SoundEvent>> ALL = new LinkedHashMap<>();
+    private static final Map<String, RegistryObject<SoundEvent>> ALL = new LinkedHashMap<>();
 
     private Sounds() { }
 
@@ -49,14 +49,14 @@ final class Sounds {
         for (String name : names()) {
             ALL.computeIfAbsent(name, key -> REGISTRY.register(key,
                     () -> SoundEvent.createVariableRangeEvent(
-                            ResourceLocation.fromNamespaceAndPath("battlefield_ops", key))));
+                            new ResourceLocation("battlefield_ops", key))));
         }
     }
 
     /** The event for {@code name}, or {@code null} when it is unknown or not yet registered. */
     static SoundEvent get(String name) {
         if (name == null) return null;
-        DeferredHolder<SoundEvent, SoundEvent> holder = ALL.get(name);
+        RegistryObject<SoundEvent> holder = ALL.get(name);
         return holder == null ? null : holder.get();
     }
 

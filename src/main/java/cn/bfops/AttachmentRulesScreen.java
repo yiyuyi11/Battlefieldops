@@ -35,7 +35,7 @@ final class AttachmentRulesScreen extends FrontScreen {
     void receive(JsonObject data){
         if(!gun.equals(Engine.str(data,"id","")))return;
         groups=Arrays.asList(BattlefieldOps.GSON.fromJson(data.get("groups"),Fittings.Group[].class));loaded=true;
-        slot=groups.isEmpty()?"":groups.getFirst().id();ok("编辑的是本兵种这把武器的规则；应用后还需保存地图");rebuild();
+        slot=groups.isEmpty()?"":groups.get(0).id();ok("编辑的是本兵种这把武器的规则；应用后还需保存地图");rebuild();
     }
     void error(String text){fail(text);}
     protected String subtitle(){return "管理员地图草稿 · 兼容槽位 · 禁用优先于解锁和白名单";}
@@ -73,7 +73,7 @@ final class AttachmentRulesScreen extends FrontScreen {
     }
     private void selectionDetails(Form form){form.section(attachment);form.paragraph(policy().blocker(attachment,0).isEmpty()?"等级 0 已解锁":policy().blocker(attachment,0),Ui.ACCENT);}
     protected void paint(GuiGraphics g,int x,int y,float dt){Ui.header(g,font,layout.left,"武器与配件槽位");Ui.header(g,font,layout.right,"权限与解锁条件");list.render(g,x,y,dt);details.render(g,x,y,dt);bar.render(g,x,y,dt);}
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return list.wheel(x,y,v)||details.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return list.wheel(x,y,v)||details.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     public void onClose(){minecraft.setScreen(parent);}
     public boolean isPauseScreen(){return false;}
 }

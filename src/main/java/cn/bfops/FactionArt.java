@@ -18,14 +18,14 @@ final class FactionArt {
             // generic base glyph, which is what made German Empire and the UK look "unset".
             for(var candidate:new String[]{emblem,emblem.replace("_deploy_default","_hud_default"),
                     emblem.replace("_deploy_default","_map_default")}){
-                var loc=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/bf1/"+candidate+".png");
+                var loc=new ResourceLocation("battlefield_ops","textures/gui/bf1/"+candidate+".png");
                 if(Minecraft.getInstance().getResourceManager().getResource(loc).isPresent())return candidate;
             }
         }
         if(team<0||team>1)return "base_map_default";
         if(cached==null){
             cached=new JsonObject();
-            var id=ResourceLocation.fromNamespaceAndPath("battlefield_ops","bf1_factions.json");
+            var id=new ResourceLocation("battlefield_ops","bf1_factions.json");
             try{var resource=Minecraft.getInstance().getResourceManager().getResource(id);
                 if(resource.isPresent())try(var reader=resource.get().openAsReader()){
                     cached=com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();

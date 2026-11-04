@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
-import net.neoforged.fml.loading.FMLPaths;
+import net.minecraftforge.fml.loading.FMLPaths;
 import cn.bfops.killicon.network.packet.ScoreboardSyncPacket;
 
 public final class LocalLeaderboardCache {

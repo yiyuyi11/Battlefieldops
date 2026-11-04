@@ -137,7 +137,7 @@ final class SuperbAmmo {
         List<String> ids = ammoIds(gun);
         if (ids.isEmpty()) return "";
         if (preferred != null && ids.contains(preferred)) return preferred;
-        return ids.getFirst();
+        return ids.get(0);
     }
 
     /** Slot name for an ammo id, used when the gun reports per-slot ammunition counts. */
@@ -203,7 +203,7 @@ final class SuperbAmmo {
         var ammoKey = net.minecraft.resources.ResourceLocation.tryParse(ammoId);
         if (ammoKey == null || !net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(ammoKey)) return out;
         net.minecraft.world.item.Item ammoItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ammoKey);
-        int perStack = Math.max(1, ammoItem.getDefaultMaxStackSize());
+        int perStack = Math.max(1, ammoItem.getMaxStackSize());
         int remaining = Math.max(0, rounds);
         while (remaining > 0) {
             int amount = Math.min(remaining, perStack);
@@ -218,10 +218,10 @@ final class SuperbAmmo {
     static String chosenFor(String gunId, String preferred) {
         var bundle = gunBundle(gunId, 0, preferred);
         if (bundle.isEmpty()) return "";
-        List<String> ids = ammoIds(bundle.getFirst());
+        List<String> ids = ammoIds(bundle.get(0));
         if (ids.isEmpty()) return "";
         if (preferred != null && ids.contains(preferred)) return preferred;
-        return ids.getFirst();
+        return ids.get(0);
     }
 
     private SuperbAmmo() {

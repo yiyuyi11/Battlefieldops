@@ -1,14 +1,14 @@
 package cn.bfops;
 
 import net.minecraft.client.Minecraft;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 /** Edits TaCZ's native option rather than introducing a second Z binding or divergent preference. */
 public final class ProneControls {
     private static boolean resolved,owned;
-    private static ModConfigSpec.BooleanValue option;
-    private static ModConfigSpec.BooleanValue option(){
-        if(!resolved){resolved=true;try{Object value=Class.forName("com.tacz.guns.config.client.KeyConfig").getField("HOLD_TO_CRAWL").get(null);if(value instanceof ModConfigSpec.BooleanValue b)option=b;}
+    private static ForgeConfigSpec.BooleanValue option;
+    private static ForgeConfigSpec.BooleanValue option(){
+        if(!resolved){resolved=true;try{Object value=Class.forName("com.tacz.guns.config.client.KeyConfig").getField("HOLD_TO_CRAWL").get(null);if(value instanceof ForgeConfigSpec.BooleanValue b)option=b;}
             catch(ReflectiveOperationException|LinkageError ignored){}}
         return option;
     }

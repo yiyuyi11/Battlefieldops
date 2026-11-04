@@ -12,7 +12,7 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.minecraftforge.client.event.RenderLevelStageEvent;
 
 /**
  * Ragdoll death bodies.
@@ -110,7 +110,7 @@ final class CorpseRagdoll {
 
     private static ResourceLocation skinOf(AbstractClientPlayer player) {
         try {
-            return player.getSkin().texture();
+            return player.getSkinTextureLocation();
         } catch (RuntimeException | LinkageError ex) {
             return null;
         }
@@ -118,7 +118,7 @@ final class CorpseRagdoll {
 
     private static boolean usesSlimModel(AbstractClientPlayer player) {
         try {
-            return player.getSkin().model() == net.minecraft.client.resources.PlayerSkin.Model.SLIM;
+            return "slim".equals(player.getModelName());
         } catch (RuntimeException | LinkageError ex) {
             return false;
         }
@@ -182,7 +182,7 @@ final class CorpseRagdoll {
                 pose.translate(0, -1.5f, 0);
                 var consumer = buffers.getBuffer(RenderType.entityCutoutNoCull(body.skin()));
                 int alpha = (int) (fade * 255f) << 24;
-                model.renderToBuffer(pose, consumer, 0xF000F0, OverlayTexture.NO_OVERLAY, alpha | 0xFFFFFF);
+                model.renderToBuffer(pose, consumer, 0xF000F0, OverlayTexture.NO_OVERLAY, 1f, 1f, 1f, fade);
             } finally {
                 pose.popPose();
             }

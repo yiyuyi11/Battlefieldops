@@ -28,7 +28,7 @@ final class ShapeScreen extends FrontScreen {
         form.paragraph("左键添加顶点，自动闭合。Shift＋左键拖动顶点；右键撤销；中键平移；滚轮缩放。",Ui.TEXT_DIM);
         row(form,"矩形起点","生成后可拖动四角",()->preset(false));
         row(form,"圆形轮廓起点","转为可编辑的 16 边形",()->preset(true));
-        row(form,"撤销一个顶点","",!vertices.isEmpty(),()->{vertices.removeLast();rebuild();});
+        row(form,"撤销一个顶点","",!vertices.isEmpty(),()->{vertices.remove(vertices.size() - 1);rebuild();});
         row(form,"清空当前草稿","原范围在应用前不变",!vertices.isEmpty(),()->{vertices.clear();rebuild();});
         String error=validation();
         form.paragraph(error.isEmpty()?"范围有效，可应用后返回保存。":error,error.isEmpty()?Ui.TEXT_OK:Ui.TEXT_WARN);
@@ -76,7 +76,7 @@ final class ShapeScreen extends FrontScreen {
                 if(vertices.size()<64){var v=new Model.Vec(Math.rint(map.worldX(body(),x)),Math.rint(map.worldZ(body(),y)));if(!vertices.contains(v))vertices.add(v);}
                 rebuild();return true;
             }
-            if(button==1){if(!vertices.isEmpty())vertices.removeLast();rebuild();return true;}
+            if(button==1){if(!vertices.isEmpty())vertices.remove(vertices.size() - 1);rebuild();return true;}
         }
         return super.mouseClicked(x,y,button);
     }
@@ -86,7 +86,7 @@ final class ShapeScreen extends FrontScreen {
         return super.mouseDragged(x,y,button,dx,dy);
     }
     public boolean mouseReleased(double x,double y,int button){if(dropdownOpen())return super.mouseReleased(x,y,button);if(dragging>=0){dragging=-1;rebuild();return true;}return super.mouseReleased(x,y,button);}
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);if(body().inside(x,y)&&v!=0){map.zoom(body(),x,y,v>0);return true;}return form.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);if(body().inside(x,y)&&v!=0){map.zoom(body(),x,y,v>0);return true;}return form.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     public void removed(){map.close();}
     public void onClose(){minecraft.setScreen(parent);}
 }

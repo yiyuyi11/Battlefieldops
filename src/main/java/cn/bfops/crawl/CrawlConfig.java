@@ -1,12 +1,12 @@
 package cn.bfops.crawl;
-import net.neoforged.neoforge.common.ModConfigSpec;
+import net.minecraftforge.common.ForgeConfigSpec;
 
 public final class CrawlConfig {
-    public static final ModConfigSpec SPEC;
-    public static final ModConfigSpec.LongValue CRAWL_ENTER_BLOCK_MS,CRAWL_EXIT_BLOCK_MS;
-    public static final ModConfigSpec.DoubleValue PRONE_HEAD_PART_OFFSET,PRONE_FOOT_PART_OFFSET,JUMP_INACCURACY_MULTIPLIER;
+    public static final ForgeConfigSpec SPEC;
+    public static final ForgeConfigSpec.LongValue CRAWL_ENTER_BLOCK_MS,CRAWL_EXIT_BLOCK_MS;
+    public static final ForgeConfigSpec.DoubleValue PRONE_HEAD_PART_OFFSET,PRONE_FOOT_PART_OFFSET,JUMP_INACCURACY_MULTIPLIER;
     static {
-        var b=new ModConfigSpec.Builder();b.push("tacz_crawl");
+        var b=new ForgeConfigSpec.Builder();b.push("tacz_crawl");
         CRAWL_ENTER_BLOCK_MS=b.defineInRange("crawl_enter_block_ms",1000L,0L,30000L);
         CRAWL_EXIT_BLOCK_MS=b.defineInRange("crawl_exit_block_ms",500L,0L,30000L);
         PRONE_HEAD_PART_OFFSET=b.defineInRange("prone_head_part_offset",.42,0,4);

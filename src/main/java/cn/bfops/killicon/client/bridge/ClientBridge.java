@@ -1,8 +1,8 @@
 package cn.bfops.killicon.client.bridge;
 import java.nio.file.Path;
 import net.minecraft.client.Minecraft;
-import net.neoforged.fml.ModList;
-import net.neoforged.fml.loading.FMLPaths;
+import net.minecraftforge.fml.ModList;
+import net.minecraftforge.fml.loading.FMLPaths;
 public final class ClientBridge {
  private static final ClientLoaderBridge LOADER=new ClientLoaderBridge(){
   public Path getConfigDir(){return FMLPaths.CONFIGDIR.get();}

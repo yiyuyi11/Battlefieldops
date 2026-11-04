@@ -5,7 +5,7 @@ import com.tacz.guns.config.client.KeyConfig;
 import com.tacz.guns.config.sync.SyncConfig;
 import com.tacz.guns.util.InputExtraCheck;
 import net.minecraft.client.Minecraft;
-import net.neoforged.neoforge.client.event.InputEvent;
+import net.minecraftforge.client.event.InputEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.injection.*;

@@ -1,8 +1,6 @@
 package cn.bfops.voice.network;
 
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import cn.bfops.voice.common.audio.CampType;
@@ -14,13 +12,8 @@ import cn.bfops.voice.common.audio.VoiceCue;
  * Server-to-client playback request: the server already resolved the cue and camp, and this only carries the
  * resolved {@link FrontVoicePlayRequest} so the client can hand it to its audio player unchanged.
  */
-public record ClientboundPlayAudioPayload(FrontVoicePlayRequest request) implements CustomPacketPayload {
-    public static final Type<ClientboundPlayAudioPayload> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath("battlefield_ops", "voice_play"));
-    public static final StreamCodec<FriendlyByteBuf, ClientboundPlayAudioPayload> CODEC =
-            StreamCodec.of(ClientboundPlayAudioPayload::write, ClientboundPlayAudioPayload::read);
-
-    private static void write(FriendlyByteBuf buffer, ClientboundPlayAudioPayload payload) {
+public record ClientboundPlayAudioPayload(FrontVoicePlayRequest request) {
+    public static void write(FriendlyByteBuf buffer, ClientboundPlayAudioPayload payload) {
         FrontVoicePlayRequest request = payload.request;
         buffer.writeBoolean(request.isCue());
         if (request.isCue()) {
@@ -42,7 +35,7 @@ public record ClientboundPlayAudioPayload(FrontVoicePlayRequest request) impleme
         buffer.writeFloat(request.attenuationDistance());
     }
 
-    private static ClientboundPlayAudioPayload read(FriendlyByteBuf buffer) {
+    public static ClientboundPlayAudioPayload read(FriendlyByteBuf buffer) {
         boolean isCue = buffer.readBoolean();
         VoiceCue voiceCue = null;
         CampType campType = null;
@@ -67,8 +60,4 @@ public record ClientboundPlayAudioPayload(FrontVoicePlayRequest request) impleme
                 soundEventId, voiceCue, campType, playbackMode, sourceEntityId, position, volume, pitch, attenuationDistance));
     }
 
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
-    }
 }

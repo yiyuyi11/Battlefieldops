@@ -180,7 +180,7 @@ final class ItemPickerScreen extends FrontScreen {
         y += 14;
         List<String> sources = ItemCatalog.sources(ItemCatalog.all());
         if (!sources.isEmpty()) {
-            String sample = "@" + sources.getFirst()
+            String sample = "@" + sources.get(0)
                     + (sources.size() > 1 ? "  @" + sources.get(1) : "");
             graphics.drawString(font, Ui.clip(font, "例如：" + sample, right.w() - 12),
                     right.x() + 6, y, Ui.TEXT_FAINT, false);
@@ -189,7 +189,7 @@ final class ItemPickerScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX,mouseY,horizontal,vertical);
+    public boolean mouseScrolled(double mouseX, double mouseY, double vertical) {if(dropdownOpen())return super.mouseScrolled(mouseX, mouseY, vertical);
         if (vertical == 0) return false;
         int rows = rowsThatFit();
         int size = filtered().size();

@@ -25,9 +25,9 @@ final class DropdownMenu {
         rows=Math.max(1,Math.min(9,(Math.max(36,down?below:above)-18)/18));
         int count=Math.min(rows,Math.max(1,filtered().size())),h=18+count*18;
         int w=Math.min(Math.max(180,anchor.getWidth()),Math.max(40,width-8));
-        box=new Layout.Rect(Math.clamp(anchor.getX(),4,Math.max(4,width-w-4)),Math.clamp(down?anchor.getY()+anchor.getHeight()+1:anchor.getY()-h-1,2,Math.max(2,height-h-2)),w,h);
-        selected=Math.clamp(selected,0,Math.max(0,filtered().size()-1));
-        first=Math.clamp(first,Math.max(0,selected-rows+1),selected);
+        box=new Layout.Rect(cn.bfops.Java17.clamp(anchor.getX(),4,Math.max(4,width-w-4)),cn.bfops.Java17.clamp(down?anchor.getY()+anchor.getHeight()+1:anchor.getY()-h-1,2,Math.max(2,height-h-2)),w,h);
+        selected=cn.bfops.Java17.clamp(selected,0,Math.max(0,filtered().size()-1));
+        first=cn.bfops.Java17.clamp(first,Math.max(0,selected-rows+1),selected);
         first=Math.min(first,Math.max(0,filtered().size()-rows));
     }
     void draw(GuiGraphics g,Font font,int mx,int my,int width,int height){
@@ -49,6 +49,6 @@ final class DropdownMenu {
         g.pose().popPose();
     }
     String click(double x,double y){if(box==null||!box.inside(x,y)||y<box.y()+18)return null;int index=first+(int)(y-box.y()-18)/18;var list=filtered();return index>=0&&index<list.size()?list.get(index).id():null;}
-    String value(){var list=filtered();return list.isEmpty()?null:list.get(Math.clamp(selected,0,list.size()-1)).id();}
-    void move(int delta){selected=Math.clamp(selected+delta,0,Math.max(0,filtered().size()-1));}
+    String value(){var list=filtered();return list.isEmpty()?null:list.get(cn.bfops.Java17.clamp(selected,0,list.size()-1)).id();}
+    void move(int delta){selected=cn.bfops.Java17.clamp(selected+delta,0,Math.max(0,filtered().size()-1));}
 }

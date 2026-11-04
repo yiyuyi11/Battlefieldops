@@ -229,7 +229,7 @@ final class KillIconHud {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.getResourceManager() == null) return null;
         for (String file : kind.textureCandidates(preset, family)) {
-            ResourceLocation location = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "icons/" + file);
+            ResourceLocation location = new ResourceLocation("battlefield_ops", "icons/" + file);
             if (mc.getResourceManager().getResource(location).isPresent()) return location;
         }
         return null;

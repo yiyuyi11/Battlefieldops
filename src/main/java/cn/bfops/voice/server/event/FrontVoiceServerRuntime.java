@@ -42,7 +42,7 @@ public final class FrontVoiceServerRuntime {
     static final long RECENT_HANDLED_KILL_TICKS = 10L;
     static final double FRIENDLY_FIRE_RADIUS = 2.0D;
     static final long FRIENDLY_FIRE_COOLDOWN_TICKS = 80L;
-    static final ResourceLocation LR_FLAMMABLE_EFFECT_ID = ResourceLocation.fromNamespaceAndPath("lrtactical", "flammable");
+    static final ResourceLocation LR_FLAMMABLE_EFFECT_ID = new ResourceLocation("lrtactical", "flammable");
 
     final Set<UUID> burningPlayers = new HashSet<>();
     final Set<UUID> ammoEmptyPlayers = new HashSet<>();

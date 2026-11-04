@@ -149,7 +149,7 @@ final class KitItems {
         if(ConquestEquipment.kind(id)!=null)return ConquestEquipment.stack(id,count);
         ResourceLocation key;
         try {
-            key = ResourceLocation.parse(id);
+            key = new ResourceLocation(id);
         } catch (RuntimeException malformed) {
             return ItemStack.EMPTY;
         }

@@ -28,9 +28,9 @@ public final class BoundaryEffect {
         if(failed||mc.level==null)return;
         var target=mc.getMainRenderTarget();
         try{
-            if(chain==null){chain=new PostChain(mc.getTextureManager(),mc.getResourceManager(),target,ResourceLocation.fromNamespaceAndPath("battlefield_ops","shaders/post/boundary.json"));width=0;}
+            if(chain==null){chain=new PostChain(mc.getTextureManager(),mc.getResourceManager(),target,new ResourceLocation("battlefield_ops","shaders/post/boundary.json"));width=0;}
             if(width!=target.width||height!=target.height){width=target.width;height=target.height;chain.resize(width,height);}
-            chain.setUniform("Saturation",1-strength);
+            // 1.20.1 post chains have no settable uniforms; the effect keeps its default look.
             RenderSystem.disableBlend();RenderSystem.disableDepthTest();
             chain.process(0);
         }catch(Exception|LinkageError ex){failed=true;if(chain!=null){chain.close();chain=null;}BattlefieldOps.LOG.warn("Boundary monochrome pass unavailable",ex);}

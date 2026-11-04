@@ -10,6 +10,6 @@ final class Bf1Players {
    g.pose().translate(x,y,0);g.pose().mulPose(com.mojang.math.Axis.ZP.rotationDegrees(heading+180));
    g.setColor((color>>16&255)/255f,(color>>8&255)/255f,(color&255)/255f,alpha);
    Bf1Ui.icon(g,self?"player_map_self_mask":"player_map_default_mask",-size/2,-size/2,size);
-  }finally{g.setColor(1,1,1,1);g.pose().popPose();}
+  }finally{g.setColor(1f,1f,1f,1f);g.pose().popPose();}
  }
 }

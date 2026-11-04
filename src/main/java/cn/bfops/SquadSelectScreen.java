@@ -51,8 +51,7 @@ final class SquadSelectScreen extends FrontScreen {
                     String name=i<entries.length?entries[i]:"";
                     var player=minecraft.level==null?null:minecraft.level.players().stream()
                         .filter(p->p.getGameProfile().getName().equals(name)).findFirst().orElse(null);
-                    if(player!=null)net.minecraft.client.gui.screens.inventory.InventoryScreen.renderEntityInInventoryFollowsMouse(
-                        g,card.x(),card.y(),card.right(),card.bottom()-4,Math.min(30,card.w()),0f,card.cx(),card.y()+20,player);
+                    if(player!=null)Bf1Ui.icon(g,"player_hud_default",card.cx()-9,card.cy()-9,18);
                     else Bf1Ui.icon(g,"player_hud_default",card.cx()-9,card.cy()-9,18);
                 }
             });
@@ -82,9 +81,9 @@ final class SquadSelectScreen extends FrontScreen {
         Ui.header(g,font,layout.left,"选择小队");Ui.header(g,font,layout.right,"小队成员");
         list.render(g,x,y,dt);members.render(g,x,y,dt);bar.render(g,x,y,dt);
     }
-    public boolean mouseScrolled(double x,double y,double h,double v){
-        if(dropdownOpen())return super.mouseScrolled(x,y,h,v);
-        return list.wheel(x,y,v)||members.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);
+    public boolean mouseScrolled(double x, double y, double v){
+        if(dropdownOpen())return super.mouseScrolled(x, y, v);
+        return list.wheel(x,y,v)||members.wheel(x,y,v)||super.mouseScrolled(x, y, v);
     }
     public void onClose(){minecraft.setScreen(parent);}
     public boolean isPauseScreen(){return false;}

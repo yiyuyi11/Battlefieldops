@@ -20,7 +20,7 @@ final class SupportMarkers {
         var mc=Minecraft.getInstance();
         if(mc==null)return false;
         if(kind.equals("radio_beacon")){
-            ResourceLocation loc=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/hud_beacon.png");
+            ResourceLocation loc=new ResourceLocation("battlefield_ops","textures/gui/hud_beacon.png");
             if(mc.getResourceManager().getResource(loc).isEmpty())return false;
             int tint=TacticalColors.FRIEND;
             g.setColor(((tint>>16)&0xff)/255f,((tint>>8)&0xff)/255f,(tint&0xff)/255f,opacity);
@@ -30,10 +30,10 @@ final class SupportMarkers {
             return true;
         }
         if(kind.equals("ground_sensor")){
-            ResourceLocation loc=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/gui/hud_ground_sensor.png");
+            ResourceLocation loc=new ResourceLocation("battlefield_ops","textures/gui/hud_ground_sensor.png");
             if(mc.getResourceManager().getResource(loc).isEmpty())return false;
             // Pre-coloured cyan art: drawn 1:1, no tint, no fractional scale.
-            g.setColor(1,1,1,opacity);g.blit(loc,cx-8,cy-8,16,16,0,0,16,16,16,16);g.setColor(1,1,1,1);
+            g.setColor(1f,1f,1f,opacity);g.blit(loc,cx-8,cy-8,16,16,0,0,16,16,16,16);g.setColor(1f,1f,1f,1f);
             return true;
         }
         if(kind.equals("ammo_box")||kind.equals("med_box")){

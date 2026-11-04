@@ -21,8 +21,8 @@ final class EntryScreen extends Screen {
     @Override public void tick(){
         if(++polls%20==0&&EntryScene.active())Client.send(Client.request("state",Client.currentMap()));
     }
-    @Override public void renderBackground(GuiGraphics g,int x,int y,float dt){}
-    private static float smooth(float t){t=Math.clamp(t,0,1);return t*t*(3-2*t);}
+    @Override public void renderBackground(GuiGraphics g){}
+    private static float smooth(float t){t=cn.bfops.Java17.clamp(t,0,1);return t*t*(3-2*t);}
     @Override public void render(GuiGraphics g,int mx,int my,float dt){
         if(!EntryScene.active())return;
         var data=EntryScene.copy();float t=EntryScene.elapsed()+dt,d=EntryScene.duration();
@@ -31,7 +31,7 @@ final class EntryScreen extends Screen {
         else if(t<reveal)dark=1-.8f*smooth(t/reveal);
         else if(t>d-darken)dark=.2f+.8f*smooth((t-(d-darken))/darken);
         else dark=.2f;
-        g.fill(0,0,width,height,Math.round(Math.clamp(dark,0,1)*255)<<24);
+        g.fill(0,0,width,height,Math.round(cn.bfops.Java17.clamp(dark,0,1)*255)<<24);
         // FPS (刷新率) pinned to the top-right with a metrics glyph, on a solid backing so it stays
         // readable over the fading world behind it.
         String fpsText="20 Hz";

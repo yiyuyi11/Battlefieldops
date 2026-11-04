@@ -2,7 +2,7 @@ package cn.bfops;
 
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.event.entity.item.ItemTossEvent;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
 
 /** Shared gameplay guards; never reference client classes from the dedicated server. */
 public final class BattleActions {

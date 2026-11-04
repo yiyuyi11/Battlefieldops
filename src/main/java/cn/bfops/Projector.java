@@ -3,10 +3,10 @@ package cn.bfops;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ViewportEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.ViewportEvent;
 import org.joml.Vector3f;
 
 /**
@@ -79,7 +79,7 @@ final class Projector {
      * FOV is computed — after sprint/scope/vehicle modifiers, before the render. Reading the same value here
      * that the renderer uses is what keeps a marker pinned to its world position while a player zooms.
      */
-    @SubscribeEvent(priority = net.neoforged.bus.api.EventPriority.LOWEST)
+    @SubscribeEvent(priority = net.minecraftforge.eventbus.api.EventPriority.LOWEST)
     public static void captureFov(ViewportEvent.ComputeFov event) {
         // The hand pass also fires this event with its own FOV after the world pass.
         if(event.usedConfiguredFov()) currentFovDegrees = event.getFOV();

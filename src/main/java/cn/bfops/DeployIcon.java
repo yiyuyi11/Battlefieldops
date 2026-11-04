@@ -45,7 +45,7 @@ final class DeployIcon {
         if(glyph!=null&&glyph.matches("[A-Ha-h]")){
             RenderSystem.enableBlend();g.setColor(1,1,1,alpha);
             try{Bf1Ui.icon(g,"objectives_"+glyph.toLowerCase(java.util.Locale.ROOT)+"_hud_default",Math.round(x-size/2f),Math.round(y-size/2f),size);}
-            finally{g.setColor(1,1,1,1);}
+            finally{g.setColor(1f,1f,1f,1f);}
         }else if(glyph!=null)g.drawCenteredString(font,glyph,Math.round(x),Math.round(y)-4,((int)(alpha*255)<<24)|0xffffff);
     }
     static void base(GuiGraphics g,Font font,float x,float y,float radius,int team,int color,boolean selected){

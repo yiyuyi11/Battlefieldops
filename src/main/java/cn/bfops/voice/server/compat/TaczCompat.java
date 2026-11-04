@@ -280,7 +280,7 @@ public final class TaczCompat {
         }
         int total = 0;
         for (ItemStack stack : player.getInventory().items) {
-            if (stack != null && !stack.isEmpty() && ItemStack.isSameItemSameComponents(stack, sampleAmmo)) {
+            if (stack != null && !stack.isEmpty() && ItemStack.isSameItemSameTags(stack, sampleAmmo)) {
                 total += stack.getCount();
             }
         }

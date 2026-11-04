@@ -3,8 +3,8 @@ package cn.bfops;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import software.bernie.geckolib.animatable.GeoItem;
-import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
@@ -23,6 +23,20 @@ public class SupportItem extends Item implements GeoItem {
         this.kind = kind;
     }
 
+    /**
+     * 1.20.1 attaches client extensions by asking the item, not through NeoForge's registration event.
+     *
+     * <p>The extension itself is a client class, so it is only named after a dist check: on a dedicated
+     * server this branch is never taken and the client package is never resolved.
+     */
+    @Override
+    public void initializeClient(
+            java.util.function.Consumer<net.minecraftforge.client.extensions.common.IClientItemExtensions> consumer) {
+        if (net.minecraftforge.fml.loading.FMLEnvironment.dist == net.minecraftforge.api.distmarker.Dist.CLIENT) {
+            cn.bfops.client.SupportItemClient.extend(consumer);
+        }
+    }
+
     public SupportRules.Kind kind() {
         return kind;
     }
@@ -33,15 +47,15 @@ public class SupportItem extends Item implements GeoItem {
     }
 
     public ResourceLocation geoModelResource() {
-        return ResourceLocation.fromNamespaceAndPath("battlefield_ops", "geo/" + itemId() + ".geo.json");
+        return new ResourceLocation("battlefield_ops", "geo/" + itemId() + ".geo.json");
     }
 
     public ResourceLocation textureResource() {
-        return ResourceLocation.fromNamespaceAndPath("battlefield_ops", "textures/item/" + itemId() + ".png");
+        return new ResourceLocation("battlefield_ops", "textures/item/" + itemId() + ".png");
     }
 
     public ResourceLocation animationResource() {
-        return ResourceLocation.fromNamespaceAndPath("battlefield_ops", "animations/static_item.animation.json");
+        return new ResourceLocation("battlefield_ops", "animations/static_item.animation.json");
     }
 
     @Override

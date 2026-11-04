@@ -8,8 +8,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.phys.*;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.neoforged.bus.api.Event;
-import net.neoforged.neoforge.common.NeoForge;
+import net.minecraftforge.eventbus.api.Event;
+import net.minecraftforge.common.MinecraftForge;
 
 /** Source-event adapters for real repair gains and mine provenance, with bounded bookkeeping. */
 final class FinalHonours {
@@ -39,10 +39,10 @@ final class FinalHonours {
     }
     void mineLeft(Entity entity){
         if(entity.level().isClientSide()||!BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString().equals("superbwarfare:tm_62")||entity.getRemovalReason()==null||!entity.getRemovalReason().shouldDestroy())return;
-        try{Object owner=entity.getClass().getMethod("getOwnerUUID").invoke(entity);if(owner instanceof UUID id){var m=engine.members.get(id);if(engine.supportActive(m)){mines.addLast(new Mine(id,m.map,entity.position(),System.currentTimeMillis()));while(mines.size()>512)mines.removeFirst();}}}catch(ReflectiveOperationException ignored){}
+        try{Object owner=entity.getClass().getMethod("getOwnerUUID").invoke(entity);if(owner instanceof UUID id){var m=engine.members.get(id);if(engine.supportActive(m)){mines.addLast(new Mine(id,m.map,entity.position(),System.currentTimeMillis()));while(mines.size()>512)mines.remove(0);}}}catch(ReflectiveOperationException ignored){}
     }
     boolean mineKill(ServerPlayer p,Entity target){
-        long now=System.currentTimeMillis();while(!mines.isEmpty()&&now-mines.getFirst().time>3000)mines.removeFirst();
+        long now=System.currentTimeMillis();while(!mines.isEmpty()&&now-mines.peekFirst().time>3000)mines.remove(0);
         var m=engine.members.get(p.getUUID());if(m==null)return false;
         try{
             var source=(net.minecraft.world.damagesource.DamageSource)target.getClass().getMethod("getLastDamageSource").invoke(target);
@@ -55,10 +55,10 @@ final class FinalHonours {
     static void register(){for(String phase:new String[]{"Pre","Post"})try{
         Class<? extends Event> type=(Class<? extends Event>)Class.forName("com.atsuishio.superbwarfare.api.event.ShootEvent$"+phase);
         Method shooter=type.getMethod("getShooter"),data=type.getMethod("getData");
-        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,false,(Class)type,(java.util.function.Consumer<Event>)event->{try{
+        MinecraftForge.EVENT_BUS.addListener(net.minecraftforge.eventbus.api.EventPriority.LOWEST,false,(Class)type,(java.util.function.Consumer<Event>)event->{try{
             if(BattlefieldOps.engine==null||!(shooter.invoke(event) instanceof ServerPlayer p))return;
             if(phase.equals("Pre")&&BattlefieldOps.engine.isDowned(p)){
-                if(event instanceof net.neoforged.bus.api.ICancellableEvent cancellable)cancellable.setCanceled(true);
+                if(event.isCancelable())event.setCanceled(true);
                 return;
             }
             Object gun=data.invoke(event);Object item=gun.getClass().getMethod("item").invoke(gun);boolean tool=false;

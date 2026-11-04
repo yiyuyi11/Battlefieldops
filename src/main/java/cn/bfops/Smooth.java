@@ -138,7 +138,7 @@ final class Smooth {
     static double deltaSeconds() {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return 0.05;
-        float seconds = mc.getTimer().getRealtimeDeltaTicks() / 20.0F;
+        float seconds = mc.getDeltaFrameTime();
         if (!(seconds > 0)) return 0.05;
         return Math.min(0.1, seconds);
     }

@@ -7,12 +7,12 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.TickEvent.PlayerTickEvent;
 import cn.bfops.voice.VoiceConfig;
 import cn.bfops.voice.common.audio.VoiceCue;
 import cn.bfops.voice.network.S2CConfigSyncPayload;
@@ -40,11 +40,11 @@ public final class FrontVoicePlayerStateEvents {
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
-    public void onLivingIncomingDamage(LivingIncomingDamageEvent event) {
+    public void onLivingIncomingDamage(LivingHurtEvent event) {
         if (event.isCanceled()) {
             return;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player) || player.server == null || player.isSpectator()) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.getServer() == null || player.isSpectator()) {
             return;
         }
         float remainingHealth = player.getHealth() + player.getAbsorptionAmount() - event.getAmount();
@@ -55,8 +55,9 @@ public final class FrontVoicePlayerStateEvents {
     }
 
     @SubscribeEvent
-    public void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || player.server == null || player.isSpectator()) {
+    public void onPlayerTick(PlayerTickEvent event) {
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
+        if (!(event.player instanceof ServerPlayer player) || player.getServer() == null || player.isSpectator()) {
             return;
         }
         handleBurningCue(player);
@@ -206,15 +207,15 @@ public final class FrontVoicePlayerStateEvents {
         if (player.isOnFire()) {
             return true;
         }
-        for (Holder<MobEffect> effect : player.getActiveEffectsMap().keySet()) {
-            if (effect.is(FrontVoiceServerRuntime.LR_FLAMMABLE_EFFECT_ID)) {
+        for (MobEffect effect : player.getActiveEffectsMap().keySet()) {
+            if (net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getKey(effect).equals(FrontVoiceServerRuntime.LR_FLAMMABLE_EFFECT_ID)) {
                 return true;
             }
         }
         return false;
     }
 
-    private boolean tryPlayExplosionCloseCue(ServerPlayer player, LivingIncomingDamageEvent event, float remainingHealth, long gameTick) {
+    private boolean tryPlayExplosionCloseCue(ServerPlayer player, LivingHurtEvent event, float remainingHealth, long gameTick) {
         if (!event.getSource().is(DamageTypeTags.IS_EXPLOSION) || remainingHealth <= 0.0F) {
             return false;
         }
@@ -244,7 +245,7 @@ public final class FrontVoicePlayerStateEvents {
 
     private void tryPlayHeavyHurtCue(
         ServerPlayer player,
-        LivingIncomingDamageEvent event,
+        LivingHurtEvent event,
         float remainingHealth,
         long gameTick,
         boolean higherPriorityPlayed

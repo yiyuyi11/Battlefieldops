@@ -189,8 +189,8 @@ final class LobbyLoadoutScreen extends FrontScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double x, double y, double h, double v) {if(dropdownOpen())return super.mouseScrolled(x,y,h,v);
-        return form.wheel(x, y, v) || super.mouseScrolled(x, y, h, v);
+    public boolean mouseScrolled(double x, double y, double v) {if(dropdownOpen())return super.mouseScrolled(x, y, v);
+        return form.wheel(x, y, v) || super.mouseScrolled(x, y, v);
     }
 
     @Override

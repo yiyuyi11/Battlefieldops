@@ -21,11 +21,11 @@ public class AceLagSimulator {
          killTimestamps.addLast(now);
 
          while (killTimestamps.size() > 10) {
-            killTimestamps.removeFirst();
+            killTimestamps.remove(0);
          }
 
          while (!killTimestamps.isEmpty() && now - killTimestamps.peekFirst() > 10000L) {
-            killTimestamps.removeFirst();
+            killTimestamps.remove(0);
          }
 
          int recentKills = killTimestamps.size();

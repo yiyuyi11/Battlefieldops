@@ -1,9 +1,9 @@
 package cn.bfops;
 
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 
 import java.lang.reflect.Method;
 
@@ -100,7 +100,8 @@ public final class XaeroGate {
     }
 
     @SubscribeEvent
-    public static void tick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+    public static void tick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
         // Driven from the client tick, not from a GUI render event: the gate must also hold while a
         // menu is open, and {@code RenderGuiEvent} stops firing then — a player sitting in the
         // deployment screen would get Xaero's map back. Tick is also the safer place to write a config
@@ -197,7 +198,7 @@ public final class XaeroGate {
 
     /** Restores on shutdown so an exit does not leave the profile modified on disk. */
     @SubscribeEvent
-    public static void shuttingDown(net.neoforged.neoforge.event.GameShuttingDownEvent event) {
+    public static void shuttingDown(net.minecraftforge.event.GameShuttingDownEvent event) {
         apply(false);
         applyRadar(false);
         applyChrome(false);

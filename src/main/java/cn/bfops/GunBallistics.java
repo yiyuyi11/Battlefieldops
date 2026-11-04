@@ -91,7 +91,7 @@ final class GunBallistics {
     private static Curve read(String gunId) throws ReflectiveOperationException {
         Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
         Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
-                .invoke(null, ResourceLocation.parse(gunId))).orElse(null);
+                .invoke(null, new ResourceLocation(gunId))).orElse(null);
         if (index == null) return new Curve(0, 0, List.of());
         Object data = index.getClass().getMethod("getGunData").invoke(index);
         Object bullet = data.getClass().getMethod("getBulletData").invoke(data);
@@ -150,7 +150,7 @@ final class GunBallistics {
     static void bakeIfChanged() {
         if (baked) return;
         baked = true;
-        Path file = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
+        Path file = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                 .resolve("battlefield_ops/ballistics.json");
         try {
             var catalog = Client.catalog;

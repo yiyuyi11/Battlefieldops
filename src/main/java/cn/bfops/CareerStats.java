@@ -37,7 +37,7 @@ final class CareerStats {
         if(attacker!=null&&VehicleKillCompat.collisionVehicle(source)!=null)collisions.put(victim.getUUID(),new Collision(attacker.getUUID(),System.currentTimeMillis()));
         else collisions.remove(victim.getUUID());
         if(attacker!=null){Engine.Member target=BattlefieldOps.engine.members.get(victim.getUUID()),sourceMember=BattlefieldOps.engine.members.get(attacker.getUUID());
-            if(target!=null&&sourceMember!=null&&target.map.equals(sourceMember.map)&&target.team>=0&&sourceMember.team>=0&&target.team!=sourceMember.team){var history=threats.computeIfAbsent(victim.getUUID(),k->new ArrayDeque<>());long now=System.currentTimeMillis();while(!history.isEmpty()&&now-history.getFirst().at>5000)history.removeFirst();history.addLast(new Threat(attacker.getUUID(),target.map,now));while(history.size()>16)history.removeFirst();}
+            if(target!=null&&sourceMember!=null&&target.map.equals(sourceMember.map)&&target.team>=0&&sourceMember.team>=0&&target.team!=sourceMember.team){var history=threats.computeIfAbsent(victim.getUUID(),k->new ArrayDeque<>());long now=System.currentTimeMillis();while(!history.isEmpty()&&now-history.peekFirst().at>5000)history.removeFirst();history.addLast(new Threat(attacker.getUUID(),target.map,now));while(history.size()>16)history.removeFirst();}
         }
     }
     void hit(ServerPlayer attacker,net.minecraft.world.entity.Entity victim,String weapon,String type){
@@ -150,10 +150,10 @@ final class CareerStats {
         }
         if(saved)repeated(p,m,"guardian");
         threats.remove(victim.getUUID());
-        boolean positive=p.getActiveEffects().stream().anyMatch(effect->effect.getEffect().value().isBeneficial());
-        boolean negative=p.getActiveEffects().stream().anyMatch(effect->!effect.getEffect().value().isBeneficial());
+        boolean positive=p.getActiveEffects().stream().anyMatch(effect->effect.getEffect().isBeneficial());
+        boolean negative=p.getActiveEffects().stream().anyMatch(effect->!effect.getEffect().isBeneficial());
         if(positive&&!negative&&(p.hasEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)||p.hasEffect(net.minecraft.world.effect.MobEffects.REGENERATION)))repeated(p,m,"frenzy");
-        if(victim.hasEffect(net.minecraft.world.effect.MobEffects.BLINDNESS)||victim.getActiveEffects().stream().anyMatch(effect->java.util.Set.of("lrtactical:blinded","superbwarfare:shock").contains(net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect().value()).toString())))repeated(p,m,"flank");
+        if(victim.hasEffect(net.minecraft.world.effect.MobEffects.BLINDNESS)||victim.getActiveEffects().stream().anyMatch(effect->java.util.Set.of("lrtactical:blinded","superbwarfare:shock").contains(net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getKey(effect.getEffect()).toString())))repeated(p,m,"flank");
         Collision collision=collisions.remove(victim.getUUID());
         if(collision!=null&&collision.driver.equals(p.getUUID())&&System.currentTimeMillis()-collision.at<=2000)repeated(p,m,"roadhog");
         Strike strike=strikes.remove(victim.getUUID());long stamp=System.currentTimeMillis();
@@ -207,12 +207,12 @@ final class CareerStats {
         var onlineIds=p.server.getPlayerList().getPlayers().stream().map(v->v.getUUID().toString()).collect(java.util.stream.Collectors.toSet());
         var live=sorted.stream().filter(v->onlineIds.contains(v.getKey())).toList();var offline=sorted.stream().filter(v->!onlineIds.contains(v.getKey())).toList();
         var merged=new ArrayList<Map.Entry<String,Entry>>();for(int i=0;i<Math.max(live.size(),offline.size());i++){if(i<live.size())merged.add(live.get(i));if(i<offline.size())merged.add(offline.get(i));}sorted=merged;
-        int from=Math.min(Math.max(0,offset),sorted.size()),to=Math.min(sorted.size(),from+Math.clamp(limit,1,128));
+        int from=Math.min(Math.max(0,offset),sorted.size()),to=Math.min(sorted.size(),from+cn.bfops.Java17.clamp(limit,1,128));
         var rows=new ArrayList<Map<String,Object>>();
         for(var pair:sorted.subList(from,to)){
             UUID id;try{id=UUID.fromString(pair.getKey());}catch(IllegalArgumentException ex){continue;}
             var online=p.server.getPlayerList().getPlayer(id);var e=pair.getValue();var row=new LinkedHashMap<String,Object>();
-            row.put("uuid",id.toString());row.put("name",e.name);row.put("score",e.score);row.put("kills",e.kills);row.put("deaths",e.deaths);row.put("assists",e.assists);row.put("revives",e.revives);row.put("online",online!=null);row.put("ping",online==null?0:online.connection.latency());rows.add(row);
+            row.put("uuid",id.toString());row.put("name",e.name);row.put("score",e.score);row.put("kills",e.kills);row.put("deaths",e.deaths);row.put("assists",e.assists);row.put("revives",e.revives);row.put("online",online!=null);row.put("ping",online==null?0:cn.bfops.LeaderboardPing.of(online));rows.add(row);
         }
         Network.send(p,Map.of("type","leaderboard","rows",rows,"offset",from,"total",sorted.size(),"requestId",requestId));
     }

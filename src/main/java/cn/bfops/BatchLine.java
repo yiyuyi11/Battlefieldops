@@ -68,7 +68,7 @@ final class BatchLine {
             List<int[]> merged = new ArrayList<>();
             for (int[] run : sorted) {
                 if (!merged.isEmpty()) {
-                    int[] last = merged.getLast();
+                    int[] last = merged.get(merged.size() - 1);
                     // Contiguous or overlapping: extend. The +1 tolerance is what merges a 2px-thick line's
                     // adjacent samples (which touch at a shared column) into one run.
                     if (run[0] <= last[1]) {

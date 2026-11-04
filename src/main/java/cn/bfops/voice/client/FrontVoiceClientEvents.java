@@ -1,11 +1,9 @@
 package cn.bfops.voice.client;
 
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod.EventBusSubscriber;
+import net.minecraftforge.client.event.RenderGuiEvent;
 import cn.bfops.voice.client.hud.QuickMessageHudHandler;
 
 /**
@@ -18,19 +16,8 @@ public final class FrontVoiceClientEvents {
     }
 
     @SubscribeEvent
-    public static void keys(RegisterKeyMappingsEvent event) {
-        event.register(FrontVoiceKeyMappings.OPEN_QUICK_MESSAGE_HUD);
-        event.register(FrontVoiceKeyMappings.TACTICAL_COMMUNICATION);
-    }
-
-    @SubscribeEvent
-    public static void setup(FMLClientSetupEvent event) {
-        event.enqueueWork(FrontVoiceClientBootstrap::init);
-    }
-
-    @SubscribeEvent
     public static void renderHud(RenderGuiEvent.Post event) {
-        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
+        float partialTick = event.getPartialTick();
         QuickMessageHudHandler.renderHud(event.getGuiGraphics(), partialTick);
     }
 }

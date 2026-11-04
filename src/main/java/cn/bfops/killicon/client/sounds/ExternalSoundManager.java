@@ -893,7 +893,7 @@ public class ExternalSoundManager {
                String baseName = resolveBaseName(soundName);
                Files.deleteIfExists(presetDir.resolve(baseName + ".ogg"));
                Files.deleteIfExists(presetDir.resolve(baseName + ".wav"));
-               ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "sounds/kill/" + soundName);
+               ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "sounds/kill/" + soundName);
 
                try (InputStream stream = ((Resource)Minecraft.getInstance().getResourceManager().getResource(resourceLocation).get()).open()) {
                   Files.copy(stream, targetPath, StandardCopyOption.REPLACE_EXISTING);
@@ -1276,7 +1276,7 @@ public class ExternalSoundManager {
          byte[] bytes = null;
 
          try {
-            ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "sounds/kill/" + soundName);
+            ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "sounds/kill/" + soundName);
 
             try (InputStream stream = ((Resource)Minecraft.getInstance().getResourceManager().getResource(resourceLocation).get()).open()) {
                bytes = stream.readAllBytes();
@@ -1618,7 +1618,7 @@ public class ExternalSoundManager {
             String baseName = resolveBaseName(soundName);
             Path targetPath = COMMON_SOUNDS_DIR.resolve(baseName + ".ogg");
             if (forceReset || !Files.exists(targetPath)) {
-               ResourceLocation resourceLocation = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "sounds/kill/" + soundName);
+               ResourceLocation resourceLocation = new ResourceLocation("battlefield_ops", "sounds/kill/" + soundName);
 
                try (InputStream stream = ((Resource)Minecraft.getInstance().getResourceManager().getResource(resourceLocation).get()).open()) {
                   Files.copy(stream, targetPath, StandardCopyOption.REPLACE_EXISTING);

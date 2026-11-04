@@ -20,7 +20,7 @@ import cn.bfops.killicon.client.render.IHudRenderer;
 
 public class MainConfigScreen extends Screen {
    private final Screen parent;
-   private static final ResourceLocation BACKGROUND_TEXTURE = ResourceLocation.fromNamespaceAndPath("minecraft", "textures/block/gilded_blackstone.png");
+   private static final ResourceLocation BACKGROUND_TEXTURE = new ResourceLocation("minecraft", "textures/block/gilded_blackstone.png");
    private final ConfigScreenHeader header;
    private boolean quickScoreboardMode = false;
    private GDButton btnExitNoSave;
@@ -184,7 +184,7 @@ public class MainConfigScreen extends Screen {
             // blurred screenshot and then pastes the menu background texture over the whole screen, and
             // because super.render() calls renderBackground again the screen ends up double-backgrounded
             // and the panels underneath are hidden behind an opaque blurred wash.
-            this.renderTransparentBackground(guiGraphics);
+            this.renderBackground(guiGraphics);
          }
 
          int textHeight = 9;
@@ -208,7 +208,7 @@ public class MainConfigScreen extends Screen {
             this.renderGildedBlackstoneBackground(guiGraphics);
          } else {
             // See the note above: transparent backdrop, never the blurred menu background.
-            this.renderTransparentBackground(guiGraphics);
+            this.renderBackground(guiGraphics);
          }
 
          this.header.render(guiGraphics, this.width, mouseX, mouseY, partialTick);
@@ -237,7 +237,7 @@ public class MainConfigScreen extends Screen {
       if (this.minecraft != null && this.minecraft.level == null) {
          this.renderGildedBlackstoneBackground(guiGraphics);
       } else {
-         this.renderTransparentBackground(guiGraphics);
+         this.renderBackground(guiGraphics);
       }
    }
 
@@ -299,7 +299,7 @@ public class MainConfigScreen extends Screen {
 
    public boolean mouseScrolled(double mouseX, double mouseY, double horizontal, double delta) {
       if (this.showExitConfirmation) {
-         return super.mouseScrolled(mouseX, mouseY, horizontal, delta);
+         return super.mouseScrolled(mouseX, mouseY, delta);
       } else {
          ConfigTabContent activeTab = this.header.getSelectedTabContent();
          if (activeTab instanceof ElementConfigContent elementContent
@@ -311,7 +311,7 @@ public class MainConfigScreen extends Screen {
          if (this.header.mouseScrolled(mouseX, mouseY, delta)) {
             return true;
          } else {
-            return activeTab != null && activeTab.mouseScrolled(mouseX, mouseY, delta) ? true : super.mouseScrolled(mouseX, mouseY, horizontal, delta);
+            return activeTab != null && activeTab.mouseScrolled(mouseX, mouseY, delta) ? true : super.mouseScrolled(mouseX, mouseY, delta);
          }
       }
    }
@@ -367,7 +367,7 @@ public class MainConfigScreen extends Screen {
       if (material != null && material.contains(":")) {
          String[] split = material.split(":", 2);
          if (split.length == 2 && !split[0].isEmpty() && !split[1].isEmpty()) {
-            ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(split[0], "textures/block/" + split[1] + ".png");
+            ResourceLocation texture = new ResourceLocation(split[0], "textures/block/" + split[1] + ".png");
             return this.minecraft != null && !this.minecraft.getResourceManager().getResource(texture).isEmpty() ? texture : BACKGROUND_TEXTURE;
          } else {
             return BACKGROUND_TEXTURE;

@@ -8,7 +8,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
+import net.minecraftforge.client.event.RenderLivingEvent;
 import java.util.*;
 
 /** Local renderer for our tagged vanilla carriers; no custom entity type or mandatory client handshake. */
@@ -22,8 +22,8 @@ public final class ReferenceProps {
         if(FAILED.contains(kind))return null;
         var found=CACHE.get(kind);if(found!=null)return found;
         var mc=Minecraft.getInstance();
-        try(var reader=mc.getResourceManager().openAsReader(ResourceLocation.fromNamespaceAndPath("battlefield_ops","geo/"+kind.id+".geo.json"))){
-            if(mc.getResourceManager().getResource(ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/item/"+kind.id+".png")).isEmpty())return null;
+        try(var reader=mc.getResourceManager().openAsReader(new ResourceLocation("battlefield_ops","geo/"+kind.id+".geo.json"))){
+            if(mc.getResourceManager().getResource(new ResourceLocation("battlefield_ops","textures/item/"+kind.id+".png")).isEmpty())return null;
             found=ReferenceGeometry.bake(JsonParser.parseReader(reader).getAsJsonObject());
             if(found.vertices().isEmpty())throw new IllegalArgumentException("Empty support model");
             float minX=Float.POSITIVE_INFINITY,minY=minX,minZ=minX,maxX=Float.NEGATIVE_INFINITY,maxY=maxX,maxZ=maxX;
@@ -45,16 +45,16 @@ public final class ReferenceProps {
             poses.mulPose(com.mojang.math.Axis.XP.rotationDegrees(gui?25:first?10:0));
             poses.mulPose(com.mojang.math.Axis.YP.rotationDegrees(gui?225:first?210:180));
             poses.scale(scale,scale,scale);poses.translate(-b.x,-b.y,-b.z);
-            var vertices=buffers.getBuffer(RenderType.entityCutoutNoCull(ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/item/"+kind.id+".png")));
+            var vertices=buffers.getBuffer(RenderType.entityCutoutNoCull(new ResourceLocation("battlefield_ops","textures/item/"+kind.id+".png")));
             var pose=poses.last();
-            for(var v:mesh.vertices())vertices.addVertex(pose,v.x(),v.y(),v.z()).setColor(255,255,255,255).setUv(v.u(),v.v()).setOverlay(OverlayTexture.NO_OVERLAY).setLight(light).setNormal(pose,v.nx(),v.ny(),v.nz());
+            emit(mesh, vertices, pose, light);
         }finally{poses.popPose();}
         return true;
     }
     static boolean render(RenderLivingEvent.Pre<?,?> event){
         if(!(event.getEntity() instanceof ArmorStand stand))return false;
         var kind=ConquestEquipment.kind(stand.getItemBySlot(EquipmentSlot.HEAD));if(kind==null)return false;
-        var mc=Minecraft.getInstance();var texture=ResourceLocation.fromNamespaceAndPath("battlefield_ops","textures/item/"+kind.id+".png");
+        var mc=Minecraft.getInstance();var texture=new ResourceLocation("battlefield_ops","textures/item/"+kind.id+".png");
         if(FAILED.contains(kind)||mc.getResourceManager().getResource(texture).isEmpty())return false;
         ReferenceGeometry.Mesh mesh=mesh(kind);if(mesh==null)return false;
         PoseStack poses=event.getPoseStack();poses.pushPose();
@@ -63,9 +63,18 @@ public final class ReferenceProps {
             float scale=switch(kind){case AMMO_BOX,MED_BOX->.88f;case RADIO_BEACON->1.1f;case AMMO_BAG,MEDIC_BAG->2;default->1;};
             poses.translate(0,kind==SupportRules.Kind.GROUND_SENSOR?.04:.05,0);poses.scale(scale,scale,scale);
             var vertices=event.getMultiBufferSource().getBuffer(RenderType.entityCutoutNoCull(texture));var pose=poses.last();
-            for(var v:mesh.vertices())vertices.addVertex(pose,v.x(),v.y(),v.z()).setColor(255,255,255,255).setUv(v.u(),v.v()).setOverlay(OverlayTexture.NO_OVERLAY).setLight(event.getPackedLight()).setNormal(pose,v.nx(),v.ny(),v.nz());
+            emit(mesh, vertices, pose, event.getPackedLight());
         }finally{poses.popPose();}
         return true;
+    }
+    private static void emit(ReferenceGeometry.Mesh mesh, com.mojang.blaze3d.vertex.VertexConsumer buffer,
+                             PoseStack.Pose pose, int light) {
+        for (var vertex : mesh.vertices()) {
+            buffer.vertex(pose.pose(), vertex.x(), vertex.y(), vertex.z())
+                    .color(255, 255, 255, 255).uv(vertex.u(), vertex.v())
+                    .overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light)
+                    .normal(pose.normal(), vertex.nx(), vertex.ny(), vertex.nz()).endVertex();
+        }
     }
     private ReferenceProps(){}
 }

@@ -28,7 +28,7 @@ public final class NativeXaero {
         return available&&!failed;
     }
     public static boolean room(){return Client.serverSupported()&&Client.state.has("inMatch")&&Client.state.get("inMatch").getAsBoolean();}
-    public static boolean present(){return net.neoforged.fml.ModList.get().isLoaded("xaerominimap");}
+    public static boolean present(){return net.minecraftforge.fml.ModList.get().isLoaded("xaerominimap");}
     public static boolean enabled(){
         var s=Client.state;if(!s.has("hud"))return true;var h=s.getAsJsonObject("hud");
         if(h.has("battleMapEnabled"))return h.get("battleMapEnabled").getAsBoolean();
@@ -156,7 +156,7 @@ public final class NativeXaero {
                 var a=vertices[j];var b=vertices[i];if((a[1]>sample)!=(b[1]>sample))crossings[n++]=a[0]+(sample-a[1])*(b[0]-a[0])/(b[1]-a[1]);
             }
             Arrays.sort(crossings,0,n);int cursor=left;
-            for(int i=0;i+1<n;i+=2){int start=Math.clamp((int)Math.floor(crossings[i]),left,right),end=Math.clamp((int)Math.ceil(crossings[i+1]),left,right);if(start>cursor)g.fill(cursor,y,start,bottom,0x44000000);cursor=Math.max(cursor,end);}
+            for(int i=0;i+1<n;i+=2){int start=cn.bfops.Java17.clamp((int)Math.floor(crossings[i]),left,right),end=cn.bfops.Java17.clamp((int)Math.ceil(crossings[i+1]),left,right);if(start>cursor)g.fill(cursor,y,start,bottom,0x44000000);cursor=Math.max(cursor,end);}
             if(cursor<right)g.fill(cursor,y,right,bottom,0x44000000);
         }
     }
@@ -169,7 +169,7 @@ public final class NativeXaero {
             Object option=Class.forName("xaero.hud.minimap.common.config.option.MinimapProfiledConfigOptions").getField("ZOOM").get(null);
             Object value=config.getMethod("get",optionClass).invoke(profile,option);
             if(!(value instanceof Integer level))return false;
-            config.getMethod("set",optionClass,Object.class).invoke(profile,option,Math.clamp(level+(in?1:-1),1,6));return true;
+            config.getMethod("set",optionClass,Object.class).invoke(profile,option,cn.bfops.Java17.clamp(level+(in?1:-1),1,6));return true;
         }catch(ReflectiveOperationException|RuntimeException ex){BattlefieldOps.LOG.debug("Xaero zoom control unavailable",ex);return false;}
     }
     static void settings(net.minecraft.client.gui.screens.Screen parent){

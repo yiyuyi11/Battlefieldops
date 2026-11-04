@@ -116,7 +116,7 @@ final class MateMarker {
                         boolean downed, int cx, int cy, int size) {
         String path = path(kitId, squad, downed);
         if (path == null || size <= 0) return false;
-        var location = net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("battlefield_ops", path);
+        var location = new net.minecraft.resources.ResourceLocation("battlefield_ops", path);
         var mc = net.minecraft.client.Minecraft.getInstance();
         if (mc == null || mc.getResourceManager().getResource(location).isEmpty()) return false;
         int color = tint(squad, downed);

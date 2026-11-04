@@ -47,7 +47,7 @@ final class GunSpec {
     private static Spec read(String id, Map<String, String> selected) throws ReflectiveOperationException {
         Class<?> api = Class.forName("com.tacz.guns.api.TimelessAPI");
         Object index = ((Optional<?>) api.getMethod("getCommonGunIndex", ResourceLocation.class)
-                .invoke(null, ResourceLocation.parse(id))).orElse(null);
+                .invoke(null, new ResourceLocation(id))).orElse(null);
         if (index == null) return UNKNOWN;
         Object data = index.getClass().getMethod("getGunData").invoke(index);
         Class<?> dataType = data.getClass();
@@ -119,22 +119,8 @@ final class GunSpec {
 
     private static int magazine(String id, Map<String, String> selected, Object data) {
         try {
-            ItemStack bare = Fittings.gun(id);
-            Class<?> igun = Class.forName("com.tacz.guns.api.item.IGun");
-            Object item = igun.getMethod("getIGunOrNull", ItemStack.class).invoke(null, bare);
-            ItemStack current = bare.copy();
-            if (item != null) {
-                for (String attachment : selected.values()) {
-                    if (attachment == null || attachment.isEmpty()) continue;
-                    ItemStack part = Fittings.attachment(attachment);
-                    if ((boolean) igun.getMethod("allowAttachment", ItemStack.class, ItemStack.class)
-                            .invoke(item, current, part)) {
-                        igun.getMethod("installAttachment", net.minecraft.core.HolderLookup.Provider.class,
-                                        ItemStack.class, ItemStack.class)
-                                .invoke(item, net.minecraft.client.Minecraft.getInstance().player.registryAccess(), current, part);
-                    }
-                }
-            }
+            ItemStack current = GunPreview.assembled(id, selected);
+            if (current.isEmpty()) throw new IllegalStateException("Gun stack unavailable: " + id);
             Class<?> utils = Class.forName("com.tacz.guns.util.AttachmentDataUtils");
             Object value = utils.getMethod("getAmmoCountWithAttachment", ItemStack.class, data.getClass())
                     .invoke(null, current, data);

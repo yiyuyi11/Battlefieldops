@@ -3,10 +3,10 @@ package cn.bfops.voice.client.hud;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.util.Mth;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.bus.api.SubscribeEvent;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.lwjgl.glfw.GLFW;
 import cn.bfops.voice.VoiceConfig;
 import cn.bfops.voice.client.FrontVoiceKeyMappings;
@@ -75,11 +75,12 @@ public final class QuickMessageHudHandler {
     }
 
     public static void init() {
-        NeoForge.EVENT_BUS.register(INSTANCE);
+        MinecraftForge.EVENT_BUS.register(INSTANCE);
     }
 
     @SubscribeEvent
-    public void onClientTick(final ClientTickEvent.Post event) {
+    public void onClientTick(final ClientTickEvent event) {
+        if(event.phase!=net.minecraftforge.event.TickEvent.Phase.END)return;
         Minecraft mc = Minecraft.getInstance();
         if(!cn.bfops.BattleServerMode.clientActive||!cn.bfops.Client.inBattleRoom()||mc.player==null||mc.level==null||mc.screen!=null||mc.getOverlay()!=null||!mc.isWindowActive()){
             while(FrontVoiceKeyMappings.TACTICAL_COMMUNICATION.consumeClick()){}

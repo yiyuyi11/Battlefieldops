@@ -45,7 +45,7 @@ final class CareerScreen extends FrontScreen {
         if(bottom>top)g.fill(0,top,width,bottom,0xe0101820);
         ranking.render(g,x,y,dt);personal.render(g,x,y,dt);
     }
-    public boolean mouseScrolled(double x,double y,double h,double v){if(dropdownOpen())return super.mouseScrolled(x,y,h,v);return ranking.wheel(x,y,v)||personal.wheel(x,y,v)||super.mouseScrolled(x,y,h,v);}
+    public boolean mouseScrolled(double x, double y, double v){if(dropdownOpen())return super.mouseScrolled(x, y, v);return ranking.wheel(x,y,v)||personal.wheel(x,y,v)||super.mouseScrolled(x, y, v);}
     public boolean isPauseScreen(){return false;}
     public void onClose(){minecraft.setScreen(parent);}
 }

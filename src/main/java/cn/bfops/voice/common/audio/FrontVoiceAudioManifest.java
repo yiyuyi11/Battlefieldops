@@ -23,7 +23,7 @@ import java.util.Set;
 public final class FrontVoiceAudioManifest {
     private static final String MANIFEST_RESOURCE_PATH = "assets/" + VoiceMain.MODID + "/frontvoice_audio_manifest.json";
     private static final ResourceLocation MANIFEST_ID =
-        ResourceLocation.fromNamespaceAndPath(VoiceMain.MODID, "frontvoice_audio_manifest.json");
+        new ResourceLocation(VoiceMain.MODID, "frontvoice_audio_manifest.json");
     private static final FrontVoiceAudioManifest INSTANCE = new FrontVoiceAudioManifest();
 
     private final Set<String> eventIds = new LinkedHashSet<>();

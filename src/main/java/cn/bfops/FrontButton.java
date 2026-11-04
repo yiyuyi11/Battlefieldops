@@ -93,7 +93,7 @@ final class FrontButton extends Button {
         boolean on = isHoveredOrFocused() && active;
         boolean reference = Ui.bf1();
         long now=System.nanoTime();float dt=Math.min(.1f,(now-lastFrame)/1_000_000_000f);lastFrame=now;
-        hoverProgress=Math.clamp(hoverProgress+(on||selected?1:-1)*dt*5,0,1);
+        hoverProgress=cn.bfops.Java17.clamp(hoverProgress+(on||selected?1:-1)*dt*5,0,1);
         // White-on-black is the reference look for *list rows*. Large cells (the deploy screen's weapon and
         // gear tiles) keep a dark body with a thin accent instead: a wall of white blocks is not the
         // reference and it also made the selected tile indistinguishable from the rest.
@@ -102,7 +102,7 @@ final class FrontButton extends Button {
                 ? (header ? 0x66000000 : !active ? 0x2a000000 : lit ? 0xf2f4f5f6 : 0x330b0e11)
                 : (header ? 0xb0202a34 : !active ? 0x30203038 : Ui.PANEL_ALT);
         g.fill(getX(),getY(),getX()+width,getY()+height,base);
-        if(!reference&&(on||selected)&&active&&!header)g.blitSprite(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("battlefield_ops","bf1/button"),getX(),getY(),width,height);
+        if(!reference&&(on||selected)&&active&&!header)Ui.sprite(g, new net.minecraft.resources.ResourceLocation("battlefield_ops","bf1/button"),getX(),getY(),width,height);
         if(header)g.fill(getX(),getY()+height-1,getX()+width,getY()+height,reference?0x24ffffff:Ui.FRAME);
         if(selected&&active&&!reference){
             g.fill(getX(),getY(),getX()+width,getY()+height,0x585f7c8a);

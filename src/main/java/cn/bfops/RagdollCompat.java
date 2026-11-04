@@ -24,7 +24,7 @@ final class RagdollCompat {
         if (installed == null) {
             boolean found = false;
             try {
-                for (var mod : net.neoforged.fml.ModList.get().getMods()) {
+                for (var mod : net.minecraftforge.fml.ModList.get().getMods()) {
                     String id = mod.getModId() == null ? "" : mod.getModId().toLowerCase(Locale.ROOT);
                     String name = mod.getDisplayName() == null ? "" : mod.getDisplayName().toLowerCase(Locale.ROOT);
                     if (id.contains("ragdoll") || name.contains("ragdoll")) {

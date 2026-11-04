@@ -11,7 +11,7 @@ import net.minecraft.resources.ResourceLocation;
  * so the font can be re-enabled once the sheet is verified in-game.
  */
 final class UiFont {
-    static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath("battlefield_ops", "ui");
+    static final ResourceLocation ID = new ResourceLocation("battlefield_ops", "ui");
 
     /** Wraps plain text so it can render in the UI font. Currently a plain vanilla-font literal. */
     static Component text(String value) {
