@@ -6,7 +6,7 @@ plugins { id 'java'; id 'net.minecraftforge.gradle' version '6.0.54' }
 apply plugin: 'org.spongepowered.mixin'
 mixin { add sourceSets.main, 'battlefield_ops.refmap.json'; config 'battlefield_ops.mixins.json'; config 'battlefield_ops.crawl.mixins.json' }
 group = 'cn.bfops'
-version = '0.8.34-forge1201'
+version = '0.8.35-forge1201'
 base.archivesName = 'battlefield_ops'
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 minecraft { mappings channel: 'official', version: '1.20.1' }
