@@ -35,11 +35,11 @@ public final class Network {
         public static final StreamCodec<RegistryFriendlyByteBuf,MapSave> CODEC=StreamCodec.of((b,p)->b.writeByteArray(p.data),b->new MapSave(b.readByteArray(30000)));
         public Type<MapSave> type(){return TYPE;}
     }
-    public static void register(RegisterPayloadHandlersEvent e){var r=e.registrar("3").optional();r.playToClient(Mode.TYPE,Mode.CODEC,(p,c)->c.enqueueWork(()->modeReceiver.accept(p.enabled)));r.playToServer(Request.TYPE,Request.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);}));r.playToClient(State.TYPE,State.CODEC,(p,c)->c.enqueueWork(()->receiver.accept(p.json)));r.playToServer(MapSave.TYPE,MapSave.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp)MapTransfer.receive(sp,p.data);}));}
+    public static void register(RegisterPayloadHandlersEvent e){var r=e.registrar("3").optional();r.playToClient(GroupRooms.ProxyConnect.TYPE,GroupRooms.ProxyConnect.CODEC,(p,c)->{});r.playToClient(Mode.TYPE,Mode.CODEC,(p,c)->c.enqueueWork(()->modeReceiver.accept(p.enabled)));r.playToServer(Request.TYPE,Request.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp&&BattlefieldOps.engine!=null)BattlefieldOps.engine.request(sp,p.json);}));r.playToClient(State.TYPE,State.CODEC,(p,c)->c.enqueueWork(()->receiver.accept(p.json)));r.playToServer(MapSave.TYPE,MapSave.CODEC,(p,c)->c.enqueueWork(()->{if(c.player() instanceof ServerPlayer sp)MapTransfer.receive(sp,p.data);}));}
     public static boolean supported(ServerPlayer p){
         // Bots (fake players) have no client: treat them as unsupported so state/award packets never
         // reach their dropped connection.
-        if(BattlefieldOps.engine!=null && BattlefieldOps.engine.isBot(p))return false;
+        if(p==null||p.connection==null||(BattlefieldOps.engine!=null && BattlefieldOps.engine.isBot(p)))return false;
         return net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,State.TYPE.id()) && net.neoforged.neoforge.network.registration.NetworkRegistry.hasChannel((net.neoforged.neoforge.common.extensions.ICommonPacketListener)(Object)p.connection,Request.TYPE.id());
     }
     public static void send(ServerPlayer p,Object state){if(!supported(p))return;String s=WIRE_JSON.toJson(state);if(s.length()>780000||s.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>900000)throw new IllegalStateException("响应过大");PacketDistributor.sendToPlayer(p,new State(s));}

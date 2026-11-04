@@ -113,7 +113,7 @@ final class ChoiceScreen extends FrontScreen {
             Choice choice = all.get(i);
             Layout.Rect row = listForm.take(Layout.ROW + 4);
             place(listForm, row, choice.name, choice.id.equals(preview == null ? "" : preview.id) ? "●" : "",
-                    choice.kind, choice.icon, true, () -> {
+                    choice.kind.equals("gun") ? "gunart" : choice.kind, choice.icon, true, () -> {
                         preview = choice;
                         rebuild();
                     });
@@ -169,7 +169,7 @@ final class ChoiceScreen extends FrontScreen {
         int nameY = body.bottom() - 30;
         Layout.Rect icon = new Layout.Rect(body.x() + 6, body.y() + 6, body.w() - 12,
                 Math.max(16, nameY - body.y() - 12));
-        AssetIcons.draw(graphics, choice.kind, choice.icon, icon.x(), icon.y(), icon.w(), icon.h());
+        AssetIcons.draw(graphics, choice.kind.equals("gun") ? "gunart" : choice.kind, choice.icon, icon.x(), icon.y(), icon.w(), icon.h());
         graphics.drawString(font, Ui.clip(font, choice.name, body.w() - 12),
                 body.x() + 6, nameY + 2, Ui.TEXT, false);
         graphics.drawString(font, Ui.clip(font, "@"+LibrarySource.name(choice.icon)+" · "+choice.icon, body.w() - 12),

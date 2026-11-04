@@ -10,7 +10,7 @@ final class LobbyDirectory {
         for(var e:rows)if(e.isJsonObject()){
             var row=e.getAsJsonObject();
             if(!mode.isEmpty()&&!mode.equals(Engine.str(row,"mode","")))continue;
-            String hay=(Engine.str(row,"id","")+" "+Engine.str(row,"name","")+" "+Engine.str(row,"modeName","")).toLowerCase(Locale.ROOT);
+            String hay=(Engine.str(row,"id","")+" "+Engine.str(row,"name","")+" "+Engine.str(row,"modeName","")+" "+Engine.str(row,"backend","")).toLowerCase(Locale.ROOT);
             if(!hay.contains(q))continue;
             boolean exists=bool(row,"room"),running=bool(row,"running");
             if(status.equals("等待开始")&&(!exists||running))continue;

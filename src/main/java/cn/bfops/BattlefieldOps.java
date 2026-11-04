@@ -70,7 +70,16 @@ public final class BattlefieldOps {
                     try{engine.setPlayerLevel(target,level);c.getSource().sendSuccess(()->net.minecraft.network.chat.Component.literal("已设置 "+target.getScoreboardName()+" 的战地等级为 "+level),true);return 1;}
                     catch(java.io.IOException ex){c.getSource().sendFailure(net.minecraft.network.chat.Component.literal("等级保存失败，原文件已保留"));return 0;}
                 }))))));
-        NeoForge.EVENT_BUS.addListener((LivingDeathEvent e)->{if(engine!=null&&e.getEntity() instanceof ServerPlayer p&&engine.members.containsKey(p.getUUID())){e.setCanceled(true);engine.death(p,VehicleKillCompat.attacker(e.getSource())!=null?VehicleKillCompat.attacker(e.getSource()):p.getKillCredit() instanceof ServerPlayer k?k:engine.recentAttacker(p));}});
+        NeoForge.EVENT_BUS.addListener((LivingDeathEvent event) -> {
+            if (engine == null || !(event.getEntity() instanceof ServerPlayer player)
+                    || !engine.members.containsKey(player.getUUID())) return;
+            event.setCanceled(true);
+            ServerPlayer attacker = VehicleKillCompat.attacker(event.getSource());
+            ServerPlayer credited = attacker != null ? attacker
+                    : player.getKillCredit() instanceof ServerPlayer killer ? killer : engine.recentAttacker(player);
+            var focus = attacker != null ? attacker : event.getSource().getEntity();
+            engine.death(player, credited, focus);
+        });
         NeoForge.EVENT_BUS.addListener((LivingIncomingDamageEvent e)->{
             if(engine!=null&&e.getEntity() instanceof ServerPlayer p){
                 ServerPlayer damageAttacker=VehicleKillCompat.attacker(e.getSource());

@@ -377,16 +377,55 @@ final class OpsScreen extends FrontScreen {
         if(Client.state.has("maps"))for(var value:Client.state.getAsJsonArray("maps")){var m=value.getAsJsonObject();choices.add(new ChoiceScreen.Choice(Engine.str(m,"id",""),Engine.str(m,"name","")+" · "+Engine.str(m,"modeName",""),""));}
         openChoice("选择要编辑的地图",selected,choices,id->discardThen(()->{selected=id;pendingLoad=true;action("state");}));
     }
-    void quickPlace(int tool,net.minecraft.world.phys.Vec3 at,boolean freshBoundary){
+    void quickPlace(int tool,net.minecraft.world.phys.Vec3 at){
         Model.require(draft!=null,"请先选择地图");double x=Math.floor(at.x)+.5,z=Math.floor(at.z)+.5,y=at.y;
         switch(tool){
             case 0 -> {Model.require(draft.points.size()<24,"据点最多 24 个");var p=new Model.Point();p.id="P"+(draft.points.size()+1);while(draft.points.stream().map(v->v.id).toList().contains(p.id))p.id+="_";p.x=x;p.y=y;p.z=z;draft.points.add(p);pointIndex=draft.points.size()-1;}
-            case 1,2 -> {Model.require(draft.spawns.size()<32,"出生点最多 32 个");var p=new Model.Spawn();p.team=tool-1;p.id=(tool==1?"机械轴心":"格雷同盟")+"出生点"+(draft.spawns.size()+1);p.x=x;p.y=y;p.z=z;draft.spawns.add(p);spawnIndex=draft.spawns.size()-1;}
-            case 3 -> {Model.require(draft.supplies.size()<32,"补给点数量已满");draft.supplies.add(new VehicleSupply.Supply("补给"+(draft.supplies.size()+1),-1,x,y,z,12,true,true,true));supplyIndex=draft.supplies.size()-1;}
-            case 4 -> {Model.require(draft.eliteSpawns.size()<24,"精英点数量已满");var p=new EliteRules.Spawn();p.id="精英"+(draft.eliteSpawns.size()+1);p.x=x;p.y=y;p.z=z;draft.eliteSpawns.add(p);eliteSpawnIndex=draft.eliteSpawns.size()-1;}
-            case 5 -> {if(freshBoundary)draft.boundary.clear();Model.require(draft.boundary.size()<64,"边界最多 64 个顶点");draft.boundary.add(new Model.Vec(x,z));}
+            case 1,2 -> {Model.require(draft.spawns.size()<32,"出生点最多 32 个");var p=new Model.Spawn();p.team=tool-1;p.id=quickId(Factions.name(draft,p.team)+"出生点",draft.spawns.stream().map(v->v.id).toList());p.x=x;p.y=y;p.z=z;draft.spawns.add(p);spawnIndex=draft.spawns.size()-1;}
+            case 3 -> {Model.require(draft.supplies.size()<32,"补给点数量已满");draft.supplies.add(new VehicleSupply.Supply(quickId("补给",draft.supplies.stream().map(VehicleSupply.Supply::id).toList()),-1,x,y,z,12,true,true,true));supplyIndex=draft.supplies.size()-1;}
+            case 4 -> {Model.require(draft.eliteSpawns.size()<24,"精英点数量已满");var p=new EliteRules.Spawn();p.id=quickId("精英",draft.eliteSpawns.stream().map(v->v.id).toList());p.x=x;p.y=y;p.z=z;draft.eliteSpawns.add(p);eliteSpawnIndex=draft.eliteSpawns.size()-1;}
+            case 5 -> {Model.require(draft.boundary.size()<64,"边界最多 64 个顶点");draft.boundary.add(new Model.Vec(x,z));}
         }
         rawFields.clear();invalid.clear();
+    }
+    private static String quickId(String prefix, List<String> used) {
+        int index = 1;
+        while (used.contains(prefix + index)) index++;
+        return prefix + index;
+    }
+    void quickMove(int tool, int index, net.minecraft.world.phys.Vec3 at) {
+        double x = at.x, y = at.y, z = at.z;
+        switch (tool) {
+            case 0 -> {
+                var point = draft.points.get(index);
+                translateBoundary(point.boundary, x - point.x, z - point.z);
+                point.x = x; point.y = y; point.z = z;
+                pointIndex = index;
+            }
+            case 1, 2 -> {
+                var spawn = draft.spawns.get(index);
+                Model.require(spawn.team == tool - 1, "出生点阵营不匹配");
+                translateBoundary(spawn.boundary, x - spawn.x, z - spawn.z);
+                spawn.x = x; spawn.y = y; spawn.z = z;
+                spawnIndex = index;
+            }
+            case 3 -> {
+                draft.supplies.set(index, draft.supplies.get(index).withX(x).withY(y).withZ(z));
+                supplyIndex = index;
+            }
+            case 4 -> {
+                var elite = draft.eliteSpawns.get(index);
+                elite.x = x; elite.y = y; elite.z = z;
+                eliteSpawnIndex = index;
+            }
+            case 5 -> draft.boundary.set(index, new Model.Vec(x, z));
+            default -> throw new IllegalArgumentException("未知点位工具");
+        }
+        rawFields.clear(); invalid.clear();
+    }
+    private static void translateBoundary(List<Model.Vec> boundary, double dx, double dz) {
+        if (boundary == null) return;
+        boundary.replaceAll(vertex -> new Model.Vec(vertex.x() + dx, vertex.z() + dz));
     }
     private void cycleMap(int delta) {discardThen(()->cycleMapConfirmed(delta));}
     private void cycleMapConfirmed(int delta) {
@@ -1853,6 +1892,11 @@ row(form,"移除战术道具","",!kit.tacticalChoices().isEmpty(),()->{
     // ------------------------------------------------------------------ painting
 
     @Override
+    protected void renderBar(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (barForm == null) buildBar();
+        if (barForm != null) barForm.render(graphics, mouseX, mouseY, partialTick);
+    }
+
     protected void paint(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (form == null) {
             graphics.drawCenteredString(font, "正在载入地图…", layout.content.cx(), layout.content.cy(),
@@ -1873,7 +1917,7 @@ row(form,"移除战术道具","",!kit.tacticalChoices().isEmpty(),()->{
         sideForm.render(graphics, mouseX, mouseY, partialTick);
         graphics.disableScissor();
 
-        if (barForm != null) barForm.render(graphics, mouseX, mouseY, partialTick);
+
         // A transport notice outranks the ordinary footer message: if a request could not even be sent,
         // that is the thing the operator needs to see, and it used to be drawn straight over the same
         // two lines with no backing, so the two strings overlapped into an unreadable smear.
@@ -2053,7 +2097,7 @@ row(form,"移除战术道具","",!kit.tacticalChoices().isEmpty(),()->{
         graphics.drawString(font, caption, rect.x() + 5, rect.y() + 4, Ui.TEXT_DIM, false);
         int top = rect.y() + 16;
         int room = rect.h() - 32;
-        if (!id.isEmpty()) AssetIcons.draw(graphics, "gun", id, rect.x() + 5, top, rect.w() - 10, room);
+        if (!id.isEmpty()) AssetIcons.draw(graphics, "gunart", id, rect.x() + 5, top, rect.w() - 10, room);
         else graphics.drawCenteredString(font, "未选择", rect.cx(), top + room / 2 - 4, Ui.TEXT_FAINT);
         graphics.drawString(font, Ui.clip(font, name(id), rect.w() - 10),
                 rect.x() + 5, rect.bottom() - 12, Ui.TEXT, false);
@@ -2069,7 +2113,7 @@ row(form,"移除战术道具","",!kit.tacticalChoices().isEmpty(),()->{
         }
         int nameY = inner.bottom() - 12;
         int buttonH = admin() ? Layout.ROW : 0;
-        AssetIcons.draw(graphics, entryKind, entryId, inner.x() + 6, inner.y() + 6,
+        AssetIcons.draw(graphics, entryKind.equals("gun") ? "gunart" : entryKind, entryId, inner.x() + 6, inner.y() + 6,
                 inner.w() - 12, Math.max(16, nameY - inner.y() - 40 - buttonH));
         graphics.drawString(font, Ui.clip(font, name(entryId), inner.w() - 12),
                 inner.x() + 6, nameY, Ui.TEXT, false);

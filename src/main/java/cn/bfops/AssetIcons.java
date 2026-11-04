@@ -127,12 +127,25 @@ final class AssetIcons {
                     }
                 }
             } else if(kind.equals("gunhud")) {
-                // textures/gun/hud/<path>.png inside the gun's own pack; the wide side-view silhouette.
                 ResourceLocation parsed=ResourceLocation.tryParse(id);
                 if(parsed!=null){
-                    ResourceLocation hud=ResourceLocation.fromNamespaceAndPath(parsed.getNamespace(),
-                            "textures/gun/hud/"+parsed.getPath()+".png");
-                    if(mc.getResourceManager().getResource(hud).isPresent())texture=hud;
+                    // The pack may use a completely different texture path from its gun id.
+                    try {
+                        var api=Class.forName("com.tacz.guns.api.TimelessAPI");
+                        Object index=((Optional<?>)api.getMethod("getClientGunIndex",ResourceLocation.class)
+                                .invoke(null,parsed)).orElse(null);
+                        if(index!=null) {
+                            Object display=index.getClass().getMethod("getDefaultDisplay").invoke(index);
+                            ResourceLocation hud=(ResourceLocation)display.getClass().getMethod("getHUDTexture").invoke(display);
+                            if(hud!=null&&mc.getResourceManager().getResource(hud).isPresent())texture=hud;
+                        }
+                    } catch(ReflectiveOperationException | LinkageError ex) {
+                        BattlefieldOps.LOG.debug("TaCZ HUD art unavailable for {}",id,ex);
+                    }
+                    if(texture==null) {
+                        ResourceLocation hud=ResourceLocation.fromNamespaceAndPath(parsed.getNamespace(),"textures/gun/hud/"+parsed.getPath()+".png");
+                        if(mc.getResourceManager().getResource(hud).isPresent())texture=hud;
+                    }
                 }
             } else if(kind.equals("gun") && ResourceLocation.tryParse(id)!=null && BuiltInRegistries.ITEM.get(ResourceLocation.parse(id)) !=null && superbIcon(id)!=null) {
                 texture=superbIcon(id);
@@ -221,6 +234,8 @@ final class AssetIcons {
         return isGun(id) ? "gunsil" : "mono";
     }
     static void draw(GuiGraphics g,String kind,String id,int x,int y,int w,int h) {
+        boolean originalGunArt=kind.equals("gunart");
+        if(originalGunArt)kind="gunhud";
         if(id.isEmpty()) return;
         if(!kind.equals("mono")&&!kind.equals("bf1")&&!kind.equals("gun")&&!kind.equals("gunhud")&&!kind.equals("gunsil")&&!kind.equals("vehicle")&&!kind.equals("role")&&!kind.equals("elite")&&!kind.equals("attachment")&&!kind.equals("item")) {
             g.drawCenteredString(Minecraft.getInstance().font,"◆",x+w/2,y+h/2-4,0x99b3a0);
@@ -235,7 +250,7 @@ final class AssetIcons {
         }
         final String iconKind=kind;
         Icon icon=cache.computeIfAbsent(iconKind+"/"+id,k->resolve(iconKind,id));
-        if(icon.texture!=null&&(whiteIcons||kind.equals("mono")))icon=transformed(g,icon,whiteIcons&&!kind.equals("mono"));
+        if(icon.texture!=null&&!originalGunArt&&(whiteIcons||kind.equals("mono")))icon=transformed(g,icon,whiteIcons&&!kind.equals("mono"));
         if(icon.texture!=null) {
             if(kind.equals("role")){
                 // Class art is 24x24 line drawing: draw it at an integer divisor of 24 so no stroke is

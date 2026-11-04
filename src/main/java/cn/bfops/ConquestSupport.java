@@ -184,9 +184,12 @@ final long expires;final SupportRules.Budget budget;
 
     /** Seconds until the nearest ammo box can hand out the next unit; 0 when it is ready. */
     double refillWait(ServerPlayer player) {
+        Engine.Member member = engine.members.get(player.getUUID());
+        if (member == null || !member.alive || member.downed) return 0;
         double best = 0;
         for (Device d : devices.values()) {
             if (d.kind != SupportRules.Kind.AMMO_BOX || !d.entity.isAlive() || d.entity.isRemoved()) continue;
+            if (!SupportRules.sameRoomTeam(d.map, d.team, member.map, member.team)) continue;
             if (player.level() != d.entity.level()) continue;
             if (player.distanceToSqr(d.entity) > SupportRules.BOX_RADIUS * SupportRules.BOX_RADIUS) continue;
             int period = refillPeriod(d.map);
@@ -201,9 +204,12 @@ final long expires;final SupportRules.Budget budget;
 
 
 double refillProgress(ServerPlayer player){
+        Engine.Member member = engine.members.get(player.getUUID());
+        if (member == null || !member.alive || member.downed) return 0;
         double best=0;
         for(Device d:devices.values()){
             if(d.kind!=SupportRules.Kind.AMMO_BOX||!d.entity.isAlive()||d.entity.isRemoved())continue;
+            if (!SupportRules.sameRoomTeam(d.map, d.team, member.map, member.team)) continue;
             if(player.level()!=d.entity.level()||player.distanceToSqr(d.entity)>SupportRules.BOX_RADIUS*SupportRules.BOX_RADIUS)continue;
             int period=refillPeriod(d.map);
             if(period<=0)continue;
@@ -241,7 +247,7 @@ double refillProgress(ServerPlayer player){
                 long[] clock=refillClock.computeIfAbsent(key,k2->new long[]{0,now});
                 // Leaving and coming back resumes the bar rather than restarting it: only time actually
                 // spent inside the radius is accumulated, any longer gap counts as "was away".
-                if(now-clock[1]<=40)clock[0]+=now-clock[1];
+                if(now-clock[1]<=20)clock[0]+=now-clock[1];
                 clock[1]=now;
                 if(period>0&&clock[0]<period)continue;
                 changed=engine.supportAmmo(player)>0;   // the box refills everything at once when its interval elapses

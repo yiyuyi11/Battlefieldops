@@ -10,6 +10,7 @@ import java.nio.file.*;
 public final class BattleServerMode {
     public static final ModConfigSpec SPEC;
     public static final ModConfigSpec.BooleanValue ENABLED;
+    static final ModConfigSpec.ConfigValue<String> GROUP_BACKEND, GROUP_DIRECTORY, GROUP_PEERS;
     public static volatile boolean clientActive;
     private static MinecraftServer server;
     private static Engine recovery;
@@ -17,6 +18,11 @@ public final class BattleServerMode {
         var b=new ModConfigSpec.Builder();
         ENABLED=b.comment("Enable Battlefield rooms on THIS backend. False leaves normal servers untouched.",
                 "Admins can persistently switch with /bf mode on or /bf mode off.").define("battlefieldMode",false);
+        b.push("groupRooms");
+        GROUP_BACKEND=b.comment("Backend name as registered in the proxy. Empty disables group rooms.").define("backend","");
+        GROUP_DIRECTORY=b.comment("Absolute path to a shared directory writable only by trusted Battlefield backends.").define("directory","");
+        GROUP_PEERS=b.comment("Comma-separated allowlist of other Battlefield backend names.").define("peers","");
+        b.pop();
         SPEC=b.build();
     }
     static void started(MinecraftServer value){
@@ -32,6 +38,7 @@ public final class BattleServerMode {
     private static void enable(){
         if(server==null||BattlefieldOps.engine!=null)return;
         BattlefieldOps.engine=recovery!=null?recovery:new Engine(server);recovery=null;
+        BattlefieldOps.engine.enableGroupRooms();
 
     }
     static void stop(){
@@ -43,6 +50,7 @@ public final class BattleServerMode {
         if(BattlefieldOps.engine==null&&recovery!=null)recovery.recover(p);
         if(BattlefieldOps.engine==null)LobbyAccess.remove(p);
         sync(p);
+        if(BattlefieldOps.engine!=null)BattlefieldOps.engine.groupArrived(p);
     }
     public static int command(net.minecraft.commands.CommandSourceStack source,boolean enabled){
         try{

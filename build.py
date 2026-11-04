@@ -1,5 +1,5 @@
 from pathlib import Path
-import subprocess,zipfile,hashlib,json,shutil
+import subprocess,zipfile,hashlib,json,shutil,tomllib
 ROOT=Path(__file__).resolve().parent
 JAVA=Path('C:/Program Files/Java/jdk-21/bin')
 LIB=Path('D:/USTBL/.minecraft/libraries')
@@ -18,11 +18,12 @@ args=['--release','21','-encoding','UTF-8','-proc:none','-classpath',';'.join(cp
 (ROOT/'build/javac.args').write_text('\n'.join('"'+s.replace('\\','/')+'"' for s in args),'utf-8')
 result=subprocess.run([str(JAVA/'javac.exe'),'@'+str(ROOT/'build/javac.args')],cwd=ROOT)
 if result.returncode:raise SystemExit(result.returncode)
-out=ROOT/'build/libs/battlefield-ops-0.8.30-neoforge-1.21.1.jar';out.parent.mkdir(exist_ok=True)
+version=tomllib.loads((ROOT/'src/main/resources/META-INF/neoforge.mods.toml').read_text(encoding='utf-8'))['mods'][0]['version']
+out=ROOT/f'build/libs/battlefield-ops-{version}-neoforge-1.21.1.jar';out.parent.mkdir(exist_ok=True)
 with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
     for folder in [classes,ROOT/'src/main/resources']:
         for f in folder.rglob('*'):
             if f.is_file():z.write(f,f.relative_to(folder).as_posix())
-    z.writestr('META-INF/MANIFEST.MF','Manifest-Version: 1.0\nImplementation-Version: 0.6.3\n\n')
+    z.writestr('META-INF/MANIFEST.MF',f'Manifest-Version: 1.0\nImplementation-Version: {version}\n\n')
 print('BUILD OK:',out)
 (ROOT/'build/compile-classpath.txt').write_text(';'.join(cp),'utf-8')

@@ -9,19 +9,19 @@
 |---|---|---|
 | JDK | 21.0.9 LTS (Oracle) | `java -version` |
 | 开发目标 | NeoForge 21.1.233 / MC 1.21.1 | `BattlefieldOps/build.gradle` |
-| 整合包实际 NeoForge | 21.1.242 | `E:\...\Battlefield参考模组\logs` / `latest.log` 的 `neoforge-21.1.242-universal.jar` |
+| 整合包实际 NeoForge | 21.1.242 | `E:\...\Battlefield656\logs` / `latest.log` 的 `neoforge-21.1.242-universal.jar` |
 | TaCZ | 1.1.8 (`tacz-neoforge-1.21.1-1.1.8-hotfix-r1.jar`) | 服务器 mods 列表 + `javap` 校验 API |
 | 卓越前线 | 0.8.9.1 / 0.8.9.2 (`superbwarfare-*-mc1.21.1-*.jar`) | 服务器 mods 列表 |
-| 客户端整合包 | `E:\QQ文件\Battlefield参考模组-六五六大战场服务器客户端\...\versions\Battlefield参考模组` | 目录存在，含 TaCZ 枪包 12 个、载具包 `limitless_vehicle` |
+| 客户端整合包 | `E:\QQ文件\Battlefield656-六五六大战场服务器客户端\...\versions\Battlefield656` | 目录存在，含 TaCZ 枪包 12 个、载具包 `limitless_vehicle` |
 | `manual_update_package.zip` | 只有更新器（UpdateAgent + mc-update.properties），无游戏内容 | 解包确认 |
 
-结论：**参考对象是 1.20.1 的 Battlefield参考模组 私服整合包**，其中的 `参考模组`（征服/突破对局）、
-`gd参考模组killicon`、`gd参考模组frontvoice` 等是别人写的 1.20.1 Forge mod。它们不能直接用于 1.21.1 NeoForge，
-但逻辑写法可移植。`Battlefield参考模组.jar` 是混淆过的客户端（7436 个 `a.class` 形式类），不可作参考。
+结论：**参考对象是 1.20.1 的 Battlefield656 私服整合包**，其中的 `gd656conquest`（征服/突破对局）、
+`gd656killicon`、`gd656frontvoice` 等是别人写的 1.20.1 Forge mod。它们不能直接用于 1.21.1 NeoForge，
+但逻辑写法可移植。`Battlefield656.jar` 是混淆过的客户端（7436 个 `a.class` 形式类），不可作参考。
 
 ## 2. 从参考模组提取并已移植的写法
 
-反编译对象：`参考模组-0.10.6-normal.jar`（272 个类反编译成功，输出在 `.ref/gdc-src/`）。
+反编译对象：`gd656conquest-0.10.6-normal.jar`（272 个类反编译成功，输出在 `.ref/gdc-src/`）。
 
 ### 2.1 占领控制条（替代布尔旗标）
 参考：`server/room/gameplay/conquest/ConquestCaptureRuntimeService.java`、

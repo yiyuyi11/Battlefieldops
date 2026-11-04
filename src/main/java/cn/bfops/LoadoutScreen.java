@@ -114,7 +114,7 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
             row(rightForm,"配件卡片","隐藏属性",()->{propertyVisible=false;rebuild();});
             row(rightForm,propertyMain?"主武器属性":"副武器属性","切换主／副武器",()->{propertyMain=!propertyMain;rebuild();});
             String weapon=shown(kit(),propertyMain);
-            rightForm.paint(48,(g,r)->{if(!GunPreview.render(g,weapon,parent.fitting("gun",weapon),r.x()+2,r.y(),r.w()-4,30,22,-14))AssetIcons.draw(g,"gun",weapon,r.x()+4,r.y()+2,r.w()-8,30);g.drawString(font,Ui.clip(font,parent.name(weapon),r.w()-8),r.x()+4,r.y()+36,Ui.TEXT,true);});
+            rightForm.paint(48,(g,r)->{AssetIcons.draw(g,"gunart",weapon,r.x()+4,r.y()+2,r.w()-8,30);g.drawString(font,Ui.clip(font,parent.name(weapon),r.w()-8),r.x()+4,r.y()+36,Ui.TEXT,true);});
             var report=EquipmentStatistics.read("gun",weapon,parent.fitting("gun",weapon));
             rightForm.section(report.source().isEmpty()?"装备属性":report.source());
             for(var value:report.rows())rightForm.paint(16,(g,r)->EquipmentStatPanel.diagram(g,font,r,value));
@@ -213,7 +213,7 @@ row(leftForm,"战术道具 1",parent.tactical1.isEmpty()?"无":parent.meleeName(
             // The attachment grid owns y=42..108. Keep weapon art in the header above it.
             int artW = Math.min(64, Math.max(24,r.w()/5));
             GuiClip.push(g,r.right()-artW-8,r.y()+4,artW,32);
-            try{AssetIcons.draw(g,"gun",id,r.right()-artW-8,r.y()+4,artW,32);}
+            try{AssetIcons.draw(g,"gunart",id,r.right()-artW-8,r.y()+4,artW,32);}
             finally{GuiClip.pop(g);}
         }
     }

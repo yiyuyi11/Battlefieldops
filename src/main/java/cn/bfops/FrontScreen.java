@@ -116,6 +116,9 @@ abstract class FrontScreen extends Screen {
         Bf1Ui.screenBackdrop(g, width, height);
     }
     protected Layout layoutFor(int width,int height){return Layout.of(width,height);}
+    /** Paints the action-bar widgets. Called after the page, so it cannot be skipped by a page failure. */
+    protected void renderBar(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) { }
+
     protected boolean showBottomBar(){return true;}
     protected boolean showFooter(){return true;}
 
@@ -224,10 +227,28 @@ abstract class FrontScreen extends Screen {
             Ui.bf1(previousStyle);AssetIcons.whiteIcons(previousWhite);
             PerfProbe.mark("paint:"+windowTitle,System.nanoTime()-started);
         }
+        // The action bar is painted here, outside the page's guard: a page that throws must not be able to
+        // hide the save row, which is how "the bar is there but nothing is drawn" used to happen.
+        if (showBottomBar() && bar.h() > 0) {
+            try {
+                renderBar(graphics, mouseX, mouseY, partialTick);
+            } catch (RuntimeException | LinkageError ex) {
+                reportPaintFailure(ex);
+            }
+        }
         if(showFooter())foot(graphics);
         // The menu drop-down is drawn AFTER the page content: it is a pop-up, so the panes must not cover it.
         if(tabsOpen)menuOverlay(graphics,mouseX,mouseY);
         if(dropdown!=null){if(!children().contains(dropdown.anchor)||!dropdown.anchor.visible)dropdown=null;else dropdown.draw(graphics,font,mouseX,mouseY,width,height);}
+        paintTransition(graphics);
+    }
+
+    private long firstPaintAt;
+    protected void paintTransition(GuiGraphics graphics) {
+        long now=System.nanoTime();
+        if(firstPaintAt==0)firstPaintAt=now;
+        double remaining=1-Cinematic.ease((now-firstPaintAt)/160_000_000.0);
+        if(remaining>0)graphics.fill(0,0,width,height,((int)(remaining*110)<<24)|0x080c11);
     }
 
     /** Last paint failure we logged, so a repeating error does not fill the log every frame. */

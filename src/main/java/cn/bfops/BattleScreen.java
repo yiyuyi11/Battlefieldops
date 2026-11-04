@@ -1559,6 +1559,19 @@ final class BattleScreen extends FrontScreen {
     private Form barForm;
     private boolean deployReady;
     private boolean spaceArmed;
+    private Boolean previousFullView;
+    private long transitionAt;
+    @Override protected void paintTransition(GuiGraphics graphics) {
+        boolean full=fullBattlefield();
+        long now=System.nanoTime();
+        if(previousFullView==null || previousFullView!=full) {
+            if(full || previousFullView!=null) transitionAt=now;
+            previousFullView=full;
+        }
+        if(transitionAt==0){super.paintTransition(graphics);return;}
+        double remaining=1-Cinematic.ease((now-transitionAt)/240_000_000.0);
+        if(remaining>0) graphics.fill(0,0,width,height,((int)(remaining*190)<<24)|0x080c11);
+    }
     @Override public void tick(){
         super.tick();
         if(!com.mojang.blaze3d.platform.InputConstants.isKeyDown(minecraft.getWindow().getWindow(),org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE))spaceArmed=true;
