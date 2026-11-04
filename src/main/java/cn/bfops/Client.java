@@ -570,6 +570,8 @@ public final class Client {
                 if(downed){mc.options.keyAttack.setDown(false);mc.player.stopUsingItem();}
                 wasDowned=downed;
                 if(!EntryScene.active())trackDeathAndDeploy(mc, me);
+                // Jade's block-info overlay is hidden while a match runs; the switch lives in the settings screen.
+                JadeGate.tick(state.has("inMatch") && state.get("inMatch").getAsBoolean());
                 boolean dead = me != null && me.has("alive") && !me.get("alive").getAsBoolean() && !downed;
                 if (dead && holdingDeathView() && mc.screen == null) {
                     boolean held = mc.options.keyJump.isDown();

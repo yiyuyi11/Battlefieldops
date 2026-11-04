@@ -10,7 +10,7 @@
 
 ## 安装
 
-把 `battlefield_ops-0.8.35-forge1201.jar` 放进 `mods/`。
+把 `battlefield_ops-0.8.36-forge1201.jar` 放进 `mods/`。
 
 ## 构建
 

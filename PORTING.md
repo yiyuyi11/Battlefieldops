@@ -4,9 +4,9 @@
 
 | 项目 | 值 |
 | --- | --- |
-| 产物 | `battlefield_ops-0.8.35-forge1201.jar` |
-| 版本 | `0.8.35-forge1201` |
-| SHA-256 | `bdbf01ded11fa0754f6f70c8845e0c6a5d858e4dd5bf0e311417a074d093b3dd` |
+| 产物 | `battlefield_ops-0.8.36-forge1201.jar` |
+| 版本 | `0.8.36-forge1201` |
+| SHA-256 | `2f04c939234f1b634d4e11ffaa7be592fa170130e503cf5a31fd2ed565d5de53` |
 | mixin refmap | 已生成 |
 | 依赖版本范围 | forge `[47,)`，minecraft `[1.20.1,1.20.2)` |
 

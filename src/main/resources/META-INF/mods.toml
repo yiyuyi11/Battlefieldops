@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="battlefield_ops"
-version="0.8.35-forge1201"
+version="0.8.36-forge1201"
 displayName="战地风云 · Battlefield Ops"
 authors="Local development"
 description='''征服 / 突破计分、地图划线编辑器、据点与出生点、双方活动区域；TaCZ 配装按部署发放，卓越前线载具按白名单部署。
